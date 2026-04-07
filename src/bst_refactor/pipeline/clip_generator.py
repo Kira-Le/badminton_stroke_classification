@@ -147,21 +147,32 @@ def _write_clips_for_video(
     if clip_window not in ('middle_in_a_sec', 'between_2_hits', 'between_2_hits_with_max_limits'):
         raise ValueError(f"Unknown clip window: {clip_window!r}")
 
-    # Create output subdirectories for every player+type combination
-    for player in players:
-        for typ in stroke_types:
-            (out_folder / f'{player}_{typ}').mkdir(parents=True, exist_ok=True)
+    # 'unknown' and 'driven_flight' are standalone classes (no player prefix)
+    # to match get_stroke_types() output; prefixing them desync folder ↔ label.
+    _standalone = {'unknown', 'driven_flight'}
+    for typ in stroke_types:
+        if typ in _standalone:
+            (out_folder / typ).mkdir(parents=True, exist_ok=True)
+        else:
+            for player in players:
+                (out_folder / f'{player}_{typ}').mkdir(parents=True, exist_ok=True)
 
-    # Open the source video
-    video_path = str(next(raw_video_dir.glob(f"{video_id} *")))
+    # Open the source video — bare next() on an empty glob raises StopIteration
+    video_matches = list(raw_video_dir.glob(f"{video_id} *"))
+    if not video_matches:
+        print(f"Warning: Raw video for ID {video_id} not found. Skipping.")
+        return 0
+    video_path = str(video_matches[0])
     video = mpe.VideoFileClip(video_path)
     fps = video.fps
     clips_written = 0
 
     try:
         for _, row in shots_df.iterrows():
+            typ = row['type']
+            folder_name = typ if typ in _standalone else f'{row["player"]}_{typ}'
             out_path = (out_folder
-                        / f'{row["player"]}_{row["type"]}'
+                        / folder_name
                         / f'{video_id}_{row["set"]}_{row["rally"]}_{int(row["ball_round"])}.mp4')
             if out_path.exists():
                 continue
@@ -306,16 +317,24 @@ def apply_class_merge(
     if merge_map is None:
         merge_map = MERGE_MAP
 
-    # Build a flat list of (source_dir, dest_dir) pairs to process
+    # Build a flat list of (source_dir, dest_dir) pairs to process.
+    # Standalone types have no player prefix — see _write_clips_for_video.
+    _standalone = {'unknown', 'driven_flight'}
     split_dirs = [d for d in sorted(output_dir.iterdir()) if d.is_dir()]
     move_ops = []
     for split_dir in split_dirs:
         for src_type, dst_type in merge_map.items():
-            for player in PLAYERS:
-                src = split_dir / f'{player}_{src_type}'
-                dst = split_dir / f'{player}_{dst_type}'
+            if src_type in _standalone or dst_type in _standalone:
+                src = split_dir / src_type
+                dst = split_dir / dst_type
                 if src.exists():
                     move_ops.append((src, dst))
+            else:
+                for player in PLAYERS:
+                    src = split_dir / f'{player}_{src_type}'
+                    dst = split_dir / f'{player}_{dst_type}'
+                    if src.exists():
+                        move_ops.append((src, dst))
 
     # Execute each move in a flat loop
     moved = 0
@@ -324,7 +343,10 @@ def apply_class_merge(
         for clip_file in src.iterdir():
             shutil.move(str(clip_file), str(dst / clip_file.name))
             moved += 1
-        src.rmdir()
+        try:
+            src.rmdir()  # may fail if stray non-clip files remain (e.g. .DS_Store)
+        except OSError:
+            pass
 
     print(f'Class merge complete: {moved} clips moved.')
 

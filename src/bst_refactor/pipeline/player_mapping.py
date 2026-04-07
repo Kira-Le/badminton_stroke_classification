@@ -51,11 +51,15 @@ def find_set3_switch_rally(df: pd.DataFrame) -> int:
     :param df: DataFrame with 'roundscore_A', 'roundscore_B', and 'rally' columns.
     :return: iloc index splitting the DataFrame into pre-switch and post-switch.
     """
-    # Find where A first reaches 11. If B reached 11 first (A's score is
-    # still <= B's at that point), search B's column instead.
-    i = df['roundscore_A'].searchsorted(11, side='left')
-    if df.iloc[i]['roundscore_A'] <= df.iloc[i]['roundscore_B']:
-        i = df['roundscore_B'].searchsorted(11, side='left')
+    # Find the first index where either player reaches 11 points.
+    i_A = df['roundscore_A'].searchsorted(11, side='left')
+    i_B = df['roundscore_B'].searchsorted(11, side='left')
+    i = min(i_A, i_B)
+
+    # Without this guard, df.iloc[len(df)] raises IndexError on retirements
+    if i >= len(df):
+        return len(df)
+
     switch_rally = df.iloc[i]['rally']
     return df['rally'].searchsorted(switch_rally, side='right')
 

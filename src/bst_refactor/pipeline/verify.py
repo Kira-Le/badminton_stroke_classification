@@ -99,15 +99,21 @@ def verify_class_merge(
     """
     if merge_map is None:
         merge_map = MERGE_MAP
+    _standalone = {'unknown', 'driven_flight'}  # no player prefix — mirrors clip_generator
     violations = []
     for split_dir in clips_dir.iterdir():
         if not split_dir.is_dir():
             continue
         for src_type in merge_map:
-            for player in PLAYERS:
-                src = split_dir / f'{player}_{src_type}'
-                if src.exists() and any(src.iterdir()):
+            if src_type in _standalone:
+                src = split_dir / src_type
+                if src.exists() and any(src.glob('*.mp4')):
                     violations.append(src)
+            else:
+                for player in PLAYERS:
+                    src = split_dir / f'{player}_{src_type}'
+                    if src.exists() and any(src.glob('*.mp4')):
+                        violations.append(src)
 
     if violations:
         print(f'FAIL: {len(violations)} unmerged source folders still contain clips:')

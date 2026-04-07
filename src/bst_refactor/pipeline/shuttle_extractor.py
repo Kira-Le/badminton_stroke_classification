@@ -7,7 +7,8 @@ Requires TrackNetV3 (https://github.com/alenzenx/TrackNetV3) cloned and set
 up separately with pretrained weights.
 
 Usage:
-    python -m pipeline.shuttle_extractor --tracknet-dir /path/to/TrackNetV3 [--clips-dir DIR]
+    python -m pipeline.shuttle_extractor --tracknet-dir /path/to/TrackNetV3 [--clips-dir DIR] \
+        [--tracknet-python /path/to/TrackNetV3/.venv/bin/python]
 """
 import argparse
 import subprocess
@@ -58,6 +59,7 @@ def extract_shuttle_trajectory(
     tracknet_dir: Path,
     output_csv_dir: Path,
     model_path: Path | None = None,
+    tracknet_python: Path | None = None,
     cur_i: int = 0,
     total: int = 0,
 ) -> bool:
@@ -70,6 +72,8 @@ def extract_shuttle_trajectory(
     :param tracknet_dir: Path to the cloned TrackNetV3 repository.
     :param output_csv_dir: Directory to write the output CSV.
     :param model_path: Path to model weights. Defaults to tracknet_dir/exp/model_best.pt.
+    :param tracknet_python: Python executable inside TrackNetV3's venv.
+        Defaults to sys.executable (assumes shared environment).
     :param cur_i: Current clip index (for progress logging).
     :param total: Total number of clips (for progress logging).
     :return: True on success, False on failure.
@@ -83,8 +87,11 @@ def extract_shuttle_trajectory(
     if model_path is None:
         model_path = tracknet_dir / _DEFAULT_MODEL_SUBPATH
 
+    # Use TrackNetV3's own Python if provided (isolates legacy dependencies)
+    python_exe = str(tracknet_python) if tracknet_python else sys.executable
+
     process_args = [
-        sys.executable, str(tracknet_dir / 'predict.py'),
+        python_exe, str(tracknet_dir / 'predict.py'),
         '--video_file', str(clip_path),
         '--model_file', str(model_path),
         '--save_dir', str(output_csv_dir),
@@ -111,6 +118,7 @@ def extract_all_shuttles(
     tracknet_dir: Path = Path('.'),
     output_csv_dir: Path | None = None,
     model_path: Path | None = None,
+    tracknet_python: Path | None = None,
     max_workers: int = 2,
 ) -> None:
     """Run TrackNetV3 on all clips in parallel.
@@ -123,6 +131,8 @@ def extract_all_shuttles(
     :param output_csv_dir: Directory for TrackNetV3 CSV outputs.
         Defaults to clips_dir/../shuttle_csv.
     :param model_path: Path to model weights. Defaults to tracknet_dir/exp/model_best.pt.
+    :param tracknet_python: Python executable inside TrackNetV3's venv.
+        Defaults to sys.executable (assumes shared environment).
     :param max_workers: Number of parallel worker processes (default 2).
     """
     # Preflight: verify TrackNetV3 is set up correctly
@@ -152,7 +162,7 @@ def extract_all_shuttles(
             futures.append(executor.submit(
                 extract_shuttle_trajectory,
                 clip_path, tracknet_dir, output_csv_dir, model_path,
-                i, len(pending),
+                tracknet_python, i, len(pending),
             ))
         successes = sum(f.result() for f in futures)
 
@@ -252,6 +262,8 @@ def main():
                         help='Path to TrackNetV3 model weights (default: tracknet-dir/exp/model_best.pt)')
     parser.add_argument('--workers', type=int, default=2,
                         help='Parallel workers for TrackNetV3 (default 2, GPU-bound)')
+    parser.add_argument('--tracknet-python', type=Path, default=None,
+                        help='Python executable in TrackNetV3 venv (avoids dependency conflicts)')
     parser.add_argument('--skip-extraction', action='store_true',
                         help='Skip TrackNetV3 extraction, only convert existing CSVs to NPY')
     args = parser.parse_args()
@@ -263,6 +275,7 @@ def main():
             tracknet_dir=args.tracknet_dir,
             output_csv_dir=args.csv_dir,
             model_path=args.model_path,
+            tracknet_python=args.tracknet_python,
             max_workers=args.workers,
         )
 

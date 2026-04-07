@@ -12,7 +12,8 @@ python -m pipeline.build_dataset --skip-shuttle --dry-run
 python -m pipeline.build_dataset --skip-shuttle
 
 # Run everything including shuttle extraction
-python -m pipeline.build_dataset --tracknet-dir /path/to/TrackNetV3
+python -m pipeline.build_dataset --tracknet-dir /path/to/TrackNetV3 \
+    --tracknet-python /path/to/TrackNetV3/.venv/bin/python
 ```
 
 ## Prerequisites
@@ -23,7 +24,7 @@ python -m pipeline.build_dataset --tracknet-dir /path/to/TrackNetV3
 | OpenCV | `pip install opencv-python` | Step 2: resolution scanning |
 | MoviePy | `pip install moviepy` | Step 3: clip generation |
 | pandas, numpy | `pip install pandas numpy` | All steps |
-| TrackNetV3 | Clone from GitHub | Step 6: shuttle extraction (optional) |
+| TrackNetV3 | Clone from GitHub + own venv (see Step 6) | Step 6: shuttle extraction (optional) |
 
 ## Pipeline Steps
 
@@ -86,9 +87,24 @@ Checks that:
 
 Runs TrackNetV3 on each clip to extract shuttle trajectories, then normalizes to `(t, 3)` numpy arrays: `[x_norm, y_norm, visibility]`.
 
+TrackNetV3 depends on legacy libraries (NumPy 1.x, older PyTorch) that conflict with this pipeline's modern dependencies. Since the two communicate entirely through CSV files on disk, you can isolate TrackNetV3 in its own venv and point the pipeline at its Python binary with `--tracknet-python`:
+
 ```bash
-python -m pipeline.shuttle_extractor --tracknet-dir /path/to/TrackNetV3 --workers 2
+# One-time setup inside the TrackNetV3 clone
+cd /path/to/TrackNetV3
+python3.10 -m venv .venv
+source .venv/bin/activate
+pip install torch==2.0.1 numpy==1.26.4 pandas==2.2.2 opencv-python Pillow parse
+deactivate
+
+# Run from the pipeline's own venv
+python -m pipeline.shuttle_extractor --tracknet-dir /path/to/TrackNetV3 \
+    --tracknet-python /path/to/TrackNetV3/.venv/bin/python --workers 2
 ```
+
+If omitted, `--tracknet-python` defaults to the current interpreter (`sys.executable`).
+
+**Frame-level guarantees:** TrackNetV3's output CSVs always contain a contiguous Frame column `[0, 1, ..., N-1]` matching the input video length. Frames where the shuttle is undetected are written with zeroed coordinates and `Visibility=0` (never skipped), and buffer flushing ensures trailing frames are included. This means `shuttle_csvs_to_npy` can safely call `.set_index('Frame').to_numpy()` without gap-filling or reindexing.
 
 Output: `ShuttleSet/shuttle_npy/{train,val,test}/{Player}_{stroke_type}/{vid}_{set}_{rally}_{ball_round}.npy`
 
@@ -100,6 +116,7 @@ Each `.npy` file has shape `(t, 3)`. To get xy-only coordinates: `shuttle[:, :2]
 python -m pipeline.build_dataset [OPTIONS]
 
 --tracknet-dir PATH    Path to cloned TrackNetV3 repo (required unless --skip-shuttle)
+--tracknet-python PATH Python executable in TrackNetV3's venv (default: sys.executable)
 --workers N            Parallel workers (default 2, safe for shared GPU nodes)
 --skip-download        Skip YouTube download (videos must already exist)
 --skip-shuttle         Skip TrackNetV3 shuttle extraction
@@ -176,7 +193,8 @@ Each module can be run standalone:
 ```bash
 python -m pipeline.download_videos --workers 4
 python -m pipeline.clip_generator --clip-window between_2_hits
-python -m pipeline.shuttle_extractor --tracknet-dir /path/to/TrackNetV3
+python -m pipeline.shuttle_extractor --tracknet-dir /path/to/TrackNetV3 \
+    --tracknet-python /path/to/TrackNetV3/.venv/bin/python
 python -m pipeline.verify --clips-dir ShuttleSet/clips
 ```
 

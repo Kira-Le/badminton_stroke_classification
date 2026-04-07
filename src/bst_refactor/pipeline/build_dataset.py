@@ -126,6 +126,7 @@ def run_pipeline(
     no_merge: bool = False,
     force: bool = False,
     workers: int = 2,
+    tracknet_python: Path | None = None,
 ) -> None:
     """Run the full ShuttleSet data pipeline.
 
@@ -138,6 +139,7 @@ def run_pipeline(
     :param no_merge: Skip class merging (keep all 19 stroke types).
     :param force: Continue to step 6 even if verification fails.
     :param workers: Parallel workers for downloads and TrackNetV3 (default 2).
+    :param tracknet_python: Python executable in TrackNetV3's venv.
     """
     _validate_inputs(tracknet_dir, skip_download, skip_shuttle)
 
@@ -196,7 +198,11 @@ def run_pipeline(
     # Step 6: Extract shuttle trajectories
     if not skip_shuttle:
         _step(6, 'Extracting shuttle trajectories')
-        extract_all_shuttles(tracknet_dir=tracknet_dir, max_workers=workers)
+        extract_all_shuttles(
+            tracknet_dir=tracknet_dir,
+            tracknet_python=tracknet_python,
+            max_workers=workers,
+        )
         print()
         shuttle_csvs_to_npy()
         # Verify clip/shuttle sync
@@ -224,6 +230,8 @@ if __name__ == '__main__':
                         help='Preview what the pipeline would do without executing')
     parser.add_argument('--force', action='store_true',
                         help='Continue past verification failures')
+    parser.add_argument('--tracknet-python', type=Path, default=None,
+                        help='Python executable in TrackNetV3 venv (avoids dependency conflicts)')
     args = parser.parse_args()
 
     # Validate early -- catches bad paths before both dry_run and run_pipeline
@@ -244,4 +252,5 @@ if __name__ == '__main__':
             no_merge=args.no_merge,
             force=args.force,
             workers=args.workers,
+            tracknet_python=args.tracknet_python,
         )
