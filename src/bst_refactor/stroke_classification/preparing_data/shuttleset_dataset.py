@@ -6,56 +6,25 @@ from torchvision.transforms import v2
 import numpy as np
 from pathlib import Path
 
-from pipeline.config import EN_TO_ZH, STROKE_TYPES_12_MERGED, STROKE_TYPES_17_RAW
+from pipeline.config import Taxonomy, TAXONOMY_RAW_35
 
 
 # ---------------------------------------------------------------------------
-# Chinese label list builders (for BST training compatibility).
-# Base stroke lists are sourced from pipeline.config; these functions build
-# the full Top_/Bottom_-prefixed label lists using Chinese names, as required
-# by the existing BST Dataset classes and training scripts.
+# Display helper
 # ---------------------------------------------------------------------------
-def _en_to_zh_list(en_names: list[str]) -> list[str]:
-    """Convert a list of English stroke names to Chinese."""
-    return [EN_TO_ZH[n] for n in en_names]
+def pad_class_labels(labels: list[str]) -> list[str]:
+    """Pad class label strings to uniform width for aligned display (e.g. F1 table).
+
+    :param labels: Class label list from ``taxonomy.class_list()``.
+    :return: Labels padded with spaces to the length of the longest label.
+    """
+    max_len = max(len(s) for s in labels)
+    return [s.ljust(max_len) for s in labels]
 
 
-def get_merged_stroke_types(pad_to_same_len=False):
-    class_ls = _en_to_zh_list(STROKE_TYPES_12_MERGED)
-    if pad_to_same_len:
-        max_len = max([len(e) for e in class_ls])
-        class_ls = [e.ljust(max_len, '　') for e in class_ls]
-        class_ls = ['未知球種'.ljust(max_len, '　')+' '*7] + ['Top_'+s+' '*3 for s in class_ls] + ['Bottom_'+s for s in class_ls]
-        return class_ls
-
-    class_ls = ['未知球種'] + ['Top_'+s for s in class_ls] + ['Bottom_'+s for s in class_ls]
-    return class_ls
-
-
-def get_stroke_types(side='Both', pad_to_same_len=False):
-    class_ls = _en_to_zh_list(STROKE_TYPES_17_RAW)
-    if pad_to_same_len:
-        max_len = max([len(e) for e in class_ls])
-        class_ls = [e.ljust(max_len, '　') for e in class_ls]
-        match side:
-            case 'Both':
-                class_ls = ['Top_'+s+' '*3 for s in class_ls] + ['Bottom_'+s for s in class_ls] + ['未知球種'.ljust(max_len, '　')+' '*7]
-            case 'Top':
-                class_ls = ['Top_'+s+' '*3 for s in class_ls] + ['未知球種'.ljust(max_len, '　')+' '*4]
-            case 'Bottom':
-                class_ls = ['Bottom_'+s for s in class_ls] + ['未知球種'.ljust(max_len, '　')+' '*7]
-
-        return class_ls
-
-    match side:
-        case 'Both':
-            class_ls = ['Top_'+s for s in class_ls] + ['Bottom_'+s for s in class_ls] + ['未知球種']
-        case 'Top':
-            class_ls = ['Top_'+s for s in class_ls] + ['未知球種']
-        case 'Bottom':
-            class_ls = ['Bottom_'+s for s in class_ls] + ['未知球種']
-
-    return class_ls
+# How many bone-vector sets each pose style adds on top of joints.
+# Used to compute input feature dimension: (n_joints + n_bones * multiplier) * channels
+POSE_BONE_MULTIPLIER = {'J_only': 0, 'JnB_bone': 1, 'JnB_interp': 1, 'Jn2B': 2}
 
 
 def get_bone_pairs(skeleton_format='coco'):
@@ -176,7 +145,8 @@ class Dataset_npy(Dataset):
         root_dir: Path,
         set_name: str,
         pose_style='J_only',
-        seq_len=30
+        seq_len=30,
+        taxonomy: Taxonomy = TAXONOMY_RAW_35,
     ):
         super().__init__()
         assert set_name in ['train', 'val', 'test', 'test_specific'], 'Invalid set_name.'
@@ -187,8 +157,8 @@ class Dataset_npy(Dataset):
                 random_shift = RandomTranslation()
             case 'val' | 'test' | 'test_specific':
                 random_shift = lambda x : x
-        
-        class_ls = get_stroke_types()
+
+        class_ls = taxonomy.class_list()
 
         # load .npy branch names
         data_branches = [str]
@@ -332,20 +302,31 @@ class Dataset_npy_collated_one_side(Dataset):
         root_dir: Path,
         set_name: str,
         pose_style='J_only',
-        use_top_side=True
+        use_top_side=True,
+        taxonomy: Taxonomy = TAXONOMY_RAW_35,
     ):
         '''Use Top / Bottom labels only. Thus, the length of the dataset becomes half.
 
-        Parameters
-        - `set_name`: 'train', 'val', 'test'
-        - `pose_style`: 'J_only', 'JnB_interp', 'JnB_bone', 'Jn2B'
-        
+        :param set_name: 'train', 'val', 'test'.
+        :param pose_style: 'J_only', 'JnB_interp', 'JnB_bone', 'Jn2B'.
+
         Notice: There is no random translation here.
+
+        .. warning::
+            This class assumes the taxonomy has ``unknown_first=True`` so that
+            'unknown' is at index 0, followed by all Top\_ classes then all
+            Bottom\_ classes.  It uses ``unknown_i // 2`` to find the boundary
+            between Top and Bottom label ranges.  Passing a taxonomy with
+            ``unknown_first=False`` will produce incorrect label splits.
         '''
         super().__init__()
-        
+
         assert set_name in ['train', 'val', 'test'], 'Invalid set_name.'
         assert pose_style in ['J_only', 'JnB_interp', 'JnB_bone', 'Jn2B'], 'Invalid pose_style.'
+        assert taxonomy.unknown_first, (
+            f'Dataset_npy_collated_one_side requires unknown_first=True, '
+            f'but taxonomy {taxonomy.name!r} has unknown_first=False'
+        )
 
         branch = root_dir/set_name
 
@@ -355,8 +336,9 @@ class Dataset_npy_collated_one_side(Dataset):
         self.videos_len = np.load(str(branch/'videos_len.npy'))
         self.labels = np.load(str(branch/'labels.npy'))
 
-        unknown_i = len(get_stroke_types()) - 1
-        n_single = unknown_i // 2
+        class_list = taxonomy.class_list()
+        unknown_i = class_list.index('unknown')
+        n_single = unknown_i // 2  # Top/Bottom boundary (assumes unknown is at index 0)
         if use_top_side:
             idx = (self.labels < n_single) | (self.labels == unknown_i)
             self.labels[self.labels == unknown_i] = n_single
@@ -392,20 +374,31 @@ class Dataset_npy_collated_single_pose(Dataset):
         root_dir: Path,
         set_name: str,
         pose_style='J_only',
-        opposite_on_purpose=False
+        opposite_on_purpose=False,
+        taxonomy: Taxonomy = TAXONOMY_RAW_35,
     ):
         '''Use Top / Bottom pose only. The length of the dataset is unchanged.
 
-        Parameters
-        - `set_name`: 'train', 'val', 'test'
-        - `pose_style`: 'J_only', 'JnB_interp', 'JnB_bone', 'Jn2B'
-        
+        :param set_name: 'train', 'val', 'test'.
+        :param pose_style: 'J_only', 'JnB_interp', 'JnB_bone', 'Jn2B'.
+
         Notice: There is no random translation here.
+
+        .. warning::
+            This class assumes the taxonomy has ``unknown_first=True`` so that
+            'unknown' is at index 0, followed by all Top\_ classes then all
+            Bottom\_ classes.  It uses ``unknown_i // 2`` to find the boundary
+            between Top and Bottom label ranges.  Passing a taxonomy with
+            ``unknown_first=False`` will produce incorrect label splits.
         '''
         super().__init__()
-        
+
         assert set_name in ['train', 'val', 'test'], 'Invalid set_name.'
         assert pose_style in ['J_only', 'JnB_interp', 'JnB_bone', 'Jn2B'], 'Invalid pose_style.'
+        assert taxonomy.unknown_first, (
+            f'Dataset_npy_collated_single_pose requires unknown_first=True, '
+            f'but taxonomy {taxonomy.name!r} has unknown_first=False'
+        )
 
         branch = root_dir/set_name
 
@@ -415,8 +408,9 @@ class Dataset_npy_collated_single_pose(Dataset):
         self.videos_len = np.load(str(branch/'videos_len.npy'))
         self.labels = np.load(str(branch/'labels.npy'))
 
-        unknown_i = len(get_stroke_types()) - 1
-        n_single = unknown_i // 2
+        class_list = taxonomy.class_list()
+        unknown_i = class_list.index('unknown')
+        n_single = unknown_i // 2  # Top/Bottom boundary (assumes unknown is at index 0)
         
         top_i = (self.labels < n_single)
         bot_i = ~top_i & (self.labels != unknown_i)

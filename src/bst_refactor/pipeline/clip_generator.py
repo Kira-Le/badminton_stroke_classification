@@ -3,7 +3,7 @@
 Replaces the 6 manual runs of gen_my_dataset.py with a single script that:
   1. Generates clips for all splits, both players, all stroke types
   2. Filters out individually removed shots (from flaw_shot_records.csv)
-  3. Applies class merging (19 -> 12 types) with English folder names
+  3. Applies class merging per the active taxonomy with English folder names
 
 Usage:
     python -m pipeline.clip_generator
@@ -20,6 +20,7 @@ from pipeline.config import (
     SET_INFO_DIR, RAW_VIDEO_DIR, CLIPS_OUTPUT_DIR,
     SPLITS, STROKE_TYPES_19, STROKE_TYPES_19_ZH,
     REMOVED_SHOTS, MERGE_MAP, CLIP_WINDOW, PLAYERS,
+    UNPREFIXED_TYPES, TAXONOMY_UNE_MERGE_V1, Taxonomy,
 )
 from pipeline.player_mapping import collect_shots
 
@@ -147,11 +148,8 @@ def _write_clips_for_video(
     if clip_window not in ('middle_in_a_sec', 'between_2_hits', 'between_2_hits_with_max_limits'):
         raise ValueError(f"Unknown clip window: {clip_window!r}")
 
-    # 'unknown' and 'driven_flight' are standalone classes (no player prefix)
-    # to match get_stroke_types() output; prefixing them desync folder ↔ label.
-    _standalone = {'unknown', 'driven_flight'}
     for typ in stroke_types:
-        if typ in _standalone:
+        if typ in UNPREFIXED_TYPES:
             (out_folder / typ).mkdir(parents=True, exist_ok=True)
         else:
             for player in players:
@@ -170,7 +168,7 @@ def _write_clips_for_video(
     try:
         for _, row in shots_df.iterrows():
             typ = row['type']
-            folder_name = typ if typ in _standalone else f'{row["player"]}_{typ}'
+            folder_name = typ if typ in UNPREFIXED_TYPES else f'{row["player"]}_{typ}'
             out_path = (out_folder
                         / folder_name
                         / f'{video_id}_{row["set"]}_{row["rally"]}_{int(row["ball_round"])}.mp4')
@@ -303,7 +301,7 @@ def generate_all_clips(
 
 def apply_class_merge(
     output_dir: Path = CLIPS_OUTPUT_DIR,
-    merge_map: dict[str, str] | None = None,
+    taxonomy: Taxonomy = TAXONOMY_UNE_MERGE_V1,
 ) -> None:
     """Merge rare subtype folders into their parent type folders.
 
@@ -311,20 +309,17 @@ def apply_class_merge(
     Source folders are removed after merging.
 
     :param output_dir: Root clips directory containing split subdirs.
-    :param merge_map: Dict mapping rare subtype names to parent names.
-        Defaults to config.MERGE_MAP.
+    :param taxonomy: Taxonomy whose merge_map defines which subtypes to merge.
     """
-    if merge_map is None:
-        merge_map = MERGE_MAP
+    if taxonomy.merge_map is None:
+        print('Taxonomy has no merge_map — nothing to merge.')
+        return
 
-    # Build a flat list of (source_dir, dest_dir) pairs to process.
-    # Standalone types have no player prefix — see _write_clips_for_video.
-    _standalone = {'unknown', 'driven_flight'}
     split_dirs = [d for d in sorted(output_dir.iterdir()) if d.is_dir()]
     move_ops = []
     for split_dir in split_dirs:
-        for src_type, dst_type in merge_map.items():
-            if src_type in _standalone or dst_type in _standalone:
+        for src_type, dst_type in taxonomy.merge_map.items():
+            if src_type in UNPREFIXED_TYPES or dst_type in UNPREFIXED_TYPES:
                 src = split_dir / src_type
                 dst = split_dir / dst_type
                 if src.exists():
@@ -370,5 +365,5 @@ if __name__ == '__main__':
     generate_all_clips(clip_window=args.clip_window)
 
     if not args.no_merge:
-        print('\n=== Applying class merge (19 -> 12 types) ===')
+        print('\n=== Applying class merge ===')
         apply_class_merge()

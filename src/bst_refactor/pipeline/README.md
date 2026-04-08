@@ -11,9 +11,9 @@ python -m pipeline.build_dataset --skip-shuttle --dry-run
 # Run steps 1-5 (download, resolution CSV, clips, merge, verify)
 python -m pipeline.build_dataset --skip-shuttle
 
-# Run everything including shuttle extraction
-python -m pipeline.build_dataset --tracknet-dir /path/to/TrackNetV3 \
-    --tracknet-python /path/to/TrackNetV3/.venv/bin/python
+# Run everything including shuttle extraction (uses BST venv for TrackNetV3)
+python -m pipeline.build_dataset --tracknet-dir TrackNetV3 \
+    --tracknet-python /path/to/bst-venv/bin/python
 ```
 
 ## Prerequisites
@@ -24,7 +24,7 @@ python -m pipeline.build_dataset --tracknet-dir /path/to/TrackNetV3 \
 | OpenCV | `pip install opencv-python` | Step 2: resolution scanning |
 | MoviePy | `pip install moviepy` | Step 3: clip generation |
 | pandas, numpy | `pip install pandas numpy` | All steps |
-| TrackNetV3 | Clone from GitHub + own venv (see Step 6) | Step 6: shuttle extraction (optional) |
+| TrackNetV3 | Included in repo + pretrained weights (see Step 6). Shares BST venv. | Step 6: shuttle extraction (optional) |
 
 ## Pipeline Steps
 
@@ -61,18 +61,16 @@ Output: `ShuttleSet/clips/{train,val,test}/{Player}_{stroke_type}/{vid}_{set}_{r
 
 ### Step 4: Class Merge
 
-Merges 6 rare stroke subtypes into their parent types:
+Merges rare stroke subtypes into their parent types according to the active taxonomy's `merge_map`. The default taxonomy (`une_merge_v1`) merges 4 subtypes:
 
 | Subtype | Merged into |
 |---|---|
-| wrist_smash | smash |
 | defensive_return_lob | lob |
-| driven_flight | unknown |
+| driven_flight | drive |
 | back_court_drive | drive |
-| passive_drop | drop |
 | defensive_return_drive | drive |
 
-This reduces 19 raw types to 12 merged types (25 classes with Top/Bottom prefixes + unknown).
+This reduces 19 raw types to 14 merged types (29 classes with Top/Bottom prefixes + unknown). The legacy `merged_25` taxonomy applies 6 merges (19 -> 12 types, 25 classes).
 
 ### Step 5: Verify
 
@@ -87,19 +85,19 @@ Checks that:
 
 Runs TrackNetV3 on each clip to extract shuttle trajectories, then normalizes to `(t, 3)` numpy arrays: `[x_norm, y_norm, visibility]`.
 
-TrackNetV3 depends on legacy libraries (NumPy 1.x, older PyTorch) that conflict with this pipeline's modern dependencies. Since the two communicate entirely through CSV files on disk, you can isolate TrackNetV3 in its own venv and point the pipeline at its Python binary with `--tracknet-python`:
+TrackNetV3 shares the BST training venv (`stroke_classification/requirements.txt`) rather than maintaining a separate environment. The original repo's dependencies (torch 1.10, numpy 1.22) are incompatible with Python 3.11 and CUDA 12.1; the code has been verified to work with torch 2.3.1. See `TrackNetV3/requirements.txt` for the full version rationale and standalone setup instructions.
+
+The pipeline calls `predict.py` as a subprocess, so TrackNetV3's imports don't affect the pipeline venv. Point `--tracknet-python` at the BST venv's Python:
 
 ```bash
-# One-time setup inside the TrackNetV3 clone
-cd /path/to/TrackNetV3
-python3.10 -m venv .venv
-source .venv/bin/activate
-pip install torch==2.0.1 numpy==1.26.4 pandas==2.2.2 opencv-python Pillow parse
-deactivate
+# Download pretrained weights (one-time)
+cd TrackNetV3
+# Download from: https://drive.google.com/file/d/1CfzE87a0f6LhBp0kniSl1-89zaLCZ8cA/view?usp=sharing
+unzip TrackNetV3_ckpts.zip   # creates ckpts/TrackNet_best.pt, ckpts/InpaintNet_best.pt
 
 # Run from the pipeline's own venv
-python -m pipeline.shuttle_extractor --tracknet-dir /path/to/TrackNetV3 \
-    --tracknet-python /path/to/TrackNetV3/.venv/bin/python --workers 2
+python -m pipeline.shuttle_extractor --tracknet-dir TrackNetV3 \
+    --tracknet-python /path/to/bst-venv/bin/python --workers 2
 ```
 
 If omitted, `--tracknet-python` defaults to the current interpreter (`sys.executable`).
@@ -115,12 +113,13 @@ Each `.npy` file has shape `(t, 3)`. To get xy-only coordinates: `shuttle[:, :2]
 ```
 python -m pipeline.build_dataset [OPTIONS]
 
---tracknet-dir PATH    Path to cloned TrackNetV3 repo (required unless --skip-shuttle)
---tracknet-python PATH Python executable in TrackNetV3's venv (default: sys.executable)
+--tracknet-dir PATH    Path to TrackNetV3 directory (required unless --skip-shuttle)
+--tracknet-python PATH Python executable in BST venv (default: sys.executable)
 --workers N            Parallel workers (default 2, safe for shared GPU nodes)
 --skip-download        Skip YouTube download (videos must already exist)
 --skip-shuttle         Skip TrackNetV3 shuttle extraction
 --no-merge             Keep all 19 stroke types (skip class merging)
+--taxonomy NAME        Stroke type taxonomy: 'une_merge_v1' (default), 'merged_25', or 'raw_35'
 --dry-run              Preview what the pipeline would do without executing
 --force                Continue past verification failures
 ```
@@ -144,18 +143,37 @@ ShuttleSet/
 
 Clip filenames: `{video_id}_{set}_{rally}_{ball_round}.mp4`
 
+## Pre-existing Input Data
+
+These files ship with the ShuttleSet dataset and are required by the pipeline. Do not delete them.
+
+| File | Read by | Contents |
+|---|---|---|
+| `ShuttleSet/set/match.csv` | `download_videos.py`, `clip_generator.py` | Match metadata: video IDs, YouTube URLs, player court orientation (`downcourt` flag). 44 matches. |
+| `ShuttleSet/set/{match_folder}/set[1-3].csv` | `clip_generator.py`, `player_mapping.py` | Per-set stroke annotations: stroke type (Chinese), rally/ball_round numbers, frame timestamps, player A/B labels. One folder per match, up to 3 CSVs per folder. |
+| `ShuttleSet/set/homography.csv` | `court_utils.py`, `prepare_train_on_shuttleset.py` | Homography matrices and court corner coordinates for camera-to-court projection. Computed at 1280x720 resolution. Optional for basic pipeline; required for court-normalized features. |
+| `ShuttleSet/flaw_shot_records.csv` | `pipeline/config.py` (parsed at import) | Data quality records: 4 whole-video exclusions and 25 individual shot removals. Drives `EXCLUDED_VIDEOS` and `REMOVED_SHOTS` constants. |
+| `ShuttleSet/my_raw_video_resolution.csv` | `court_utils.py`, `prepare_train_on_shuttleset.py` | Video dimensions (id, width, height). Auto-regenerated by Step 2, but the pre-existing copy is useful as a reference before videos are downloaded. |
+
+The `ShuttleSet/deprecated/` directory contains old scripts and spreadsheets from the original repo. Nothing in the active pipeline reads from it.
+
 ## Configuration
 
 All configuration lives in `pipeline/config.py`. Key constants:
 
 | Constant | Description |
 |---|---|
+| `TAXONOMIES` | Dict of named `Taxonomy` instances (`'une_merge_v1'`, `'merged_25'`, `'raw_35'`). Each taxonomy defines `merge_map`, `base_types`, `n_classes`, and `class_list()`. |
+| `DEFAULT_TAXONOMY` | Name of the default taxonomy (`'une_merge_v1'`). Used by all CLI defaults and fallback code paths. |
+| `UNPREFIXED_TYPES` | Frozenset of raw types that never get `Top_`/`Bottom_` prefixed folders (`{'unknown', 'driven_flight'}`). Used only by clip generation. |
 | `SPLITS` | Train/val/test video ID lists (excluded videos auto-stripped) |
 | `EXCLUDED_VIDEOS` | Parsed from `flaw_shot_records.csv` at import time |
 | `REMOVED_SHOTS` | Individual bad shots, also from `flaw_shot_records.csv` |
-| `MERGE_MAP` | Which subtypes merge into which parents |
+| `UNE_MERGE_V1_MAP` | Default merge map (19 -> 14 types). Used by `TAXONOMY_UNE_MERGE_V1`. |
+| `MERGE_MAP` | Legacy merge map (19 -> 12 types). Used by `TAXONOMY_MERGED_25`. |
 | `CLIP_WINDOW` | Default temporal clipping strategy |
 | `EN_TO_ZH` / `ZH_TO_EN` | English-Chinese stroke name translation (used at CSV I/O boundary only) |
+| `HOMOGRAPHY_RESOLUTION` | Resolution (1280, 720) at which homography matrices were computed. Coordinates must be scaled before applying homography. Used by `court_utils.py`. |
 
 ### Changing Splits
 
@@ -193,14 +211,16 @@ Each module can be run standalone:
 ```bash
 python -m pipeline.download_videos --workers 4
 python -m pipeline.clip_generator --clip-window between_2_hits
-python -m pipeline.shuttle_extractor --tracknet-dir /path/to/TrackNetV3 \
-    --tracknet-python /path/to/TrackNetV3/.venv/bin/python
+python -m pipeline.shuttle_extractor --tracknet-dir TrackNetV3 \
+    --tracknet-python /path/to/bst-venv/bin/python
 python -m pipeline.verify --clips-dir ShuttleSet/clips
 ```
 
 ## For Downstream Consumers
 
 Both architectures read from the same `clips/` and `shuttle_npy/` directories. The pipeline doesn't care what you do with the output.
+
+**Next step for BST:** Run `stroke_classification/preparing_data/prepare_train_on_shuttleset.py` to extract poses (MMPose) and collate into batch-ready arrays. See `data_pipeline_to_model_train.md` at the project root for the full pipeline-to-training walkthrough.
 
 ```python
 # Loading clips (example)
@@ -214,7 +234,8 @@ xy = shuttle[:, :2]           # (t, 2) normalized coordinates
 visibility = shuttle[:, 2]    # (t,) detection confidence
 
 # Getting class labels
-from pipeline.config import get_stroke_types
-labels_25 = get_stroke_types(side='Both', merged=True)   # 25 classes
-labels_35 = get_stroke_types(side='Both', merged=False)   # 35 classes
+from pipeline.config import TAXONOMIES, DEFAULT_TAXONOMY
+labels_29 = TAXONOMIES[DEFAULT_TAXONOMY].class_list()  # 29 classes (une_merge_v1)
+labels_25 = TAXONOMIES['merged_25'].class_list()       # 25 classes
+labels_35 = TAXONOMIES['raw_35'].class_list()           # 35 classes
 ```

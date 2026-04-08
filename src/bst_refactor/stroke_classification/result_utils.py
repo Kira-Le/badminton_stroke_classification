@@ -10,6 +10,14 @@ import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 
+# ---------------------------------------------------------------------------
+# Display defaults for confusion matrix plots
+# ---------------------------------------------------------------------------
+# Max classes before switching from per-cell text to grid lines.
+CELL_TEXT_MAX_CLASSES = 18
+DEFAULT_FONT_SIZE = 12
+CONFUSION_FIG_SIZE = (15, 7)
+
 
 def show_f1_results(
     model_name: str,
@@ -52,15 +60,15 @@ def set_one_ax_confusion_matrix(
     ax: Axes,
     matrix: np.ndarray,
     normalized=True,
-    font_size=12
+    font_size=DEFAULT_FONT_SIZE,
 ):
     classes = np.arange(len(matrix))
     ax_img = ax.imshow(matrix, interpolation='nearest', cmap='Blues')
     fig.colorbar(ax_img, ax=ax)
     ax.set_xticks(classes, classes, fontsize=font_size)
     ax.set_yticks(classes, classes, fontsize=font_size)
-    
-    if len(matrix) < 18:  # 類別少的話可以顯示個別的數值了
+
+    if len(matrix) < CELL_TEXT_MAX_CLASSES:
         fmt = '.2f' if normalized else 'd'
         thresh = matrix.max() / 2.
         for i in range(matrix.shape[0]):
@@ -87,7 +95,7 @@ def plot_confusion_matrix(
     y_pred: np.ndarray,
     need_pre_argmax: bool,
     model_name: str,
-    font_size=12,
+    font_size=DEFAULT_FONT_SIZE,
     save_name=None,
     save=True
 ):
@@ -100,7 +108,7 @@ def plot_confusion_matrix(
     else:
         matrix = confusion_matrix(y_true, y_pred)
 
-    fig = plt.figure(figsize=(15, 7))
+    fig = plt.figure(figsize=CONFUSION_FIG_SIZE)
     fig.suptitle(f'{model_name} Result On Testing Set')
     ax1, ax2 = fig.subplots(1, 2)
     ax1: Axes; ax2: Axes
@@ -122,7 +130,7 @@ def plot_confusion_matrix(
 
 
 if __name__ == '__main__':
-    n_classes = 35
+    n_classes = 29
 
     y_true = np.eye(n_classes).repeat(4, axis=0)
 
@@ -135,7 +143,6 @@ if __name__ == '__main__':
         y_pred=y_pred,
         need_pre_argmax=True,
         model_name='Example',
-        normalize_strategy='precision',
         font_size=6,
-        save=False
+        save=False,
     )

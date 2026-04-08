@@ -84,15 +84,15 @@ class MultiHeadCrossAttention(nn.Module):
             # mask: (b, t) — True for real frames, False for padding
             mask = mask.view(b, 1, 1, t)
             # Set padded positions to -inf so softmax gives them zero weight
-            dots = dots.masked_fill(mask == 0.0, -torch.inf)
+            dots = dots.masked_fill(~mask, -torch.inf)
 
         coef = self.attend(dots)  # softmax -> dropout
         # Weighted sum of values by attention coefficients
-        attension: Tensor = coef @ v.contiguous()
-        # attension: (b, h, t, d_head)
+        attention: Tensor = coef @ v.contiguous()
+        # attention: (b, h, t, d_head)
 
         # Merge heads back: (b, h, t, d_head) -> (b, t, h*d_head)
-        out = attension.transpose(1, 2).reshape(b, t, -1)
+        out = attention.transpose(1, 2).reshape(b, t, -1)
         # out: (b, t, h*d_head)
         out = self.tail(out)  # project back to d_model
         return out  # (b, t, d_model)
@@ -168,6 +168,9 @@ class BST(nn.Module):
         self.learned_token_tem = nn.Parameter(torch.randn(1, d_model))
         # Positional embeddings: added to input so the transformer knows frame order
         # (transformers have no built-in notion of sequence position unlike LSTMs)
+        # Intentionally learnable (nn.Parameter): initialised with sinusoidal values in
+        # init_weights(), but gradients are enabled so the model can fine-tune positions
+        # during training. This gives a sensible starting point without constraining it.
         self.embedding_tem = nn.Parameter(torch.empty(1, 1+seq_len, d_model))  # 1+ for CLS
         self.pre_dropout = nn.Dropout(drop_p, inplace=True)
         self.encoder_tem = TransformerEncoder(d_model, d_head, n_head, depth_tem, d_model * mlp_d_scale, drop_p)
@@ -389,7 +392,7 @@ class BST(nn.Module):
 
 
 # ==========================================================================
-# Backward-compatible aliases for training scripts that import by class name.
+# Pre-configured BST variants — the single source of truth for flag combos.
 # partial(BST, use_ppf=True, ...) creates a "pre-configured" version of BST
 # that acts like a class — you can call BST_CG_AP(in_dim=72, ...) and the
 # flags are already set. Same idea as functools.partial in any Python context.
@@ -402,6 +405,9 @@ BST_CG_AP = partial(BST, use_ppf=True, use_cg=True, use_ap=True)
 
 
 if __name__ == '__main__':
+    from pipeline.config import TAXONOMIES, DEFAULT_TAXONOMY
+    n_class = TAXONOMIES[DEFAULT_TAXONOMY].n_classes
+
     b, t, n = 1, 100, 2
     n_features = (17 + 19 * 1) * n
     pose = torch.randn((b, t, n, n_features), dtype=torch.float)
@@ -412,11 +418,11 @@ if __name__ == '__main__':
 
     # Test all variants produce valid output shapes
     variants = {
-        'BST_0':     BST_0(in_dim=n_features, seq_len=t, n_class=25, d_model=100),
-        'BST_PPF':   BST_PPF(in_dim=n_features, seq_len=t, n_class=25, d_model=100),
-        'BST_CG':    BST_CG(in_dim=n_features, seq_len=t, n_class=25, d_model=100),
-        'BST_AP':    BST_AP(in_dim=n_features, seq_len=t, n_class=25, d_model=100),
-        'BST_CG_AP': BST_CG_AP(in_dim=n_features, seq_len=t, n_class=25, d_model=100),
+        'BST_0':     BST_0(in_dim=n_features, seq_len=t, n_class=n_class, d_model=100),
+        'BST_PPF':   BST_PPF(in_dim=n_features, seq_len=t, n_class=n_class, d_model=100),
+        'BST_CG':    BST_CG(in_dim=n_features, seq_len=t, n_class=n_class, d_model=100),
+        'BST_AP':    BST_AP(in_dim=n_features, seq_len=t, n_class=n_class, d_model=100),
+        'BST_CG_AP': BST_CG_AP(in_dim=n_features, seq_len=t, n_class=n_class, d_model=100),
     }
     for name, model in variants.items():
         output = model(*input_data)

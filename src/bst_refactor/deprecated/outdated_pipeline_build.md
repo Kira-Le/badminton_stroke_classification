@@ -1,3 +1,5 @@
+** outdated_pipeline_build.md — development notes from when the pipeline was being built. All content is now covered by pipeline/README.md**
+
 # Pipeline Build Summary
 
 Summary of changes made to create the `pipeline/` package, which automates the ShuttleSet data pipeline that previously required 6+ manual script runs, hand-editing of config values, and manual file operations.

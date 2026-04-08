@@ -1,5 +1,17 @@
+"""Prepare ShuttleSet training data: shuttle detection, pose estimation, and collation.
+
+Bridges the gap between the pipeline's clip output and BST's expected input format.
+Three steps, each independently skippable:
+  Step 1: Shuttle trajectory detection via TrackNetV3
+  Step 2: 2D/3D player pose estimation via MMPose + court projection
+  Step 3: Collate per-clip .npy files into batch-ready arrays
+
+Run from stroke_classification/:
+    python -m preparing_data.prepare_train_on_shuttleset --help
+"""
 from mmpose.apis import MMPoseInferencer
 
+import argparse
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -8,7 +20,26 @@ from tqdm import tqdm
 import subprocess
 from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor
 
-from shuttleset_dataset import get_stroke_types, get_bone_pairs, make_seq_len_same, create_bones, interpolate_joints
+import sys
+import os
+if __name__ == '__main__':
+    # Add stroke_classification/ for preparing_data imports (matches bst_train.py)
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+    # Add project root for pipeline.config imports
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
+from preparing_data.shuttleset_dataset import (
+    get_bone_pairs,
+    make_seq_len_same,
+    create_bones,
+    interpolate_joints,
+)
+from pipeline.config import (
+    CLIPS_OUTPUT_DIR,
+    SET_INFO_DIR,
+    RESOLUTION_CSV_PATH,
+    Taxonomy, TAXONOMIES, TAXONOMY_UNE_MERGE_V1, DEFAULT_TAXONOMY,
+)
 
 
 def get_H(homography_info: pd.Series):
@@ -219,37 +250,40 @@ def detect_players_2d(
                               for person in result['predictions'][0]])  # batch_size=1 (default)
         # keypoints: (m, J, 2)
 
-        # There should be at least 2 people in the video frame.
-        failed = len(keypoints) < 2
-        if not failed:
-            in_court, pos_normalized = check_pos_in_court(keypoints, vid, all_court_info, res_df)
-            # in_court: (m), pos_normalized: (m, xy), xy=2
-            in_court_pid = np.nonzero(in_court)[0]
-            
-            # There should be 2 players only in a normal case.
-            failed = len(in_court_pid) != 2
-            if not failed:
-                bboxes = np.array([person['bbox'][0]
-                                   for person in result['predictions'][0]])  # batch_size=1 (default)
-                # bboxes: (m, 4)
-
-                # Make sure Top player before Bottom player (comparing y-dim)
-                if pos_normalized[in_court_pid[0], 1] > pos_normalized[in_court_pid[1], 1]:
-                    in_court_pid = np.flip(in_court_pid)
-                
-                failed_ls.append(False)
-                players_positions.append(pos_normalized[in_court_pid])
-                players_joints.append(normalize_joints(
-                    arr=keypoints[in_court_pid],
-                    bbox=bboxes[in_court_pid],
-                    v_height=res_df.loc[vid, 'height'] if normalized_by_v_height else None,
-                    center_align=center_align
-                ))
-
-        if failed:
+        # Need at least 2 detected people in the frame.
+        if len(keypoints) < 2:
             failed_ls.append(True)
             players_positions.append(np.zeros((2, 2), dtype=float))
             players_joints.append(np.zeros((2, J, 2), dtype=float))
+            continue
+
+        in_court, pos_normalized = check_pos_in_court(keypoints, vid, all_court_info, res_df)
+        # in_court: (m), pos_normalized: (m, xy), xy=2
+        in_court_pid = np.nonzero(in_court)[0]
+
+        # Need exactly 2 players on court.
+        if len(in_court_pid) != 2:
+            failed_ls.append(True)
+            players_positions.append(np.zeros((2, 2), dtype=float))
+            players_joints.append(np.zeros((2, J, 2), dtype=float))
+            continue
+
+        bboxes = np.array([person['bbox'][0]
+                           for person in result['predictions'][0]])  # batch_size=1 (default)
+        # bboxes: (m, 4)
+
+        # Make sure Top player before Bottom player (comparing y-dim)
+        if pos_normalized[in_court_pid[0], 1] > pos_normalized[in_court_pid[1], 1]:
+            in_court_pid = np.flip(in_court_pid)
+
+        failed_ls.append(False)
+        players_positions.append(pos_normalized[in_court_pid])
+        players_joints.append(normalize_joints(
+            arr=keypoints[in_court_pid],
+            bbox=bboxes[in_court_pid],
+            v_height=res_df.loc[vid, 'height'] if normalized_by_v_height else None,
+            center_align=center_align
+        ))
 
     players_positions = np.stack(players_positions)
     # players_positions: (t, m, xy)
@@ -283,12 +317,17 @@ def detect_players_3d(
     players_joints = []
 
     gen_2d = inferencer_2d(str(video_path), show=False)
-    inferencer_3d = MMPoseInferencer(pose3d='human3d')  # Should be written like this because there's a bug when you use it in '2d' way.
+    # WARNING: intentionally instantiated per-call, NOT per-loop-iteration in the caller.
+    # The original author found that passing inferencer_3d as a parameter (the way
+    # inferencer_2d is passed) triggers an MMPose bug. The commented-out parameter
+    # on line ~300 and the commented-out caller on line ~588 are evidence of this.
+    # This DOES reload model weights from disk for every clip, which is slow.
+    # If MMPose fixes the bug upstream, hoist this into prepare_3d_dataset_npy_from_raw_video
+    # and pass it in like inferencer_2d to avoid the repeated load.
+    inferencer_3d = MMPoseInferencer(pose3d='human3d')
     gen_3d = inferencer_3d(str(video_path), show=False)
     
     for frame_num, (result_2d, result_3d) in enumerate(zip(gen_2d, gen_3d)):
-        failed = False
-
         keypoints_2d = np.array([
             person['keypoints']
             for person in result_2d['predictions'][0]]  # batch_size=1 (default)
@@ -301,28 +340,31 @@ def detect_players_3d(
         )
         # keypoints_3d: (m, J, 3)
 
-        # There should be at least 2 people in the video frame.
-        failed = len(keypoints_2d) < 2
-        if not failed:
-            in_court, pos_normalized = check_pos_in_court(keypoints_2d, vid, all_court_info, res_df)
-            # in_court: (m), pos_normalized: (m, xy), xy=2
-            in_court_pid = np.nonzero(in_court)[0]
-            
-            # There should be 2 players only in a normal case.
-            failed = len(in_court_pid) != 2
-            if not failed:
-                # Make sure Top player before Bottom player (comparing y-dim)
-                if pos_normalized[in_court_pid[0], 1] > pos_normalized[in_court_pid[1], 1]:
-                    in_court_pid = np.flip(in_court_pid)
-                
-                failed_ls.append(False)
-                players_positions.append(pos_normalized[in_court_pid])
-                players_joints.append(keypoints_3d[in_court_pid])
-
-        if failed:
+        # Need at least 2 detected people in the frame.
+        if len(keypoints_2d) < 2:
             failed_ls.append(True)
             players_positions.append(np.zeros((2, 2), dtype=float))
             players_joints.append(np.zeros((2, J, 3), dtype=float))
+            continue
+
+        in_court, pos_normalized = check_pos_in_court(keypoints_2d, vid, all_court_info, res_df)
+        # in_court: (m), pos_normalized: (m, xy), xy=2
+        in_court_pid = np.nonzero(in_court)[0]
+
+        # Need exactly 2 players on court.
+        if len(in_court_pid) != 2:
+            failed_ls.append(True)
+            players_positions.append(np.zeros((2, 2), dtype=float))
+            players_joints.append(np.zeros((2, J, 3), dtype=float))
+            continue
+
+        # Make sure Top player before Bottom player (comparing y-dim)
+        if pos_normalized[in_court_pid[0], 1] > pos_normalized[in_court_pid[1], 1]:
+            in_court_pid = np.flip(in_court_pid)
+
+        failed_ls.append(False)
+        players_positions.append(pos_normalized[in_court_pid])
+        players_joints.append(keypoints_3d[in_court_pid])
 
     players_positions = np.stack(players_positions)
     # players_positions: (t, m, xy)
@@ -332,24 +374,31 @@ def detect_players_3d(
     return failed_ls, players_positions, players_joints
 
 
-def detect_shuttlecock_by_TrackNetV3_with_attension(
+def detect_shuttlecock_by_TrackNetV3_with_attention(
     cur_i: int,
     total_tasks: int,
     video_path: Path,
     save_dir: Path,
-    model_folder=Path("C:/MyResearch/TrackNetV3-main"),
+    model_folder: Path = None,
 ):
-    '''
-    TrackNetV3 (using attention)
+    '''TrackNetV3 (using attention).
+
     https://github.com/alenzenx/TrackNetV3
+
+    :param cur_i: Current task index (for progress printing).
+    :param total_tasks: Total number of tasks (for progress printing).
+    :param video_path: Path to the clip .mp4 file.
+    :param save_dir: Directory to save the shuttle detection CSV.
+    :param model_folder: Path to the cloned TrackNetV3 repository.
+    :raises ValueError: If model_folder is None.
     '''
+    if model_folder is None:
+        raise ValueError('model_folder is required for shuttle detection.')
     process_args = [
         'python', str(model_folder/'predict.py').replace('\\', '/'),
         "--video_file", str(video_path).replace('\\', '/'),
-        "--model_file", str(model_folder/"exp"/"model_best.pt").replace('\\', '/'),
+        "--tracknet_file", str(model_folder/"ckpts"/"TrackNet_best.pt").replace('\\', '/'),
         "--save_dir", str(save_dir).replace('\\', '/'),
-        # "--output_video"  # added myself
-        # "--verbose"  # added myself
     ]
     r = subprocess.run(process_args)
     assert r.returncode == 0, 'Subprocess failed!'
@@ -364,22 +413,29 @@ def detect_shuttlecock_by_TrackNetV3_with_rectification(
     total_tasks: int,
     video_path: Path,
     save_dir: Path,
-    model_folder=Path("C:/MyResearch/TrackNetV3-master"),
+    model_folder: Path = None,
 ):
-    '''
-    TrackNetV3 (with rectification module)
+    '''TrackNetV3 (with rectification module).
+
     https://github.com/qaz812345/TrackNetV3
+
+    :param cur_i: Current task index (for progress printing).
+    :param total_tasks: Total number of tasks (for progress printing).
+    :param video_path: Path to the clip .mp4 file.
+    :param save_dir: Directory to save the shuttle detection CSV.
+    :param model_folder: Path to the cloned TrackNetV3 repository.
+    :raises ValueError: If model_folder is None.
     '''
+    if model_folder is None:
+        raise ValueError('model_folder is required for shuttle detection.')
     process_args = [
         "python", str(model_folder/'predict.py').replace('\\', '/'),
         "--video_file", str(video_path).replace('\\', '/'),
-        "--tracknet_file", str(model_folder/'weight'/'TrackNet_best.pt').replace('\\', '/'),
-        "--inpaintnet_file", str(model_folder/'weight'/'InpaintNet_best.pt').replace('\\', '/'),
+        "--tracknet_file", str(model_folder/'ckpts'/'TrackNet_best.pt').replace('\\', '/'),
+        "--inpaintnet_file", str(model_folder/'ckpts'/'InpaintNet_best.pt').replace('\\', '/'),
         "--save_dir", str(save_dir).replace('\\', '/'),
-        # "--output_video",
         "--large_video"
     ]
-    subprocess.run(process_args)
     r = subprocess.run(process_args)
     assert r.returncode == 0, 'Subprocess failed!'
 
@@ -389,7 +445,7 @@ def detect_shuttlecock_by_TrackNetV3_with_rectification(
 
 
 def get_shuttle_result(path: Path, v_width, v_height):
-    df = pd.read_csv(str(path)).drop_duplicates('Frame')  # for the .csv generated by TrackNetV3 with attension
+    df = pd.read_csv(str(path)).drop_duplicates('Frame')  # for the .csv generated by TrackNetV3 with attention
     df = df.set_index('Frame').drop(columns='Visibility')
     shuttle_camera = df.to_numpy().astype(float)
     # shuttle_camera: (t, 2)
@@ -413,9 +469,15 @@ def prepare_trajectory(
     model_folder: Path,
     save_shuttle_dir: Path,
 ):
-    '''Trajectory detection
+    '''Run TrackNetV3 shuttle trajectory detection on all clips.
 
-    Notice: max_workers shouldn't be too high because this process is using GPU as well.
+    Scans my_clips_folder for .mp4 files and runs TrackNetV3 on each one,
+    saving shuttle detection CSVs to save_shuttle_dir. Skips clips that
+    already have a corresponding CSV.
+
+    :param my_clips_folder: Directory containing clip .mp4 files (searched recursively).
+    :param model_folder: Path to cloned TrackNetV3 repository.
+    :param save_shuttle_dir: Directory to save shuttle detection CSVs.
     '''
     all_mp4_paths = sorted(my_clips_folder.glob('**/*.mp4'))
 
@@ -424,7 +486,7 @@ def prepare_trajectory(
             shuttle_result_path = save_shuttle_dir/(video_path.stem+'_ball.csv')
             if not shuttle_result_path.exists():
                 executor.submit(
-                    detect_shuttlecock_by_TrackNetV3_with_attension,
+                    detect_shuttlecock_by_TrackNetV3_with_attention,
                     i, len(all_mp4_paths),
                     video_path=video_path,
                     save_dir=save_shuttle_dir,
@@ -441,6 +503,21 @@ def prepare_2d_dataset_npy_from_raw_video(
     joints_normalized_by_v_height=False,
     joints_center_align=False
 ):
+    '''Run MMPose 2D pose estimation on clips and save per-clip .npy files.
+
+    For each clip, detects player keypoints (COCO 17-joint), extracts court
+    positions via homography, normalizes joints, and combines with shuttle
+    trajectory data. Saves _joints.npy, _pos.npy, _shuttle.npy per clip.
+
+    :param my_clips_folder: Directory containing clip .mp4 files (searched recursively).
+    :param save_shuttle_dir: Directory containing shuttle detection CSVs from Step 1.
+    :param save_root_dir: Output directory for per-clip .npy files.
+    :param resolution_df: DataFrame with video resolutions, indexed by video ID.
+    :param all_court_info: Dict mapping video ID to court info (homography, borders).
+    :param joints_normalized_by_v_height: If True, normalize joints by video height
+        instead of bounding box diagonal.
+    :param joints_center_align: If True, center-align joints within bounding box.
+    '''
     # Make sure there are folders that can contain .npy files.
     mk_same_dir_structure(src_dir=my_clips_folder, target_dir=save_root_dir)
 
@@ -477,9 +554,13 @@ def prepare_2d_dataset_npy_from_raw_video(
             )
             # shuttle_result: (F, 2)
 
-            # Set the content of the frame failed in players detection to 0
+            # Set the content of the frame failed in players detection to 0.
+            # Guard against frame count mismatch: MMPose and TrackNetV3 use
+            # different video backends that can disagree by 1-2 frames.
             if np.any(failed_ls):
-                shuttle_result[failed_ls, :] = 0
+                min_frames = min(len(failed_ls), len(shuttle_result))
+                failed_mask = np.array(failed_ls[:min_frames])
+                shuttle_result[:min_frames][failed_mask, :] = 0
 
             np.save(save_branch+'_pos.npy', players_positions)
             # (F, P, xy)
@@ -498,6 +579,16 @@ def prepare_3d_dataset_npy_from_raw_video(
     resolution_df: pd.DataFrame,
     all_court_info: dict,
 ):
+    '''Run MMPose 3D pose estimation on clips and save per-clip .npy files.
+
+    Same as prepare_2d_dataset_npy_from_raw_video but uses 3D keypoints (xyz).
+
+    :param my_clips_folder: Directory containing clip .mp4 files (searched recursively).
+    :param save_shuttle_dir: Directory containing shuttle detection CSVs from Step 1.
+    :param save_root_dir: Output directory for per-clip .npy files.
+    :param resolution_df: DataFrame with video resolutions, indexed by video ID.
+    :param all_court_info: Dict mapping video ID to court info (homography, borders).
+    '''
     # Make sure there are folders that can contain .npy files.
     mk_same_dir_structure(src_dir=my_clips_folder, target_dir=save_root_dir)
 
@@ -534,9 +625,13 @@ def prepare_3d_dataset_npy_from_raw_video(
             )
             # shuttle_result: (F, 2)
 
-            # Set the content of the frame failed in players detection to 0
+            # Set the content of the frame failed in players detection to 0.
+            # Guard against frame count mismatch: MMPose and TrackNetV3 use
+            # different video backends that can disagree by 1-2 frames.
             if np.any(failed_ls):
-                shuttle_result[failed_ls, :] = 0
+                min_frames = min(len(failed_ls), len(shuttle_result))
+                failed_mask = np.array(failed_ls[:min_frames])
+                shuttle_result[:min_frames][failed_mask, :] = 0
 
             np.save(save_branch+'_pos.npy', players_positions)
             # (F, P, xy)
@@ -555,19 +650,16 @@ def pad_and_augment_one_npy_video(
     shuttle: np.ndarray,
     bone_pairs: list[int, int]
 ):
-    '''Pad to the same sequence length and Augment bones and interpolations.
-    Input shape:
-        `joints`: (t, 2, J, d)
-        `pos`: (t, 2, xy)
-        `shuttle`: (t, xy)
-    output:
-        J_only: (s, 2, J, d)
-        JnB_interp: (s, 2, J+B, d)
-        JnB_bone: (s, 2, J+B, d)
-        Jn2B: (s, 2, J+2B, d)
-        pos: (s, 2, xy)
-        shuttle: (s, xy)
-        video_len: int
+    '''Pad to uniform sequence length and compute bone/interpolation augmentations.
+
+    :param seq_len: Target sequence length. Shorter clips are zero-padded; longer
+        clips are strided (subsampled) to fit.
+    :param joints: Joint keypoints, shape (t, 2, J, d).
+    :param pos: Player court positions, shape (t, 2, xy).
+    :param shuttle: Shuttle coordinates, shape (t, xy).
+    :param bone_pairs: List of (start_joint, end_joint) index pairs for bone computation.
+    :return: Tuple of (J_only, JnB_interp, JnB_bone, Jn2B, pos, shuttle, video_len)
+        where video_len is the number of real (non-padded) frames.
     '''
     joints = joints.astype(np.float32)
     pos = pos.astype(np.float32)
@@ -585,19 +677,36 @@ def pad_and_augment_one_npy_video(
     return joints, joints_interpolated, JnB_bone, Jn2B, pos, shuttle, new_video_len
 
 
-def collate_npy(root_dir: Path, set_name: str, seq_len: int, save_dir: Path):
-    '''Collate .npy data before to make training faster.
-    Notice: This will pad the arrays to the same length.
+def collate_npy(
+    root_dir: Path,
+    set_name: str,
+    seq_len: int,
+    save_dir: Path,
+    taxonomy: Taxonomy = TAXONOMY_UNE_MERGE_V1,
+):
+    '''Collate per-clip .npy files into stacked batch arrays for one split.
+
+    Loads all *_joints.npy, *_pos.npy, *_shuttle.npy from root_dir/set_name,
+    pads to uniform seq_len, computes bone vectors and interpolations, then
+    saves the stacked arrays into save_dir/set_name/.
+
+    :param root_dir: Directory containing train/val/test subdirectories with per-clip .npy files.
+    :param set_name: One of 'train', 'val', 'test'.
+    :param seq_len: Target sequence length (frames). Clips are padded/strided to this length.
+    :param save_dir: Output directory. A set_name/ subdirectory is created inside.
+    :param taxonomy: Taxonomy defining the class list for label indexing.
     '''
     assert set_name in ['train', 'val', 'test'], 'Invalid set_name.'
-    
-    class_ls = get_stroke_types()
+
+    class_ls = taxonomy.class_list()
 
     # load .npy branch names
     data_branches = []
     labels = []
     target_dir = root_dir/set_name
     for typ in target_dir.iterdir():
+        if not typ.is_dir():
+            continue
         shots = sorted([str(s).replace('_pos.npy', '') for s in typ.glob('*_pos.npy')])
         data_branches += shots
         labels.append(np.full(len(shots), class_ls.index(typ.name), dtype=np.int64))
@@ -682,72 +791,148 @@ def collate_npy(root_dir: Path, set_name: str, seq_len: int, save_dir: Path):
     print('Collation is complete.')
 
 
+def main():
+    """Parse CLI arguments and run the requested pipeline steps.
+
+    Usage (from stroke_classification/ directory):
+        python -m preparing_data.prepare_train_on_shuttleset --dry-run
+        python -m preparing_data.prepare_train_on_shuttleset --skip-trajectory --skip-pose
+        python -m preparing_data.prepare_train_on_shuttleset --tracknet-dir /path/to/TrackNetV3
+    """
+    parser = argparse.ArgumentParser(
+        description=(
+            'Prepare ShuttleSet training data in 3 steps:\n'
+            '  Step 1: Shuttle trajectory detection (TrackNetV3)\n'
+            '  Step 2: 2D/3D pose estimation (MMPose)\n'
+            '  Step 3: Collate per-clip .npy files into batch arrays\n'
+            '\n'
+            'Each step can be skipped independently.'
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    # Step control
+    parser.add_argument('--skip-trajectory', action='store_true',
+                        help='Skip Step 1 (shuttle trajectory detection)')
+    parser.add_argument('--skip-pose', action='store_true',
+                        help='Skip Step 2 (pose estimation)')
+    parser.add_argument('--skip-collate', action='store_true',
+                        help='Skip Step 3 (collation into batch arrays)')
+
+    # Data configuration
+    parser.add_argument('--seq-len', type=int, default=30, choices=[30, 100],
+                        help='Target sequence length in frames (default: 30)')
+    parser.add_argument('--taxonomy', default=DEFAULT_TAXONOMY, choices=list(TAXONOMIES.keys()),
+                        help=f'Stroke type taxonomy (default: {DEFAULT_TAXONOMY})')
+    parser.add_argument('--use-3d-pose', action='store_true',
+                        help='Use 3D pose estimation instead of 2D')
+
+    # Path overrides (only the ones that genuinely vary)
+    parser.add_argument('--clips-dir', type=Path, default=CLIPS_OUTPUT_DIR,
+                        help=f'Clip .mp4 input directory (default: {CLIPS_OUTPUT_DIR})')
+    parser.add_argument('--tracknet-dir', type=Path, default=None,
+                        help='Path to TrackNetV3 repo (required for Step 1)')
+
+    parser.add_argument('--dry-run', action='store_true',
+                        help='Preview what would be done without executing')
+
+    args = parser.parse_args()
+
+    # ---- Resolve taxonomy and derive intermediate paths ----
+    taxonomy = TAXONOMIES[args.taxonomy]
+    str_3d = '_3d' if args.use_3d_pose else ''
+    preparing_root = Path(__file__).resolve().parent / f'ShuttleSet_data_{taxonomy.name}'
+
+    if args.seq_len == 30:
+        shuttle_dir = preparing_root / 'shuttlecock_temp'
+        npy_raw_dir = preparing_root / f'dataset{str_3d}_npy'
+        npy_collated_dir = preparing_root / f'dataset{str_3d}_npy_collated'
+    else:  # 100
+        shuttle_dir = preparing_root / 'shuttlecock_temp_between_2_hits_with_max_limits'
+        npy_raw_dir = preparing_root / f'dataset{str_3d}_npy_between_2_hits_with_max_limits'
+        npy_collated_dir = preparing_root / (
+            f'dataset{str_3d}_npy_collated_between_2_hits_with_max_limits_seq_100'
+        )
+
+    # ---- Dry run ----
+    if args.dry_run:
+        print('=== DRY RUN (no files will be created) ===\n')
+        print(f'  seq_len:        {args.seq_len}')
+        print(f'  taxonomy:       {taxonomy.name} ({taxonomy.n_classes} classes)')
+        print(f'  use_3d_pose:    {args.use_3d_pose}')
+        print(f'  clips_dir:      {args.clips_dir}')
+        print(f'  shuttle_dir:    {shuttle_dir}')
+        print(f'  npy_raw_dir:    {npy_raw_dir}')
+        print(f'  npy_collated:   {npy_collated_dir}')
+        print(f'  homography:     {SET_INFO_DIR / "homography.csv"}')
+        print(f'  resolution:     {RESOLUTION_CSV_PATH}')
+        print(f'\n  Step 1 (trajectory): {"SKIP" if args.skip_trajectory else "RUN"}')
+        print(f'  Step 2 (pose):       {"SKIP" if args.skip_pose else "RUN"}')
+        print(f'  Step 3 (collate):    {"SKIP" if args.skip_collate else "RUN"}')
+        print('\n=== End dry run ===')
+        return
+
+    # ---- Load homography and resolution data (needed by Steps 1-2) ----
+    homo_df = pd.read_csv(str(SET_INFO_DIR / 'homography.csv')).set_index('id')
+    resolution_df = pd.read_csv(str(RESOLUTION_CSV_PATH)).set_index('id')
+    all_court_info = {
+        vid: get_court_info(homo_df, vid) for vid in resolution_df.index
+    }
+
+    # ---- Step 1: Shuttle trajectory detection ----
+    if not args.skip_trajectory:
+        if args.tracknet_dir is None:
+            parser.error('--tracknet-dir is required for Step 1 (trajectory detection).')
+        print('\n--- Step 1: Shuttle trajectory detection ---')
+        shuttle_dir.mkdir(parents=True, exist_ok=True)
+        prepare_trajectory(
+            my_clips_folder=args.clips_dir,
+            model_folder=args.tracknet_dir,
+            save_shuttle_dir=shuttle_dir,
+        )
+    else:
+        print('Step 1: Skipped (--skip-trajectory)')
+
+    # ---- Step 2: Pose estimation ----
+    if not args.skip_pose:
+        print('\n--- Step 2: Pose estimation ---')
+        if args.use_3d_pose:
+            prepare_3d_dataset_npy_from_raw_video(
+                my_clips_folder=args.clips_dir,
+                save_shuttle_dir=shuttle_dir,
+                save_root_dir=npy_raw_dir,
+                resolution_df=resolution_df,
+                all_court_info=all_court_info,
+            )
+        else:
+            prepare_2d_dataset_npy_from_raw_video(
+                my_clips_folder=args.clips_dir,
+                save_shuttle_dir=shuttle_dir,
+                save_root_dir=npy_raw_dir,
+                resolution_df=resolution_df,
+                all_court_info=all_court_info,
+                joints_normalized_by_v_height=False,
+                joints_center_align=True,
+            )
+    else:
+        print('Step 2: Skipped (--skip-pose)')
+
+    # ---- Step 3: Collation ----
+    if not args.skip_collate:
+        print('\n--- Step 3: Collate .npy files ---')
+        for set_name in ['train', 'val', 'test']:
+            collate_npy(
+                root_dir=npy_raw_dir,
+                set_name=set_name,
+                seq_len=args.seq_len,
+                save_dir=npy_collated_dir,
+                taxonomy=taxonomy,
+            )
+    else:
+        print('Step 3: Skipped (--skip-collate)')
+
+    print('\nAll requested steps complete.')
+
+
 if __name__ == '__main__':
-    seq_len = 30
-    use_3d_pose = False
-
-    my_clips_root = Path('C:/BST_advanced/ShuttleSet')
-    preparing_root = Path('preparing_data/ShuttleSet_data')
-
-    str_3d = '_3d' if use_3d_pose else ''
-    match seq_len:
-        case 30:
-            my_clips_folder = my_clips_root/"shuttle_set"
-            
-            # Save directories (Step 1-3)
-            save_shuttle_dir = preparing_root/'shuttlecock_temp'
-            save_root_dir_raw = preparing_root/f'dataset{str_3d}_npy'
-            save_root_dir_collate = preparing_root/f'dataset{str_3d}_npy_collated'
-        
-        case 100:
-            my_clips_folder = my_clips_root/"shuttle_set_between_2_hits_with_max_limits"
-            
-            # Save directories (Step 1-3)
-            save_shuttle_dir = preparing_root/'shuttlecock_temp_between_2_hits_with_max_limits'
-            save_root_dir_raw = preparing_root/f'dataset{str_3d}_npy_between_2_hits_with_max_limits'
-            save_root_dir_collate = preparing_root/f'dataset{str_3d}_npy_collated_between_2_hits_with_max_limits_seq_100'
-
-        case _:
-            raise NotImplementedError(f'Invalid seq_len: {seq_len}. Must be 30 or 100.')
-
-    homo_df = pd.read_csv(my_clips_root/"set/homography.csv").set_index('id')
-    resolution_df = pd.read_csv(my_clips_root/"my_raw_video_resolution.csv").set_index('id')
-
-    all_court_info = {vid: get_court_info(homo_df, vid)
-                      for vid in resolution_df.index}
-
-    ## I recommended to run each Step individually.
-
-    ## Step 1
-    # prepare_trajectory(
-    #     my_clips_folder=my_clips_folder,
-    #     model_folder=Path("C:/MyResearch/TrackNetV3-main"),
-    #     save_shuttle_dir=save_shuttle_dir
-    # )
-
-    ## Step 2 (choose 2d or 3d)
-    # prepare_2d_dataset_npy_from_raw_video(
-    #     my_clips_folder,
-    #     save_shuttle_dir,
-    #     save_root_dir_raw,
-    #     resolution_df,
-    #     all_court_info,
-    #     joints_normalized_by_v_height=False,
-    #     joints_center_align=True
-    # )
-    # prepare_3d_dataset_npy_from_raw_video(
-    #     my_clips_folder,
-    #     save_shuttle_dir,
-    #     save_root_dir_raw,
-    #     resolution_df,
-    #     all_court_info,
-    # )
-
-    ## Step 3
-    # for set_name in ['train', 'val', 'test']:
-    #     collate_npy(
-    #         root_dir=save_root_dir_raw,
-    #         set_name=set_name,
-    #         seq_len=seq_len,
-    #         save_dir=save_root_dir_collate
-    #     )
+    main()

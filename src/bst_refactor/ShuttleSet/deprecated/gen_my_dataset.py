@@ -1,3 +1,28 @@
+"""DEPRECATED (2026-04-08) — Superseded by pipeline/clip_generator.py.
+
+Original manual clip generation script. Generates stroke clips from raw
+ShuttleSet match videos one player/split at a time using MoviePy.
+
+Superseded by:
+    pipeline/clip_generator.py  — automated clip generation for all
+        splits, both players, with flaw filtering and taxonomy-aware merging.
+    pipeline/player_mapping.py  — A/B -> Top/Bottom mapping (replaces the
+        inline XOR logic at lines 34-37).
+    pipeline/config.py          — centralised paths, splits, stroke types.
+
+To align with the current codebase (if ever needed):
+    1. Replace hardcoded splits (lines 222-224) with
+       ``from pipeline.config import SPLITS``
+    2. Replace hardcoded Chinese stroke list (lines 229-233) with
+       ``from pipeline.config import STROKE_TYPES_19_ZH``
+    3. Replace hardcoded paths (lines 216-218) with config constants
+       (RAW_VIDEO_DIR, CLIPS_OUTPUT_DIR)
+    4. Replace inline player mapping (lines 34-37) with
+       ``from pipeline.player_mapping import map_players``
+    5. Add sys.path setup or convert to absolute imports
+    6. Replace ``from utils import *`` with direct imports from
+       pipeline modules
+"""
 from utils import *
 
 import moviepy.editor as mpe

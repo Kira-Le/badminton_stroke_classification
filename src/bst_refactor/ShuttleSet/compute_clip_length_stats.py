@@ -1,4 +1,4 @@
-"""Compute median and std of frame lengths for the BST ShuttleSet 25-class dataset
+"""Compute median and std of frame lengths for the BST ShuttleSet dataset
 using the between_2_hits_with_max_limits clipping strategy.
 
 Replicates the clipping logic from gen_my_dataset.py using only the CSV annotations

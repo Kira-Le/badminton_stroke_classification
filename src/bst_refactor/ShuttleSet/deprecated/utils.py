@@ -1,3 +1,15 @@
+"""DEPRECATED (2026-04-08) — Superseded by pipeline/clip_generator.py.
+
+Frame/time conversion helpers and an OpenCV video writer, originally used
+by gen_my_dataset.py.
+
+Superseded by:
+    pipeline/clip_generator.py  — contains its own ``_frame_to_time()``
+        and uses MoviePy for video writing.
+
+No alignment needed — if gen_my_dataset.py is not used, this module has
+no consumers.
+"""
 import cv2
 from typing import Union
 

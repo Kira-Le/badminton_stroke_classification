@@ -4,7 +4,7 @@ Runs all pipeline steps in sequence:
   1. Download videos from YouTube (optional, skip with --skip-download)
   2. Build resolution CSV from downloaded videos
   3. Generate labeled clips (all splits, both players, English folder names)
-  4. Apply class merge (19 -> 12 stroke types, skip with --no-merge)
+  4. Apply class merge per active taxonomy (skip with --no-merge)
   5. Verify clips
   6. Extract shuttle trajectories via TrackNetV3 (skip with --skip-shuttle)
 
@@ -22,6 +22,7 @@ from pathlib import Path
 from pipeline.config import (
     RAW_VIDEO_DIR, CLIPS_OUTPUT_DIR, RESOLUTION_CSV_PATH,
     SPLITS, EXCLUDED_VIDEOS, REMOVED_SHOTS, MERGE_MAP, CLIP_WINDOW,
+    TAXONOMIES, TAXONOMY_UNE_MERGE_V1, DEFAULT_TAXONOMY, Taxonomy,
 )
 from pipeline.download_videos import download_all_videos, build_resolution_csv
 from pipeline.clip_generator import generate_all_clips, apply_class_merge
@@ -79,6 +80,7 @@ def dry_run(
     skip_shuttle: bool = False,
     no_merge: bool = False,
     tracknet_dir: Path | None = None,
+    taxonomy: Taxonomy = TAXONOMY_UNE_MERGE_V1,
 ) -> None:
     """Preview what the pipeline would do without executing anything.
 
@@ -86,11 +88,18 @@ def dry_run(
     :param skip_shuttle: Whether the shuttle extraction step is skipped.
     :param no_merge: Whether class merging is skipped.
     :param tracknet_dir: Path to TrackNetV3 repo.
+    :param taxonomy: Taxonomy to use for class merging and labelling.
     """
     print('=== DRY RUN (no files will be created or moved) ===\n')
+    print(f'  taxonomy: {taxonomy.name} ({taxonomy.n_classes} classes)')
 
+    skip_merge = no_merge or taxonomy.merge_map is None
     vid_count = sum(len(ids) for ids in SPLITS.values())
     split_summary = ', '.join(f'{k}={len(v)}' for k, v in SPLITS.items())
+
+    merge_detail = 'SKIP'
+    if not skip_merge:
+        merge_detail = f'{len(taxonomy.merge_map)} subtypes merged into parents'
 
     steps = [
         ('1. Download videos',
@@ -102,8 +111,7 @@ def dry_run(
          f'window: {CLIP_WINDOW}, '
          f'{len(REMOVED_SHOTS)} shots excluded, '
          f'output: {CLIPS_OUTPUT_DIR}'),
-        ('4. Class merge',
-         'SKIP' if no_merge else f'{len(MERGE_MAP)} subtypes merged into parents'),
+        ('4. Class merge', merge_detail),
         ('5. Verify clips',
          'Check splits, excluded videos, removed shots, merge'),
         ('6. Shuttle extraction',
@@ -127,6 +135,7 @@ def run_pipeline(
     force: bool = False,
     workers: int = 2,
     tracknet_python: Path | None = None,
+    taxonomy: Taxonomy = TAXONOMY_UNE_MERGE_V1,
 ) -> None:
     """Run the full ShuttleSet data pipeline.
 
@@ -139,7 +148,8 @@ def run_pipeline(
     :param no_merge: Skip class merging (keep all 19 stroke types).
     :param force: Continue to step 6 even if verification fails.
     :param workers: Parallel workers for downloads and TrackNetV3 (default 2).
-    :param tracknet_python: Python executable in TrackNetV3's venv.
+    :param tracknet_python: Python executable in BST venv (shared with TrackNetV3).
+    :param taxonomy: Taxonomy to use for class merging.
     """
     _validate_inputs(tracknet_dir, skip_download, skip_shuttle)
 
@@ -168,11 +178,13 @@ def run_pipeline(
     generate_all_clips()
 
     # Step 4: Apply class merge
-    if not no_merge:
-        _step(4, 'Applying class merge (19 -> 12 types)')
-        apply_class_merge()
+    skip_merge = no_merge or taxonomy.merge_map is None
+    if not skip_merge:
+        n_merges = len(taxonomy.merge_map)
+        _step(4, f'Applying class merge ({n_merges} subtypes -> parents)')
+        apply_class_merge(taxonomy=taxonomy)
     else:
-        print('Step 4: Skipped (--no-merge)')
+        print('Step 4: Skipped (no merge for this taxonomy)')
 
     # Step 5: Verify clips
     _step(5, 'Verifying clips')
@@ -182,8 +194,8 @@ def run_pipeline(
         verify_no_excluded(clip_paths),
         verify_no_removed_shots(clip_paths),
     ]
-    if not no_merge:
-        checks.append(verify_merge())
+    if not skip_merge:
+        checks.append(verify_merge(taxonomy=taxonomy))
     warn_orphan_files(CLIPS_OUTPUT_DIR, clip_paths)
     print_dataset_summary()
 
@@ -226,16 +238,20 @@ if __name__ == '__main__':
                         help='Skip TrackNetV3 shuttle trajectory extraction')
     parser.add_argument('--no-merge', action='store_true',
                         help='Skip class merging (keep all 19 stroke types)')
+    parser.add_argument('--taxonomy', default=DEFAULT_TAXONOMY, choices=list(TAXONOMIES.keys()),
+                        help=f'Stroke type taxonomy (default: {DEFAULT_TAXONOMY})')
     parser.add_argument('--dry-run', action='store_true',
                         help='Preview what the pipeline would do without executing')
     parser.add_argument('--force', action='store_true',
                         help='Continue past verification failures')
     parser.add_argument('--tracknet-python', type=Path, default=None,
-                        help='Python executable in TrackNetV3 venv (avoids dependency conflicts)')
+                        help='Python executable in BST venv (shared with TrackNetV3)')
     args = parser.parse_args()
 
     # Validate early -- catches bad paths before both dry_run and run_pipeline
     _validate_inputs(args.tracknet_dir, args.skip_download, args.skip_shuttle)
+
+    taxonomy = TAXONOMIES[args.taxonomy]
 
     if args.dry_run:
         dry_run(
@@ -243,6 +259,7 @@ if __name__ == '__main__':
             skip_shuttle=args.skip_shuttle,
             no_merge=args.no_merge,
             tracknet_dir=args.tracknet_dir,
+            taxonomy=taxonomy,
         )
     else:
         run_pipeline(
@@ -253,4 +270,5 @@ if __name__ == '__main__':
             force=args.force,
             workers=args.workers,
             tracknet_python=args.tracknet_python,
+            taxonomy=taxonomy,
         )

@@ -56,8 +56,7 @@ def download_video(
         result = subprocess.run(
             [
                 'yt-dlp',
-                '--format', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-                '--merge-output-format', 'mp4',
+                '--format', 'bestvideo[ext=mp4]/best[ext=mp4]/best',
                 '--output', output_template,
                 '--no-playlist',
                 '--retries', '3',
