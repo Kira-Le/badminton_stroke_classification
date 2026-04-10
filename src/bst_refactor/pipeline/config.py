@@ -5,6 +5,7 @@ CSV I/O), flaw records, merge rules, and default paths. Every other module in
 the pipeline imports from here instead of hardcoding these values.
 """
 import csv
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -69,12 +70,28 @@ MERGE_MAP: dict[str, str] = {
     'defensive_return_drive': 'drive',
 }
 
+UNE_MERGE_V1_MAP: dict[str, str] = {
+    'defensive_return_lob':   'lob',
+    'driven_flight':          'drive',
+    'back_court_drive':       'drive',
+    'defensive_return_drive': 'drive',
+}
+
 # The 12 merged stroke types (English), in a stable order.
 # These are the types that receive Top_/Bottom_ prefixes in the 25-class system.
 STROKE_TYPES_12_MERGED = [
     'net_shot', 'return_net', 'smash', 'lob',
     'clear', 'drive', 'drop', 'push',
     'rush', 'cross_court_net_shot', 'short_service', 'long_service',
+]
+
+# The 14 UNE merged stroke types: keeps wrist_smash and passive_drop as
+# distinct classes, folds driven_flight into drive instead of unknown.
+STROKE_TYPES_14_UNE_MERGE_V1 = [
+    'net_shot', 'return_net', 'smash', 'wrist_smash',
+    'lob', 'clear', 'drive', 'drop',
+    'passive_drop', 'push', 'rush', 'cross_court_net_shot',
+    'short_service', 'long_service',
 ]
 
 # The 17 raw stroke types (English) that receive Top_/Bottom_ prefixes in the
@@ -86,6 +103,115 @@ STROKE_TYPES_17_RAW = [s for s in STROKE_TYPES_19 if s not in ('unknown', 'drive
 # Players
 # ---------------------------------------------------------------------------
 PLAYERS = ('Top', 'Bottom')
+
+# ---------------------------------------------------------------------------
+# Unprefixed types (clip-generation concern, NOT a taxonomy property)
+# These raw ShuttleSet types never get Top_/Bottom_ prefixed folders because
+# they lack meaningful player attribution.  Constant across all taxonomies.
+# 'driven_flight' is a transient type that always gets merged into 'unknown'
+# before training — it only exists as an unprefixed folder during pipeline clip
+# generation.
+# ---------------------------------------------------------------------------
+UNPREFIXED_TYPES: frozenset[str] = frozenset({'unknown', 'driven_flight'})
+
+
+# ---------------------------------------------------------------------------
+# Taxonomy: single source of truth for class grouping schemes
+# ---------------------------------------------------------------------------
+@dataclass(frozen=True)
+class Taxonomy:
+    """A stroke-type grouping scheme for training and evaluation.
+
+    :param name: Short identifier, e.g. 'merged_25', 'raw_35'.
+    :param merge_map: Maps rare subtype names to parent names, or None if no
+        merging is applied.  Only used by the pipeline merge/verify steps.
+    :param base_types: Stroke types that receive Top_/Bottom_ player prefixes.
+    :param standalone_types: Types that appear unprefixed in the final class
+        list (e.g. ``('unknown',)``).
+    :param unknown_first: If True, standalone types are placed *before* the
+        prefixed types in ``class_list()``; otherwise they come last.
+    """
+
+    name: str
+    merge_map: dict[str, str] | None
+    base_types: tuple[str, ...]
+    standalone_types: tuple[str, ...]
+    unknown_first: bool
+
+    @property
+    def n_classes(self) -> int:
+        """Total number of classes when side='Both'."""
+        return len(self.base_types) * 2 + len(self.standalone_types)
+
+    @property
+    def standalone_set(self) -> frozenset[str]:
+        return frozenset(self.standalone_types)
+
+    def class_list(self, side: str = 'Both') -> list[str]:
+        """Build the full class label list with Top_/Bottom_ prefixes (English).
+
+        Used for training labels, evaluation display, and folder-to-index
+        mapping.  NOT used for clip-generation folder creation (that uses
+        the module-level ``UNPREFIXED_TYPES`` constant).
+
+        :param side: ``'Both'``, ``'Top'``, or ``'Bottom'``.
+        :return: Ordered list of class label strings.
+        """
+        base = list(self.base_types)
+        standalone = list(self.standalone_types)
+        match side:
+            case 'Both':
+                prefixed = (
+                    [f'Top_{s}' for s in base]
+                    + [f'Bottom_{s}' for s in base]
+                )
+            case 'Top':
+                prefixed = [f'Top_{s}' for s in base]
+            case 'Bottom':
+                prefixed = [f'Bottom_{s}' for s in base]
+            case _:
+                raise ValueError(
+                    f"side must be 'Both', 'Top', or 'Bottom', got {side!r}"
+                )
+        # unknown_first only applies to side='Both' (BST convention).
+        # Single-side lists always place standalone types at the end.
+        if side == 'Both' and self.unknown_first:
+            return standalone + prefixed
+        return prefixed + standalone
+
+
+TAXONOMY_MERGED_25 = Taxonomy(
+    name='merged_25',
+    merge_map=MERGE_MAP,
+    base_types=tuple(STROKE_TYPES_12_MERGED),
+    standalone_types=('unknown',),
+    unknown_first=True,
+)
+
+TAXONOMY_UNE_MERGE_V1 = Taxonomy(
+    name='une_merge_v1',
+    merge_map=UNE_MERGE_V1_MAP,
+    base_types=tuple(STROKE_TYPES_14_UNE_MERGE_V1),
+    standalone_types=('unknown',),
+    unknown_first=True,
+)
+
+TAXONOMY_RAW_35 = Taxonomy(
+    name='raw_35',
+    merge_map=None,
+    base_types=tuple(STROKE_TYPES_17_RAW),
+    standalone_types=('unknown',),
+    unknown_first=False,
+)
+
+DEFAULT_TAXONOMY = 'une_merge_v1'
+
+TAXONOMIES: dict[str, Taxonomy] = {
+    'merged_25':    TAXONOMY_MERGED_25,
+    'une_merge_v1': TAXONOMY_UNE_MERGE_V1,
+    'raw_35':       TAXONOMY_RAW_35,
+}
+
 
 # ---------------------------------------------------------------------------
 # Clip window
@@ -181,39 +307,3 @@ SPLITS: dict[str, list[int]] = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Label list builders
-# ---------------------------------------------------------------------------
-def get_stroke_types(side: str = 'Both', merged: bool = True) -> list[str]:
-    """Build the full class label list with Top_/Bottom_ prefixes.
-
-    :param side: 'Both', 'Top', or 'Bottom'.
-    :param merged: If True, use 12 merged types (25 classes when side='Both');
-        if False, use 17 raw types (35 classes when side='Both').
-    :return: List of class labels, e.g. ['unknown', 'Top_net_shot', ..., 'Bottom_long_service'].
-    """
-    # These lists contain only the types that get Top_/Bottom_ prefixes.
-    # 'unknown' is always a standalone class (no player prefix).
-    base = STROKE_TYPES_12_MERGED if merged else STROKE_TYPES_17_RAW
-
-    # BST convention: in the 25-class merged system, unknown is first;
-    # in the 35-class raw system, unknown is last.
-    match side:
-        case 'Both' if merged:
-            return (
-                ['unknown']
-                + [f'Top_{s}' for s in base]
-                + [f'Bottom_{s}' for s in base]
-            )
-        case 'Both':
-            return (
-                [f'Top_{s}' for s in base]
-                + [f'Bottom_{s}' for s in base]
-                + ['unknown']
-            )
-        case 'Top':
-            return [f'Top_{s}' for s in base] + ['unknown']
-        case 'Bottom':
-            return [f'Bottom_{s}' for s in base] + ['unknown']
-        case _:
-            raise ValueError(f"side must be 'Both', 'Top', or 'Bottom', got {side!r}")

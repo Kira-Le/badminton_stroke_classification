@@ -1,3 +1,20 @@
+"""DEPRECATED (2026-04-08) — Partially superseded by pipeline/ modules.
+
+Aggregates per-class stroke counts from ShuttleSet CSV annotations into
+an Excel workbook, with separate sheets for Top/Bottom players.
+
+Superseded by:
+    pipeline/player_mapping.py  — A/B -> Top/Bottom mapping and shot
+        collection (replaces inline set-3 logic at lines 38-43).
+    pipeline/config.py          — centralised paths and stroke types.
+
+To align with the current codebase (if ever needed):
+    1. Replace hardcoded paths ('set/match.csv', 'class_total.xlsx',
+       etc.) with ``from pipeline.config import SET_INFO_DIR``
+    2. Replace inline set-3 XOR logic (lines 38-43) with a second call
+       to ``map_players()`` (already imported but not used for set 3)
+    3. Replace Chinese error messages (line 67) with English
+"""
 import sys
 from pathlib import Path
 

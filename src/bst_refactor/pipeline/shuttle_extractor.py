@@ -3,11 +3,13 @@
 Runs TrackNetV3 inference on clip .mp4 files to produce per-clip shuttle
 trajectory arrays. Both architectures share this step.
 
-Requires TrackNetV3 (https://github.com/alenzenx/TrackNetV3) cloned and set
-up separately with pretrained weights.
+TrackNetV3 is included in the repo (trimmed to inference only) and shares the
+BST training venv. Pretrained weights must be downloaded separately — see
+TrackNetV3/README.md.
 
 Usage:
-    python -m pipeline.shuttle_extractor --tracknet-dir /path/to/TrackNetV3 [--clips-dir DIR]
+    python -m pipeline.shuttle_extractor --tracknet-dir TrackNetV3 [--clips-dir DIR] \
+        [--tracknet-python /path/to/bst-venv/bin/python]
 """
 import argparse
 import subprocess
@@ -22,7 +24,7 @@ from pipeline.config import (
     CLIPS_OUTPUT_DIR, SHUTTLE_OUTPUT_DIR, RESOLUTION_CSV_PATH,
 )
 
-_DEFAULT_MODEL_SUBPATH = Path('exp') / 'model_best.pt'
+_DEFAULT_MODEL_SUBPATH = Path('ckpts') / 'TrackNet_best.pt'
 
 
 def _default_csv_dir(clips_dir: Path) -> Path:
@@ -58,18 +60,21 @@ def extract_shuttle_trajectory(
     tracknet_dir: Path,
     output_csv_dir: Path,
     model_path: Path | None = None,
+    tracknet_python: Path | None = None,
     cur_i: int = 0,
     total: int = 0,
 ) -> bool:
     """Run TrackNetV3 on a single clip.
 
-    Adapted from detect_shuttlecock_by_TrackNetV3_with_attension() in
+    Adapted from detect_shuttlecock_by_TrackNetV3_with_attention() in
     prepare_train_on_shuttleset.py, with parameterised paths.
 
     :param clip_path: Path to the .mp4 clip file.
     :param tracknet_dir: Path to the cloned TrackNetV3 repository.
     :param output_csv_dir: Directory to write the output CSV.
-    :param model_path: Path to model weights. Defaults to tracknet_dir/exp/model_best.pt.
+    :param model_path: Path to model weights. Defaults to tracknet_dir/ckpts/TrackNet_best.pt.
+    :param tracknet_python: Python executable in BST venv (shared with TrackNetV3).
+        Defaults to sys.executable (assumes shared environment).
     :param cur_i: Current clip index (for progress logging).
     :param total: Total number of clips (for progress logging).
     :return: True on success, False on failure.
@@ -83,10 +88,13 @@ def extract_shuttle_trajectory(
     if model_path is None:
         model_path = tracknet_dir / _DEFAULT_MODEL_SUBPATH
 
+    # Use BST venv's Python if provided (TrackNetV3 shares BST venv)
+    python_exe = str(tracknet_python) if tracknet_python else sys.executable
+
     process_args = [
-        sys.executable, str(tracknet_dir / 'predict.py'),
+        python_exe, str(tracknet_dir / 'predict.py'),
         '--video_file', str(clip_path),
-        '--model_file', str(model_path),
+        '--tracknet_file', str(model_path),
         '--save_dir', str(output_csv_dir),
     ]
 
@@ -111,6 +119,7 @@ def extract_all_shuttles(
     tracknet_dir: Path = Path('.'),
     output_csv_dir: Path | None = None,
     model_path: Path | None = None,
+    tracknet_python: Path | None = None,
     max_workers: int = 2,
 ) -> None:
     """Run TrackNetV3 on all clips in parallel.
@@ -122,7 +131,9 @@ def extract_all_shuttles(
     :param tracknet_dir: Path to the cloned TrackNetV3 repository.
     :param output_csv_dir: Directory for TrackNetV3 CSV outputs.
         Defaults to clips_dir/../shuttle_csv.
-    :param model_path: Path to model weights. Defaults to tracknet_dir/exp/model_best.pt.
+    :param model_path: Path to model weights. Defaults to tracknet_dir/ckpts/TrackNet_best.pt.
+    :param tracknet_python: Python executable in BST venv (shared with TrackNetV3).
+        Defaults to sys.executable (assumes shared environment).
     :param max_workers: Number of parallel worker processes (default 2).
     """
     # Preflight: verify TrackNetV3 is set up correctly
@@ -152,7 +163,7 @@ def extract_all_shuttles(
             futures.append(executor.submit(
                 extract_shuttle_trajectory,
                 clip_path, tracknet_dir, output_csv_dir, model_path,
-                i, len(pending),
+                tracknet_python, i, len(pending),
             ))
         successes = sum(f.result() for f in futures)
 
@@ -249,9 +260,11 @@ def main():
     parser.add_argument('--resolution-csv', type=Path, default=RESOLUTION_CSV_PATH,
                         help='Path to video resolution CSV')
     parser.add_argument('--model-path', type=Path, default=None,
-                        help='Path to TrackNetV3 model weights (default: tracknet-dir/exp/model_best.pt)')
+                        help='Path to TrackNetV3 model weights (default: tracknet-dir/ckpts/TrackNet_best.pt)')
     parser.add_argument('--workers', type=int, default=2,
                         help='Parallel workers for TrackNetV3 (default 2, GPU-bound)')
+    parser.add_argument('--tracknet-python', type=Path, default=None,
+                        help='Python executable in BST venv (shared with TrackNetV3)')
     parser.add_argument('--skip-extraction', action='store_true',
                         help='Skip TrackNetV3 extraction, only convert existing CSVs to NPY')
     args = parser.parse_args()
@@ -263,6 +276,7 @@ def main():
             tracknet_dir=args.tracknet_dir,
             output_csv_dir=args.csv_dir,
             model_path=args.model_path,
+            tracknet_python=args.tracknet_python,
             max_workers=args.workers,
         )
 

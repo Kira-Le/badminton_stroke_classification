@@ -3,7 +3,7 @@
 Replaces the 6 manual runs of gen_my_dataset.py with a single script that:
   1. Generates clips for all splits, both players, all stroke types
   2. Filters out individually removed shots (from flaw_shot_records.csv)
-  3. Applies class merging (19 -> 12 types) with English folder names
+  3. Applies class merging per the active taxonomy with English folder names
 
 Usage:
     python -m pipeline.clip_generator
@@ -11,7 +11,7 @@ Usage:
 import argparse
 import shutil
 
-import moviepy.editor as mpe
+from moviepy import VideoFileClip
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -20,6 +20,7 @@ from pipeline.config import (
     SET_INFO_DIR, RAW_VIDEO_DIR, CLIPS_OUTPUT_DIR,
     SPLITS, STROKE_TYPES_19, STROKE_TYPES_19_ZH,
     REMOVED_SHOTS, MERGE_MAP, CLIP_WINDOW, PLAYERS,
+    UNPREFIXED_TYPES, TAXONOMY_UNE_MERGE_V1, Taxonomy,
 )
 from pipeline.player_mapping import collect_shots
 
@@ -55,7 +56,7 @@ def compute_temporal_bounds(folder_path: Path, shots_df: pd.DataFrame) -> pd.Dat
         df['end_f'] = df['end_f'].where(df.duplicated('rally', keep='last'), -1)
 
         merged = pd.merge(
-            shots_df.iloc[group_idx].reset_index(drop=True),
+            shots_df.loc[group_idx].reset_index(drop=True),
             df,
             on=['rally', 'ball_round', 'frame_num'],
         )
@@ -147,27 +148,36 @@ def _write_clips_for_video(
     if clip_window not in ('middle_in_a_sec', 'between_2_hits', 'between_2_hits_with_max_limits'):
         raise ValueError(f"Unknown clip window: {clip_window!r}")
 
-    # Create output subdirectories for every player+type combination
-    for player in players:
-        for typ in stroke_types:
-            (out_folder / f'{player}_{typ}').mkdir(parents=True, exist_ok=True)
+    for typ in stroke_types:
+        if typ in UNPREFIXED_TYPES:
+            (out_folder / typ).mkdir(parents=True, exist_ok=True)
+        else:
+            for player in players:
+                (out_folder / f'{player}_{typ}').mkdir(parents=True, exist_ok=True)
 
-    # Open the source video
-    video_path = str(next(raw_video_dir.glob(f"{video_id} *")))
-    video = mpe.VideoFileClip(video_path)
+    # Open the source video — bare next() on an empty glob raises StopIteration
+    video_matches = list(raw_video_dir.glob(f"{video_id} *"))
+    if not video_matches:
+        print(f"Warning: Raw video for ID {video_id} not found. Skipping.")
+        return 0
+    video_path = str(video_matches[0])
+    video = VideoFileClip(video_path)
     fps = video.fps
     clips_written = 0
 
     try:
         for _, row in shots_df.iterrows():
+            typ = row['type']
+            folder_name = typ if typ in UNPREFIXED_TYPES else f'{row["player"]}_{typ}'
             out_path = (out_folder
-                        / f'{row["player"]}_{row["type"]}'
+                        / folder_name
                         / f'{video_id}_{row["set"]}_{row["rally"]}_{int(row["ball_round"])}.mp4')
             if out_path.exists():
                 continue
 
             start_f, end_f = _compute_clip_bounds(row, clip_window, fps)
-            clip = video.subclip(
+
+            clip = video.subclipped(
                 _frame_to_time(start_f, fps),
                 _frame_to_time(end_f, fps),
             )
@@ -292,7 +302,7 @@ def generate_all_clips(
 
 def apply_class_merge(
     output_dir: Path = CLIPS_OUTPUT_DIR,
-    merge_map: dict[str, str] | None = None,
+    taxonomy: Taxonomy = TAXONOMY_UNE_MERGE_V1,
 ) -> None:
     """Merge rare subtype folders into their parent type folders.
 
@@ -300,22 +310,27 @@ def apply_class_merge(
     Source folders are removed after merging.
 
     :param output_dir: Root clips directory containing split subdirs.
-    :param merge_map: Dict mapping rare subtype names to parent names.
-        Defaults to config.MERGE_MAP.
+    :param taxonomy: Taxonomy whose merge_map defines which subtypes to merge.
     """
-    if merge_map is None:
-        merge_map = MERGE_MAP
+    if taxonomy.merge_map is None:
+        print('Taxonomy has no merge_map — nothing to merge.')
+        return
 
-    # Build a flat list of (source_dir, dest_dir) pairs to process
     split_dirs = [d for d in sorted(output_dir.iterdir()) if d.is_dir()]
     move_ops = []
     for split_dir in split_dirs:
-        for src_type, dst_type in merge_map.items():
-            for player in PLAYERS:
-                src = split_dir / f'{player}_{src_type}'
-                dst = split_dir / f'{player}_{dst_type}'
+        for src_type, dst_type in taxonomy.merge_map.items():
+            if src_type in UNPREFIXED_TYPES or dst_type in UNPREFIXED_TYPES:
+                src = split_dir / src_type
+                dst = split_dir / dst_type
                 if src.exists():
                     move_ops.append((src, dst))
+            else:
+                for player in PLAYERS:
+                    src = split_dir / f'{player}_{src_type}'
+                    dst = split_dir / f'{player}_{dst_type}'
+                    if src.exists():
+                        move_ops.append((src, dst))
 
     # Execute each move in a flat loop
     moved = 0
@@ -324,7 +339,10 @@ def apply_class_merge(
         for clip_file in src.iterdir():
             shutil.move(str(clip_file), str(dst / clip_file.name))
             moved += 1
-        src.rmdir()
+        try:
+            src.rmdir()  # may fail if stray non-clip files remain (e.g. .DS_Store)
+        except OSError:
+            pass
 
     print(f'Class merge complete: {moved} clips moved.')
 
@@ -348,5 +366,5 @@ if __name__ == '__main__':
     generate_all_clips(clip_window=args.clip_window)
 
     if not args.no_merge:
-        print('\n=== Applying class merge (19 -> 12 types) ===')
+        print('\n=== Applying class merge ===')
         apply_class_merge()

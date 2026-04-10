@@ -14,6 +14,7 @@ from pathlib import Path
 from pipeline.config import (
     CLIPS_OUTPUT_DIR, SHUTTLE_OUTPUT_DIR, EXCLUDED_VIDEOS, REMOVED_SHOTS,
     MERGE_MAP, PLAYERS, SPLITS,
+    UNPREFIXED_TYPES, TAXONOMY_UNE_MERGE_V1, Taxonomy,
 )
 
 
@@ -88,26 +89,31 @@ def verify_no_removed_shots(
 
 def verify_class_merge(
     clips_dir: Path = CLIPS_OUTPUT_DIR,
-    merge_map: dict[str, str] | None = None,
+    taxonomy: Taxonomy = TAXONOMY_UNE_MERGE_V1,
 ) -> bool:
     """Check that source folders for merged classes no longer exist.
 
     :param clips_dir: Root clips directory to scan.
-    :param merge_map: Dict mapping rare subtype names to parent names.
-        Defaults to config.MERGE_MAP.
+    :param taxonomy: Taxonomy whose merge_map defines expected merges.
     :return: True if all source folders are empty or absent.
     """
-    if merge_map is None:
-        merge_map = MERGE_MAP
+    if taxonomy.merge_map is None:
+        print('Taxonomy has no merge_map — nothing to verify.')
+        return True
     violations = []
     for split_dir in clips_dir.iterdir():
         if not split_dir.is_dir():
             continue
-        for src_type in merge_map:
-            for player in PLAYERS:
-                src = split_dir / f'{player}_{src_type}'
-                if src.exists() and any(src.iterdir()):
+        for src_type in taxonomy.merge_map:
+            if src_type in UNPREFIXED_TYPES:
+                src = split_dir / src_type
+                if src.exists() and any(src.glob('*.mp4')):
                     violations.append(src)
+            else:
+                for player in PLAYERS:
+                    src = split_dir / f'{player}_{src_type}'
+                    if src.exists() and any(src.glob('*.mp4')):
+                        violations.append(src)
 
     if violations:
         print(f'FAIL: {len(violations)} unmerged source folders still contain clips:')

@@ -1,3 +1,5 @@
+**outdated_bst_repo_reusability_assessment.md — initial analysis of the original BST repo before refactoring. All actionable items have been implemented; the rest is historical context.**
+
 # BST Repository Reusability Assessment
 **This assessment was carried out before the Claude refactor to trim reused clode blocks from the original repo. Details in: bst_models_refactor.md**
 
