@@ -132,7 +132,7 @@ The pipeline produces **video clips** and **shuttle .npy files**. BST does not o
 
 | Module | Role | Key functions / concepts |
 |--------|------|--------------------------|
-| `prepare_train_on_shuttleset.py` | Runs MMPose on each clip to extract 2D (or 3D) player keypoints, combines them with shuttle trajectories, normalizes everything, and collates per-sample arrays into batch-ready `.npy` files. | **Step 1**: `prepare_trajectory()` -- run TrackNetV3 on clips (if shuttle extraction wasn't done in the pipeline stage). **Step 2**: `prepare_2d_dataset_npy_from_raw_video()` -- run MMPose pose estimation, extract court positions via homography, normalize joints by bounding box, save per-clip `_joints.npy`, `_pos.npy`, `_shuttle.npy`. **Step 3**: `collate_npy(taxonomy=...)` -- pad all samples to uniform `seq_len`, compute bone vectors and interpolated joints, stack into single arrays per split. The `taxonomy` parameter (a `Taxonomy` instance from `pipeline.config`) determines the class list for label assignment. MMPose resizes input frames internally (typically 256x192 for RTMPose COCO-17), so video resolution does not affect pose estimation quality beyond ~720p. |
+| `prepare_train_on_shuttleset.py` | Runs MMPose on each clip to extract 2D (or 3D) player keypoints, combines them with shuttle trajectories at collation time, normalizes everything, and collates per-sample arrays into batch-ready `.npy` files. | **Step 1**: `prepare_trajectory()` -- run TrackNetV3 on clips, saving CSVs to `ShuttleSet/shuttle_csv/` (if shuttle extraction wasn't done in the pipeline stage). **Step 2**: `prepare_2d_dataset_npy_from_raw_video()` -- run MMPose pose estimation, extract court positions via homography, normalize joints by bounding box, save per-clip `_joints.npy`, `_pos.npy`, `_failed.npy`. Shuttle data is intentionally not read here -- keeping this step independent of CSV availability prevents a missing CSV from silently blocking the expensive GPU job. **Step 3**: `collate_npy(taxonomy=..., shuttle_csv_dir=..., resolution_df=...)` -- reads shuttle CSVs from the canonical `ShuttleSet/shuttle_csv/` dir, applies temporal alignment and failed-frame masking, pads all samples to uniform `seq_len`, computes bone vectors and interpolated joints, stacks into single arrays per split. The `taxonomy` parameter (a `Taxonomy` instance from `pipeline.config`) determines the class list for label assignment. MMPose resizes input frames internally (typically 256x192 for RTMPose COCO-17), so video resolution does not affect pose estimation quality beyond ~720p. |
 
 #### CLI usage
 
@@ -149,7 +149,7 @@ python -m preparing_data.prepare_train_on_shuttleset --skip-trajectory --skip-po
 python -m preparing_data.prepare_train_on_shuttleset --tracknet-dir /path/to/TrackNetV3
 ```
 
-Key flags: `--seq-len` (30 or 100), `--taxonomy` (`une_merge_v1`, `merged_25`, or `raw_35`), `--use-3d-pose`, `--skip-trajectory`, `--skip-pose`, `--skip-collate`, `--clips-dir`, `--tracknet-dir`, `--dry-run`.
+Key flags: `--seq-len` (30 or 100), `--taxonomy` (`une_merge_v1`, `merged_25`, or `raw_35`), `--use-3d-pose`, `--skip-trajectory`, `--skip-pose`, `--skip-collate`, `--clips-dir`, `--tracknet-dir`, `--shuttle-csv-dir` (default: `ShuttleSet/shuttle_csv/`), `--dry-run`.
 
 #### Data transformations in detail
 
@@ -157,7 +157,7 @@ Key flags: `--seq-len` (30 or 100), `--taxonomy` (`une_merge_v1`, `merged_25`, o
 
 2. **Joint normalization** (`normalize_joints`): Keypoints are normalized relative to the player's bounding box diagonal. Optionally center-aligned.
 
-3. **Shuttle normalization** (`normalize_shuttlecock`): Shuttle xy divided by video resolution to get [0,1] range. Frames where pose detection failed are zeroed out.
+3. **Shuttle normalization** (`normalize_shuttlecock`): Shuttle xy divided by video resolution to get [0,1] range. Done at collation time (Step 3). Frames where pose detection failed (recorded in `_failed.npy` by Step 2) are zeroed out.
 
 4. **Padding and augmentation** (`pad_and_augment_one_npy_video`): Each sample is padded (or strided) to a fixed `seq_len` (30 or 100 frames). Four pose representations are pre-computed:
    - `J_only`: raw joints `(t, 2, 17, 2)`

@@ -10,33 +10,38 @@ The MMPose integration is almost entirely unchanged from the [original BST repo]
 
 ### Changes that affect runtime behavior
 
-#### 1. Frame count alignment (bugfix)
+#### 1. Shuttle/pose decoupling + frame count alignment (refactor + bugfix)
 
-**Problem**: MMPose and TrackNetV3 use different video backends that can disagree by 1-2 frames on the same `.mp4` file. The original code crashes or produces mismatched `.npy` files when this happens:
+**Problem**: The original code read shuttle CSVs inside the pose estimation step and saved `_shuttle.npy` per clip. This created two issues:
+
+1. A missing or corrupt shuttle CSV would silently skip pose extraction for that clip entirely, since the resume check (`if not _shuttle.npy exists`) was gated on shuttle data rather than pose data.
+2. MMPose and TrackNetV3 use different video backends that can disagree by 1-2 frames on the same `.mp4`, causing an `IndexError` when applying the failed-frame mask:
 
 ```python
 # Original -- crashes with IndexError when len(failed_ls) != len(shuttle_result)
 shuttle_result[failed_ls, :] = 0
 ```
 
-Even when no frames failed, the saved `_joints.npy` (MMPose frame count) and `_shuttle.npy` (TrackNetV3 frame count) could have different temporal dimensions, causing `np.stack()` to crash during collation in `make_seq_len_same()`.
+**Fix**: Shuttle CSV reading was moved out of the pose step entirely and into `collate_npy()` (Step 3). The pose step now saves `_failed.npy` (a bool array marking frames where MMPose failed to detect 2 players) instead of `_shuttle.npy`. The resume check uses `_failed.npy`.
 
-**Fix**: Tail-truncate all arrays to the shorter length before saving:
+Temporal alignment and failed-frame masking now happen in `collate_npy()`:
 
 ```python
-min_t = min(len(failed_ls), len(shuttle_result))
-if min_t < len(failed_ls) or min_t < len(shuttle_result):
-    players_positions = players_positions[:min_t]
-    joints = joints[:min_t]
-    shuttle_result = shuttle_result[:min_t]
-    failed_ls = failed_ls[:min_t]
+min_t = min(len(failed), len(shuttle))
+if min_t < len(failed) or min_t < len(shuttle):
+    joints_ls[i] = joints_ls[i][:min_t]
+    pos_ls[i] = pos_ls[i][:min_t]
+    shuttle = shuttle[:min_t]
+    failed = failed[:min_t]
+if np.any(failed):
+    shuttle[failed, :] = 0
 ```
 
-**Why tail-truncation, not centering**: Both decoders start at frame 0 and agree on early frames -- the disagreement is about whether the last 1-2 frames are valid (partial frames, B-frame dependencies). Tail-truncation preserves the 1:1 correspondence between `joints[i]` and `shuttle[i]` for all kept frames. Centering would shift one array relative to the other, misaligning every frame by 1.
+**Why tail-truncation, not centering**: Both decoders start at frame 0 and agree on early frames -- the disagreement is about whether the last 1-2 frames are valid (partial frames, B-frame dependencies). Tail-truncation preserves the 1:1 correspondence between `joints[i]` and `shuttle[i]` for all kept frames.
+
+**Why shuttle reading belongs in collation**: Shuttle CSVs are taxonomy- and split-agnostic physical measurements that live in a single canonical directory (`ShuttleSet/shuttle_csv/`). Keeping them out of the pose step means the 1.5-3 day GPU job has no dependency on CSV availability, and collation (fast, re-runnable) can be re-run cheaply when the taxonomy changes without redoing pose extraction.
 
 **Impact**: Loses at most 1-2 frames from the end of a 75-105 frame clip. No effect on clips where frame counts match (the vast majority).
-
-Applied in both `prepare_2d_dataset_npy_from_raw_video()` and `prepare_3d_dataset_npy_from_raw_video()`.
 
 #### 2. GPU memory cleanup between clips
 
@@ -119,14 +124,15 @@ prepare_train_on_shuttleset.py    main() dispatches 3 steps
     |            |       +-- check_pos_in_court()      filter to 2 on-court players
     |            |       +-- normalize_joints()        normalize by bbox
     |            |
-    |            +-- get_shuttle_result()           read TrackNetV3 CSV
-    |            +-- tail-truncate to align frames
-    |            +-- save _joints.npy, _pos.npy, _shuttle.npy
+    |            +-- save _joints.npy, _pos.npy, _failed.npy
     |            +-- gc.collect() + torch.cuda.empty_cache()
     |
-    Step 3:  collate_npy()
+    Step 3:  collate_npy(shuttle_csv_dir, resolution_df)
                  |
-                 +-- load per-clip .npy files (ThreadPoolExecutor)
+                 +-- load _joints.npy, _pos.npy, _failed.npy (ThreadPoolExecutor)
+                 +-- per clip: get_shuttle_result() from ShuttleSet/shuttle_csv/
+                 |             tail-truncate to align MMPose/TrackNetV3 frame counts
+                 |             zero shuttle coords where _failed is True
                  +-- pad_and_augment_one_npy_video() per clip (ProcessPoolExecutor)
                  +-- np.stack() all clips into batch arrays
                  +-- save J_only.npy, JnB_interp.npy, JnB_bone.npy, Jn2B.npy, ...
@@ -148,11 +154,13 @@ For each clip, `detect_players_2d()`:
 |------|-------|----------|
 | `*_joints.npy` | `(F, 2, 17, 2)` or `(F, 2, 17, 3)` | Normalized joint keypoints (2D or 3D) |
 | `*_pos.npy` | `(F, 2, 2)` | Court-projected player positions |
-| `*_shuttle.npy` | `(F, 2)` | Normalized shuttle coordinates |
+| `*_failed.npy` | `(F,)` bool | True where MMPose failed to detect 2 players |
+
+Shuttle data (`*_shuttle.npy`) is no longer saved per-clip by the pose step. It is read from `ShuttleSet/shuttle_csv/` and merged at collation time (Step 3).
 
 ### Resume logic
 
-`prepare_2d_dataset_npy_from_raw_video()` checks for an existing `_shuttle.npy` before processing each clip (line 537). Safe to re-run after crashes.
+`prepare_2d_dataset_npy_from_raw_video()` checks for an existing `_failed.npy` before processing each clip. `_failed.npy` is saved last, so its presence means all three outputs (`_pos`, `_joints`, `_failed`) are complete. Safe to re-run after crashes.
 
 ---
 
