@@ -265,6 +265,8 @@ def detect_players_2d(
         # keypoints: (m, J, 2)
 
         # Need at least 2 detected people in the frame.
+        # Failed frames are kept as zeros (not dropped) so the clip stays intact.
+        # Shuttle coords for these frames are zeroed at collation (Step 3).
         if len(keypoints) < 2:
             failed_ls.append(True)
             players_positions.append(np.zeros((2, 2), dtype=float))
@@ -277,7 +279,7 @@ def detect_players_2d(
         # in_court: (m), pos_normalized: (m, xy), xy=2
         in_court_pid = np.nonzero(in_court)[0]
 
-        # Need exactly 2 players on court.
+        # Need exactly 2 players on court. Same retention policy as above.
         if len(in_court_pid) != 2:
             failed_ls.append(True)
             players_positions.append(np.zeros((2, 2), dtype=float))
@@ -794,6 +796,8 @@ def collate_npy(
             shuttle = shuttle[:min_t]
             failed = failed[:min_t]
 
+        # Zero shuttle coords on frames where pose detection failed. The clip
+        # is still included -- no samples are dropped based on failed frames.
         if np.any(failed):
             shuttle[failed, :] = 0
 

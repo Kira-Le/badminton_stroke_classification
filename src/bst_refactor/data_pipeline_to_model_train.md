@@ -178,7 +178,7 @@ Key flags: `--seq-len` (30 or 100), `--taxonomy` (`une_merge_v1`, `merged_25`, o
 
 #### Data transformations in detail
 
-1. **Pose detection** (`detect_players_2d`): MMPose extracts 17 COCO keypoints per frame. Players are identified by court projection of their feet -- only the two players whose feet project inside the court boundaries are kept, ordered Top-first by y-coordinate.
+1. **Pose detection** (`detect_players_2d`): MMPose extracts 17 COCO keypoints per frame. Players are identified by court projection of their feet -- only the two players whose feet project inside the court boundaries are kept, ordered Top-first by y-coordinate. See [`keypoints_schema.md`](stroke_classification/preparing_data/keypoints_schema.md) for the full joint index map, bone pairs, and JnB representation details.
 
 2. **Joint normalization** (`normalize_joints`): Keypoints are normalized relative to the player's bounding box diagonal. Optionally center-aligned.
 
