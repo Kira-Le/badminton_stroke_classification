@@ -71,7 +71,7 @@ python -m preparing_data.prepare_train_on_shuttleset \
     --skip-trajectory --skip-pose                          # collate (reads shuttle CSVs)
 
 cd main_on_shuttleset
-python bst_train.py                                        # train (5 serial trials)
+python bst_train.py                                        # train (3 serial trials)
 python bst_infer.py                                        # inference
 ```
 
@@ -340,11 +340,12 @@ BST_CG_AP = BST(use_ppf=True,  use_cg=True,  use_ap=True)   # Full model
 
 | Name | Role |
 |------|------|
-| `Hyp` (namedtuple) | Experiment hyperparameters: `n_epochs=1600`, `batch_size=128`, `lr=5e-4`, `warm_up_step=400`, `early_stop_n_epochs=300`, `taxonomy=DEFAULT_TAXONOMY` (key into `TAXONOMIES`, currently `'une_merge_v1'`), `seq_len=30`, `pose_style='JnB_bone'`, `train_partial=0.25`. Edit these to configure experiments. |
+| `Hyp` (namedtuple) | Experiment hyperparameters: `n_epochs=1600`, `batch_size=128`, `lr=5e-4`, `warm_up_step=400`, `early_stop_n_epochs=300`, `taxonomy='merged_25'` (key into `TAXONOMIES`; options: `'une_merge_v1'`, `'merged_25'`, `'raw_35'`), `seq_len=100`, `pose_style='JnB_bone'`, `use_3d_pose=False`, `train_partial=1.0`. Edit these to configure experiments. |
 | `train_one_epoch()` | Standard PyTorch training loop: forward pass, cross-entropy loss (with label smoothing 0.1), backward, optimizer step, scheduler step. Applies `RandomTranslation_batch` to joints (not bones). |
 | `validate()` | Evaluates on val set. Accumulates per-class TP/FP/FN across batches, computes macro F1 and min-class F1. |
 | `test()` | Runs inference on test set, returns `(predictions, ground_truth)` tensors. |
-| `train_network()` | Full training loop with AdamW optimizer, cosine LR schedule with warmup, early stopping on macro F1, TensorBoard logging, and best-checkpoint saving. |
+| `train_network()` | Full training loop with AdamW optimizer, cosine LR schedule with warmup, early stopping on macro F1, and best-checkpoint saving. Logs per-epoch scalars (`Loss/Train`, `Loss/Val`, `F1/Val_macro`, `F1/Val_min`) plus an end-of-run **HParams** entry: best + 2nd-best macro F1 and min F1 (with their epochs), best val loss (with epoch), and `stopped_epoch`. `stopped_epoch - best/macro_f1_epoch == early_stop_n_epochs` confirms a clean early-stop vs a crash. |
+| `Tee` (class) | Duplicates writes across multiple streams (terminal + file). Used by `__main__` to auto-tee test output to `test_logs/test_<timestamp>.log` so test metrics survive a dropped terminal. Training output stays terminal-only (TB has it). |
 | `MODELS` (dict) | Maps variant names (`'BST_0'`, `'BST'`, etc.) to pre-configured partials imported from `bst.py`. Used by `get_network_architecture()` to instantiate the model without local flag dicts. |
 | `Task` (class) | Orchestrates the full workflow: `prepare_dataloaders()` -> `get_network_architecture()` -> `seek_network_weights()` (loads existing or trains) -> `test()`. |
 
@@ -359,12 +360,13 @@ Task()
   .test_topk_acc(k=2)
 ```
 
-The `__main__` block runs 5 serial trials (serial_no 1-5) to measure variance.
+The `__main__` block runs 3 serial trials (serial_no 1-3) to measure variance. Bump the `range(1, 4)` back to `range(1, 6)` to restore the original 5-trial sweep. Each invocation opens a single `test_logs/test_<timestamp>.log` file for the whole loop; `Task.test()` and `task.test_topk_acc()` are wrapped in `redirect_stdout(Tee(sys.stdout, log_f))` so test metrics land in both the terminal and the log file.
 
 #### Outputs
 
 - **Model weights** (`main_on_shuttleset/weight/*.pt`): Best-validation-F1 checkpoint per trial. Git-ignored — these are reproducible and too large to track.
-- **TensorBoard logs** (`main_on_shuttleset/runs/`): Loss and F1 curves. Tracked in git so the team can review training results.
+- **TensorBoard logs** (`main_on_shuttleset/runs/<timestamp>_<hostname>/`): Per-epoch scalar curves (train/val loss, val macro/min F1) plus an **HParams** row per run with best/2nd-best macro F1 and min F1, best val loss, their epochs, and `stopped_epoch`. The HParams tab gives a sortable cross-run comparison. Tracked in git so the team can review training results.
+- **Test logs** (`main_on_shuttleset/test_logs/test_<timestamp>.log`): All serials' test-set output (`=== Serial N (...) ===` headers, macro F1 table, accuracy, top-2 accuracy) auto-captured so metrics survive a dropped terminal. Grep with `grep -E 'Accuracy|macro' test_logs/test_*.log` for a tidy summary.
 
 ---
 

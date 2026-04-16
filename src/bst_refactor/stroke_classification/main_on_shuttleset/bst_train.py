@@ -19,8 +19,9 @@ import pandas as pd
 from pathlib import Path
 from copy import deepcopy
 from collections import namedtuple
+from contextlib import redirect_stdout
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import sys
 import os
@@ -343,6 +344,7 @@ def train_network(
     writer.close()
 
     # Save best checkpoint and restore it into the model
+    save_path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(best_state, str(save_path))  # like model.save_weights() in TF
     model.load_state_dict(best_state)       # like model.load_weights() in TF
     return model
@@ -360,6 +362,18 @@ MODELS = {
     'BST_AP':    BST_AP,
     'BST_CG_AP': BST_CG_AP,
 }
+
+
+class Tee:
+    """Duplicate writes across multiple streams (e.g. terminal + log file)."""
+    def __init__(self, *streams):
+        self.streams = streams
+    def write(self, data):
+        for s in self.streams:
+            s.write(data)
+    def flush(self):
+        for s in self.streams:
+            s.flush()
 
 
 class Task:
@@ -547,20 +561,35 @@ if __name__ == '__main__':
         else:
             model_info = additional_model_info
 
-    for serial_no in range(1, 6):
-        print(f'Running serial {serial_no} ...')
-        task = Task(n_joints=17, taxonomy=taxonomy)
-        task.prepare_dataloaders(
-            root_dir=Path(f'preparing_data/ShuttleSet_data_{taxonomy.name}')
-                         /npy_collated_dir,
-            pose_style=hyp.pose_style,
-            train_partial=hyp.train_partial
-        )
-        task.get_network_architecture(model_name='BST_CG_AP', in_channels=(3 if hyp.use_3d_pose else 2))
-        weight_exists = task.seek_network_weights(model_info=model_info, serial_no=serial_no)
-        task.test(show_details=False, show_confusion_matrix=False)
-        task.test_topk_acc(k=2)
-        print('Serial', serial_no, 'done.')
+    # Test output is auto-teed to a timestamped log file so metrics are never
+    # lost to a dropped terminal. Training stdout stays on terminal only — TB
+    # captures it. One log file per script invocation, all 5 serials inside.
+    log_dir = Path('test_logs')
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / f'test_{datetime.now():%Y%m%d_%H%M%S}.log'
 
-        if not weight_exists:
-            time.sleep(3)
+    with open(log_path, 'w') as log_f:
+        tee = Tee(sys.stdout, log_f)
+        for serial_no in range(1, 4):
+            print(f'Running serial {serial_no} ...')
+            task = Task(n_joints=17, taxonomy=taxonomy)
+            task.prepare_dataloaders(
+                root_dir=Path(f'preparing_data/ShuttleSet_data_{taxonomy.name}')
+                             /npy_collated_dir,
+                pose_style=hyp.pose_style,
+                train_partial=hyp.train_partial
+            )
+            task.get_network_architecture(model_name='BST_CG_AP', in_channels=(3 if hyp.use_3d_pose else 2))
+            weight_exists = task.seek_network_weights(model_info=model_info, serial_no=serial_no)
+
+            with redirect_stdout(tee):
+                print(f'\n=== Serial {serial_no} ({task.model_name}) ===')
+                task.test(show_details=False, show_confusion_matrix=False)
+                task.test_topk_acc(k=2)
+
+            print('Serial', serial_no, 'done.')
+
+            if not weight_exists:
+                time.sleep(3)
+
+    print(f'\nTest log saved to: {log_path}')
