@@ -12,7 +12,6 @@ from pathlib import Path
 
 from pipeline.data_access import (
     DataPaths,
-    ClipRecord,
     get_clip_records,
     summarise,
     _class_dirs,
