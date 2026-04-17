@@ -66,11 +66,30 @@ Run from the project root (or any directory with pipeline importable):
     python -m pipeline.data_access \\
         --mmpose-npy-dir preparing_data/ShuttleSet_data_une_merge_v1/dataset_npy \\
         --summary
+
+Environment / .env file
+-----------------------
+Instead of passing flags every time, set paths in a .env file at the project root
+(copy .env.example and fill in your values):
+
+    BST_CLIPS_DIR=/scratch/comp320a/ShuttleSet/clips
+    BST_SHUTTLE_NPY_DIR=/scratch/comp320a/ShuttleSet/shuttle_npy
+    BST_MMPOSE_NPY_DIR=          # leave blank until mmpose data is generated
+
+Then just run with no flags:
+
+    python -m pipeline.data_access --summary
+    python -m pipeline.data_access          # interactive TUI
+
+Shell exports take precedence over .env, so you can always override on the fly:
+
+    BST_CLIPS_DIR=/other/path python -m pipeline.data_access --summary
 """
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
+import os
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
@@ -85,13 +104,73 @@ from pipeline.config import (
 
 SPLITS = ('train', 'val', 'test')
 
+# .env is searched for in the project root (two levels up from this file:
+# pipeline/ -> bst_refactor/ -> project root).
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+_DOTENV_PATH = _PROJECT_ROOT / '.env'
+
+
+def _load_dotenv(path: Path = _DOTENV_PATH) -> None:
+    """Load key=value pairs from a .env file into os.environ (no-op if missing).
+
+    Only sets variables that are not already set in the environment, so
+    shell exports always take precedence over the .env file.
+
+    :param path: Path to the .env file.
+    """
+    if not path.is_file():
+        return
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+            key, _, value = line.partition('=')
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+
+
+_load_dotenv()
+
+
+def _env_path(var: str, default: Path) -> Path:
+    """Return Path from env var if set, otherwise the default.
+
+    :param var: Environment variable name.
+    :param default: Fallback path.
+    :return: Resolved path.
+    """
+    val = os.environ.get(var, '').strip()
+    return Path(val) if val else default
+
+
+def _env_path_or_none(var: str) -> Path | None:
+    """Return Path from env var if set and non-empty, otherwise None.
+
+    :param var: Environment variable name.
+    :return: Path or None.
+    """
+    val = os.environ.get(var, '').strip()
+    return Path(val) if val else None
+
 
 @dataclass
 class DataPaths:
     """Root directories for each data type.
 
-    All paths default to the config values but can be overridden when data
-    lives in a non-standard location (e.g. a different HPC scratch directory).
+    Path resolution order (highest to lowest priority):
+      1. Value passed directly to the constructor
+      2. Environment variable (or .env file entry)
+      3. Default from pipeline.config
+
+    Environment variables:
+      BST_CLIPS_DIR        — root clips directory
+      BST_SHUTTLE_NPY_DIR  — root shuttle npy directory
+      BST_MMPOSE_NPY_DIR   — root mmpose per-clip npy directory (omit if not generated)
+
+    These can be set in a .env file at the project root (see .env.example).
 
     :param clips_dir: Root of the clips tree (contains train/val/test subdirs).
     :param shuttle_npy_dir: Root of the shuttle npy tree (mirrors clips_dir).
@@ -101,9 +180,15 @@ class DataPaths:
         (alongside ``_pos.npy``).
     """
 
-    clips_dir: Path = CLIPS_OUTPUT_DIR
-    shuttle_npy_dir: Path = SHUTTLE_OUTPUT_DIR
-    mmpose_npy_dir: Path | None = None
+    clips_dir: Path = field(
+        default_factory=lambda: _env_path('BST_CLIPS_DIR', CLIPS_OUTPUT_DIR)
+    )
+    shuttle_npy_dir: Path = field(
+        default_factory=lambda: _env_path('BST_SHUTTLE_NPY_DIR', SHUTTLE_OUTPUT_DIR)
+    )
+    mmpose_npy_dir: Path | None = field(
+        default_factory=lambda: _env_path_or_none('BST_MMPOSE_NPY_DIR')
+    )
 
 
 @dataclass
