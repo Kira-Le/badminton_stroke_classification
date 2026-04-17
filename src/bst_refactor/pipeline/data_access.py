@@ -392,16 +392,16 @@ if __name__ == '__main__':
         help=f'Taxonomy for class validation (default: {DEFAULT_TAXONOMY})',
     )
     parser.add_argument(
-        '--clips-dir', type=Path, default=CLIPS_OUTPUT_DIR,
-        help=f'Root clips directory (default: {CLIPS_OUTPUT_DIR})',
+        '--clips-dir', type=Path, default=None,
+        help='Root clips directory (overrides BST_CLIPS_DIR env var and config default)',
     )
     parser.add_argument(
-        '--shuttle-npy-dir', type=Path, default=SHUTTLE_OUTPUT_DIR,
-        help=f'Root shuttle npy directory (default: {SHUTTLE_OUTPUT_DIR})',
+        '--shuttle-npy-dir', type=Path, default=None,
+        help='Root shuttle npy directory (overrides BST_SHUTTLE_NPY_DIR env var and config default)',
     )
     parser.add_argument(
         '--mmpose-npy-dir', type=Path, default=None,
-        help='Root mmpose per-clip npy directory (default: not set)',
+        help='Root mmpose per-clip npy directory (overrides BST_MMPOSE_NPY_DIR env var)',
     )
     parser.add_argument(
         '--summary', action='store_true',
@@ -414,11 +414,16 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     taxonomy = TAXONOMIES[args.taxonomy]
-    paths = DataPaths(
-        clips_dir=args.clips_dir,
-        shuttle_npy_dir=args.shuttle_npy_dir,
-        mmpose_npy_dir=args.mmpose_npy_dir,
-    )
+    # Build DataPaths — only pass CLI values that were explicitly set so that
+    # DataPaths.default_factory can pick up env vars / .env for anything omitted.
+    path_kwargs = {}
+    if args.clips_dir is not None:
+        path_kwargs['clips_dir'] = args.clips_dir
+    if args.shuttle_npy_dir is not None:
+        path_kwargs['shuttle_npy_dir'] = args.shuttle_npy_dir
+    if args.mmpose_npy_dir is not None:
+        path_kwargs['mmpose_npy_dir'] = args.mmpose_npy_dir
+    paths = DataPaths(**path_kwargs)
 
     # No flags passed — launch interactive TUI
     no_flags = not any([args.split, args.taxonomy_class, args.summary, args.list_classes])
