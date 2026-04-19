@@ -72,14 +72,12 @@ serials:
 best_serials:
 - 3
 notes: |
-  Run A: paired control with CG/AP on throughout (no annealing), 80-epoch schedule.
-  Tests whether CG/AP contribute anything under the retuned LR, or whether
-  run_20260418_151139's slight macro F1 lift was the fade itself vs. just the
-  shorter schedule.
+  Run A of the CG/AP ablation (always-on arm): aux_factor held at 1.0
+  for all 80 epochs under the retuned LR schedule. Pairs with 18_15
+  (annealed) and 18_23 Run B (always off). Mean macro F1 0.826,
+  between the annealed arm (0.829) and the null (0.822).
 
-  Mean macro F1 0.826 vs 0.829 for the annealed run (18_15): within noise.
-  Supports the hypothesis that CG/AP are not load-bearing under the retuned LR.
-
-  Best seed: S3 (macro F1 0.828, min F1 0.603). S2 has top accuracy (0.851)
-  but min F1 0.538, same lucky-accuracy pattern as 18_15 S2; not flagged.
+  Best seed: S3 (macro F1 0.828, min F1 0.603). S2 has top accuracy
+  (0.851) but min F1 0.538, lucky-accuracy pattern (same as 18_15 S2);
+  not flagged.
 legacy: true

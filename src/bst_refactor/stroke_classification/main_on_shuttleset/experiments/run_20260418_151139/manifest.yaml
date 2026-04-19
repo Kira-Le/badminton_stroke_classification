@@ -72,10 +72,15 @@ serials:
 best_serials:
 - 2
 notes: |
-  Aggressive CG/AP annealing pass (compressed warm-start-then-finetune):
-  cosine fade of CG/AP from factor 1.0 at epoch 1 to 0.0 at epoch 15,
-  then ~65 epochs of pure backbone. First run at 5 seeds (was 3).
+  Aggressive CG/AP annealing (compressed warm-start-then-finetune):
+  cosine downtune from factor 1.0 at epoch 1 to 0.0 by epoch 15, then
+  ~65 epochs of pure backbone. First run at 5 serials (was 3).
 
-  Best seed: S2 (top accuracy 0.850, macro F1 0.831). S1 has the highest
-  macro F1 (0.834, within noise of S2) but accuracy 0.846; not flagged.
+  Top mean macro F1 (0.829) of the three CG/AP schedules. The accuracy
+  lift over the always-on arm (18_17) suggests CG/AP cap performance on
+  well-sampled classes once the backbone has settled; a per-class F1
+  breakdown would confirm.
+
+  Best seed: S2 (accuracy 0.850, macro F1 0.831). S1 edges it on macro F1
+  (0.834) but trails on accuracy (0.846); within noise, not flagged.
 legacy: true

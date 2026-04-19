@@ -52,12 +52,8 @@ serials:
 best_serials:
 - 3
 notes: 'First CG/AP annealing pass (gentle schedule): cosine fade of CG/AP from factor 1.0
-
   at epoch 1 to 0.0 at epoch 60, pinned at 0 for the tail.
-
   Winner on every metric: serial 3. Most seeds picked best-val before factor dropped
-
   much below ~0.6, so the fade had little effect. Serial 3 was the only seed that
-
   picked deep into the fade (factor ~0.1 at its best epoch).'
 legacy: true

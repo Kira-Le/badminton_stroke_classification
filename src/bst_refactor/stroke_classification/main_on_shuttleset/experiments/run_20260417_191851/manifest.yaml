@@ -52,12 +52,8 @@ serials:
 best_serials:
 - 1
 notes: 'Retuned LR schedule: first run after realizing cosine decay wasn''t biting in the
-
   default 1600-epoch schedule. Shortened n_epochs to 120, num_cycles 0.25 -> 0.5
-
   so LR reaches 0 at run end, warmup 400 -> 100, patience 300 -> 40.
-
   No CG/AP annealing (feature didn''t exist yet).
-
   Best on every metric: serial 1 leads macro F1, min F1, accuracy, and Top-2.'
 legacy: true

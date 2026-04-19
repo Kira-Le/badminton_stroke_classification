@@ -738,8 +738,9 @@ if __name__ == '__main__':
             print(f'Running serial {serial_no} ...')
             task = Task(n_joints=17, taxonomy=taxonomy, weight_dir=weight_dir)
             task.prepare_dataloaders(
-                root_dir=Path(f'preparing_data/ShuttleSet_data_{taxonomy.name}')
-                             /npy_collated_dir,
+                root_dir=Path(__file__).resolve().parent.parent
+                             / f'preparing_data/ShuttleSet_data_{taxonomy.name}'
+                             / npy_collated_dir,
                 pose_style=hyp.pose_style,
                 train_partial=hyp.train_partial
             )

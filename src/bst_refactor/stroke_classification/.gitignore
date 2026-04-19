@@ -1,13 +1,13 @@
-# Model weights + TB logs for the stroke_classification subtree.
+# Model weights for the stroke_classification subtree.
 # Scoped here (not the repo-root .gitignore) so per-run tactical unignores
 # don't clutter the global file as more runs pile up.
 
 # Run layout: main_on_shuttleset/experiments/<run_id>/.
-# manifest.yaml + best_model_id.txt stay tracked (small, source of truth for
-# hparams + results). Weights (large) and TB event files (medium) are ignored
-# by default; tactical unignores below pick the best checkpoint(s) per run.
+# manifest.yaml, best_model_id.txt, and TB event files stay tracked (all
+# small, source of truth for hparams + results + training curves). Only
+# weights (large) are ignored by default; tactical unignores below pick the
+# best checkpoint per run.
 main_on_shuttleset/experiments/*/weights/*
-main_on_shuttleset/experiments/*/tb/
 
 # Aim experiment tracker cache (optional UI, local only; created in cwd when
 # aim_backfill.py or `aim up` runs from main_on_shuttleset/).
@@ -29,3 +29,6 @@ main_on_shuttleset/.aim/
 
 # run_20260418_174238: Run A paired control, CG/AP on throughout, 80ep. S3 best (macro F1 0.828, min F1 0.603).
 !main_on_shuttleset/experiments/run_20260418_174238/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25_3.pt
+
+# run_20260418_234822: Run B null arm, CG/AP always off, 80ep. S2 best (macro F1 0.830, accuracy 0.842).
+!main_on_shuttleset/experiments/run_20260418_234822/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25_2.pt
