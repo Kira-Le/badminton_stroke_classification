@@ -1,7 +1,5 @@
-import { Button } from '../components'
+import { Button, SearchBar, SingleFileUploader} from '../components'
 
-import SingleFileUploader from '../components/SingleFileUploader'
-import SearchBar from '../components/SearchBar'
 import style from './Home.module.css'
 
 export default function Home() {

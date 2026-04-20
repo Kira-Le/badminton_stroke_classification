@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react'
+import { RadioButtonGroup } from '../components'
+
+const API_BASE = 'http://127.0.0.1:8000'
 
 export default function Analysis() {
     const [models, setModels] = useState([])
@@ -6,15 +9,29 @@ export default function Analysis() {
     
     // Run once on page load, to get available models
     useEffect(() => {
-        fetch("http://127.0.0.1:8000/api/models")
+        fetch(`${API_BASE}/api/models`)
               .then((response) => response.json())
               .then((json) => setModels(json.models))
               .catch((error) => console.error('Error fetching data: ', error))
     }, [])
 
+    // Radio Button Group set up 
+    const[selectedValue, setSelectedValue] = useState('')
+
+    useEffect(() => {
+        if (models.length > 0) {
+            setSelectedValue(models[0])
+        }
+    }, [models])
+
+    function radioGroupHandler(event) {
+        setSelectedValue(event.target.value)
+    }
+
+    // Get status of processing task
     useEffect(() => {
         const interval = setInterval(() => {
-            fetch("http://127.0.0.1:8000/api/status/123")
+            fetch(`${API_BASE}/api/status/123`)
               .then((response) => response.json())
               .then((json) => {
                 setStatus(json.status)
@@ -30,13 +47,16 @@ export default function Analysis() {
 
     return (
         <>
-          <div>Analysis</div>
-          <div>Select a model:</div>
-          <ul>
-            {models.map((model, index) => (
-                <li key={index}>{model}</li>
-            ))}
-          </ul>
+          <h1>Analysis</h1>
+          {models.length === 0
+              ? <p>Loading models...</p>
+              : <RadioButtonGroup
+              label="Select a model: "
+              options={models}
+              onChange={radioGroupHandler}
+              name="model-selection"
+              />
+          }
           <div>Stroke classification is: {status}</div>
         </>
 
