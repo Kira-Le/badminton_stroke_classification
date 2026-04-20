@@ -706,34 +706,23 @@ def collate_npy(
     set_name: str,
     seq_len: int,
     save_dir: Path,
-    clips_csv: Path,
-    split_column: str,
     taxonomy: Taxonomy = TAXONOMY_UNE_MERGE_V1,
-    drop_unknown: bool = False,
     shuttle_csv_dir: Path | None = None,
     resolution_df: pd.DataFrame | None = None,
 ):
     """Collate per-clip .npy files into stacked batch arrays for one split.
 
-    Reads split assignment and label from the master clips CSV, resolves
-    per-clip files at FLAT path ``{root_dir}/{clip_stem}_*.npy``, reads
-    shuttle trajectories from the canonical CSV dir, aligns temporal
+    Loads all *_joints.npy, *_pos.npy, *_failed.npy from root_dir/set_name,
+    reads shuttle trajectories from the canonical CSV dir, aligns temporal
     dimensions, applies failed-frame masking, pads to uniform seq_len,
     computes bone vectors and interpolations, then saves the stacked arrays
-    into ``save_dir/set_name/``.
+    into save_dir/set_name/.
 
-    :param root_dir: FLAT per-clip dir containing
-        ``{clip_stem}_{joints,pos,failed}.npy`` for every clip.
+    :param root_dir: Directory containing train/val/test subdirectories with per-clip .npy files.
     :param set_name: One of 'train', 'val', 'test'.
     :param seq_len: Target sequence length (frames). Clips are padded/strided to this length.
     :param save_dir: Output directory. A set_name/ subdirectory is created inside.
-    :param clips_csv: Master clips CSV (one row per clip) providing split
-        assignment (``split_column``), ``raw_type_en``, ``player_side``,
-        ``clip_stem``.
-    :param split_column: Column in ``clips_csv`` to use for split assignment,
-        e.g. ``'split_bst_baseline'`` or ``'split_v2'``.
-    :param taxonomy: Taxonomy defining the class list and merge_map.
-    :param drop_unknown: If True, drop rows where ``raw_type_en == 'unknown'``.
+    :param taxonomy: Taxonomy defining the class list for label indexing.
     :param shuttle_csv_dir: Directory containing TrackNetV3 shuttle CSVs
         ({clip}_ball.csv). Required.
     :param resolution_df: DataFrame with video resolutions (width/height), indexed
@@ -745,62 +734,19 @@ def collate_npy(
     if resolution_df is None:
         raise ValueError("resolution_df is required")
 
-    # Filter the master CSV down to this split (and optionally drop unknown).
-    clips_df = pd.read_csv(clips_csv)
-    if split_column not in clips_df.columns:
-        raise KeyError(
-            f"split_column {split_column!r} not in clips_csv columns: "
-            f"{list(clips_df.columns)}"
-        )
-    clips_df = clips_df[clips_df[split_column] == set_name].copy()
-    if drop_unknown:
-        clips_df = clips_df[clips_df["raw_type_en"] != "unknown"]
-
-    # Derive the folder-style label string per clip via the taxonomy:
-    # merge_map normalises rare subtypes to their parent; standalone types
-    # (e.g. 'unknown') skip the side prefix; everything else becomes
-    # f'{Top|Bottom}_{merged_type}' so it lines up with class_list().
     class_ls = taxonomy.class_list()
-    class_to_idx = {s: i for i, s in enumerate(class_ls)}
-    standalone_set = taxonomy.standalone_set
-    merge_map = taxonomy.merge_map or {}
 
-    data_branches: list[str] = []
-    labels_ls: list[int] = []
-    missing = 0
-    for raw_type, side, stem in zip(
-        clips_df["raw_type_en"],
-        clips_df["player_side"],
-        clips_df["clip_stem"],
-    ):
-        merged = merge_map.get(raw_type, raw_type)
-        label_str = merged if merged in standalone_set else f"{side}_{merged}"
-        if label_str not in class_to_idx:
-            raise ValueError(
-                f"Derived label {label_str!r} for clip {stem!r} not in "
-                f"taxonomy {taxonomy.name!r}.class_list()"
-            )
-        branch = str(root_dir / stem)
-        # Skip clips whose flat per-clip files are absent. verify_flatten.py
-        # should have ruled this out before the originals were deleted, but
-        # the check is cheap and prevents a confusing ENOENT mid-collation.
-        if not Path(branch + "_pos.npy").exists():
-            missing += 1
+    # load .npy branch names
+    data_branches = []
+    labels = []
+    target_dir = root_dir / set_name
+    for typ in target_dir.iterdir():
+        if not typ.is_dir():
             continue
-        data_branches.append(branch)
-        labels_ls.append(class_to_idx[label_str])
-
-    if missing:
-        print(
-            f"  [{set_name}] WARNING: {missing} clips in master CSV had no "
-            f"flat per-clip files under {root_dir}; skipped."
-        )
-    labels = np.asarray(labels_ls, dtype=np.int64)
-    print(
-        f"  [{set_name}] {len(data_branches)} clips after filter "
-        f"(taxonomy={taxonomy.name}, split_column={split_column}, "
-        f"drop_unknown={drop_unknown})."
-    )
+        shots = sorted([str(s).replace("_pos.npy", "") for s in typ.glob("*_pos.npy")])
+        data_branches += shots
+        labels.append(np.full(len(shots), class_ls.index(typ.name), dtype=np.int64))
+    labels = np.concatenate(labels)
 
     # load .npy files
     print(f"Load .npy files for {set_name} set ...")
@@ -996,45 +942,6 @@ def main():
         help=f"Directory with TrackNetV3 shuttle CSVs (default: {SHUTTLE_CSV_DIR})",
     )
 
-    # Step 3 (collation) configuration: drives split + label assignment from
-    # the master clips CSV instead of the on-disk folder layout. The flat
-    # per-clip dir holds {clip_stem}_*.npy files shared across all ablations;
-    # the collated dir is per-ablation (encodes taxonomy + split + drop policy).
-    parser.add_argument(
-        "--clips-csv",
-        type=Path,
-        default=Path(__file__).resolve().parents[4] / "notebooks" / "clips_master.csv",
-        help="Master clips CSV with split + label per clip "
-             "(default: <repo>/notebooks/clips_master.csv).",
-    )
-    parser.add_argument(
-        "--split-column",
-        default="split_bst_baseline",
-        choices=["split_bst_baseline", "split_v2"],
-        help="Column in clips_csv giving train/val/test assignment "
-             "(default: split_bst_baseline).",
-    )
-    parser.add_argument(
-        "--drop-unknown",
-        action="store_true",
-        help="Drop clips with raw_type_en == 'unknown' before collation.",
-    )
-    parser.add_argument(
-        "--ablation-id",
-        default=None,
-        help="Tag suffix on the collated output dir so multiple ablations "
-             "don't collide. Defaults to "
-             "'<taxonomy>_<split_column>_<dropunk|keepunk>'.",
-    )
-    parser.add_argument(
-        "--clip-npy-dir",
-        type=Path,
-        default=None,
-        help="FLAT per-clip dir for Step 3 (collation). Defaults to "
-             "the per-taxonomy preparing_root + "
-             "'dataset[_3d]_npy_between_2_hits_with_max_limits_flat'.",
-    )
-
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -1051,34 +958,16 @@ def main():
     )
     preparing_root.mkdir(parents=True, exist_ok=True)
 
-    # Default ablation_id encodes the (taxonomy, split, drop) tuple so each
-    # config writes to its own collated dir without collision.
-    ablation_id = args.ablation_id or (
-        f"{taxonomy.name}_{args.split_column}"
-        f"_{'dropunk' if args.drop_unknown else 'keepunk'}"
-    )
-
     if args.seq_len == 30:
         npy_raw_dir = preparing_root / f"dataset{str_3d}_npy"
-        npy_collated_dir = preparing_root / (
-            f"dataset{str_3d}_npy_collated_{ablation_id}"
-        )
+        npy_collated_dir = preparing_root / f"dataset{str_3d}_npy_collated"
     else:  # 100
         npy_raw_dir = (
             preparing_root / f"dataset{str_3d}_npy_between_2_hits_with_max_limits"
         )
         npy_collated_dir = preparing_root / (
             f"dataset{str_3d}_npy_collated_between_2_hits_with_max_limits_seq_100"
-            f"_{ablation_id}"
         )
-
-    # FLAT per-clip dir for Step 3 (collation). Step 2's writer still emits
-    # the legacy {split}/{class}/ tree under npy_raw_dir until Phase 2.1
-    # rewires it to write flat directly. Until then, the flat dir is the
-    # output of scripts/flatten_copy.sh.
-    flat_clip_npy_dir = args.clip_npy_dir or (
-        preparing_root / f"dataset{str_3d}_npy_between_2_hits_with_max_limits_flat"
-    )
 
     # ---- Dry run ----
     if args.dry_run:
@@ -1088,13 +977,8 @@ def main():
         print(f"  use_3d_pose:      {args.use_3d_pose}")
         print(f"  clips_dir:        {args.clips_dir}")
         print(f"  shuttle_csv_dir:  {args.shuttle_csv_dir}")
-        print(f"  npy_raw_dir:      {npy_raw_dir}  (Step 2 nested writer)")
-        print(f"  flat_clip_npy:    {flat_clip_npy_dir}  (Step 3 reader)")
+        print(f"  npy_raw_dir:      {npy_raw_dir}")
         print(f"  npy_collated:     {npy_collated_dir}")
-        print(f"  clips_csv:        {args.clips_csv}")
-        print(f"  split_column:     {args.split_column}")
-        print(f"  drop_unknown:     {args.drop_unknown}")
-        print(f"  ablation_id:      {ablation_id}")
         print(f'  homography:       {SET_INFO_DIR / "homography.csv"}')
         print(f"  resolution:       {RESOLUTION_CSV_PATH}")
         print(f'\n  Step 1 (trajectory): {"SKIP" if args.skip_trajectory else "RUN"}')
@@ -1149,23 +1033,13 @@ def main():
     # ---- Step 3: Collation ----
     if not args.skip_collate:
         print("\n--- Step 3: Collate .npy files ---")
-        if not args.clips_csv.exists():
-            parser.error(f"--clips-csv path does not exist: {args.clips_csv}")
-        if not flat_clip_npy_dir.exists():
-            parser.error(
-                f"flat per-clip dir does not exist: {flat_clip_npy_dir}\n"
-                "  Run scripts/flatten_copy.sh first (or pass --clip-npy-dir)."
-            )
         for set_name in ["train", "val", "test"]:
             collate_npy(
-                root_dir=flat_clip_npy_dir,
+                root_dir=npy_raw_dir,
                 set_name=set_name,
                 seq_len=args.seq_len,
                 save_dir=npy_collated_dir,
-                clips_csv=args.clips_csv,
-                split_column=args.split_column,
                 taxonomy=taxonomy,
-                drop_unknown=args.drop_unknown,
                 shuttle_csv_dir=args.shuttle_csv_dir,
                 resolution_df=resolution_df,
             )

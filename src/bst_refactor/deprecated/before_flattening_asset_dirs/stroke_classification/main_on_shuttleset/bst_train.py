@@ -15,7 +15,6 @@ from torcheval.metrics.functional import multiclass_f1_score
 
 from transformers import get_cosine_schedule_with_warmup  # from HuggingFace, not a custom module
 
-import hashlib
 import pandas as pd
 from pathlib import Path
 from copy import deepcopy
@@ -41,25 +40,15 @@ from pipeline.config import TAXONOMIES, Taxonomy
 from run_tracker import track_run, track_serial
 
 
-REPO_ROOT = Path(__file__).resolve().parents[4]
-DEFAULT_CLIPS_CSV = REPO_ROOT / 'notebooks' / 'clips_master.csv'
-
-
 # ==========================================================================
 # Hyperparameters — edit these to change experiment configuration.
 # namedtuple is just an immutable struct: hyp.lr, hyp.batch_size, etc.
 # ==========================================================================
-# Data-source knobs (clips_csv, split_column, drop_unknown, ablation_id) feed
-# scripts/dir_flatten_refactor.md Phase 1: collation reads split + label from
-# the master CSV instead of the on-disk folder layout. ablation_id tags the
-# collated dir so multiple ablations don't collide; it defaults to a tuple of
-# (taxonomy, split_column, drop_unknown) when None.
 Hyp = namedtuple('Hyp', [
     'n_epochs', 'batch_size', 'lr', 'warm_up_step',
     'taxonomy', 'seq_len', 'early_stop_n_epochs',
     'pose_style', 'use_3d_pose', 'train_partial',
     'use_aux_schedule', 'aux_fade_end_epoch',
-    'clips_csv', 'split_column', 'drop_unknown', 'ablation_id',
 ])
 # --------------------------------------------------------------------------
 # LR-SCHEDULE RETUNE (2026-04-17)
@@ -92,11 +81,7 @@ Hyp = namedtuple('Hyp', [
 #     seq_len=100,              # frames per sample (must match data preprocessing)
 #     pose_style='JnB_bone',   # 'J_only'=joints, 'JnB_bone'=joints+bones, 'Jn2B'=joints+2xbones
 #     use_3d_pose=False,        # True for xyz keypoints, False for xy only
-#     train_partial=1.0,        # fraction of training set to use (1.0 = all)
-#     clips_csv=str(DEFAULT_CLIPS_CSV),
-#     split_column='split_bst_baseline',
-#     drop_unknown=False,
-#     ablation_id=None,
+#     train_partial=1.0         # fraction of training set to use (1.0 = all)
 # )
 # --------------------------------------------------------------------------
 # AUX-SCHEDULE (CG/AP warm-start-to-fade)
@@ -147,12 +132,8 @@ hyp = Hyp(
     pose_style='JnB_bone',   # 'J_only'=joints, 'JnB_bone'=joints+bones, 'Jn2B'=joints+2xbones
     use_3d_pose=False,        # True for xyz keypoints, False for xy only
     train_partial=1.0,        # fraction of training set to use (1.0 = all)
-    use_aux_schedule=True,    # Aggressive CG/AP annealing — matches preferred config from run_20260418_151139.
-    aux_fade_end_epoch=15,    # cosine fade 1.0 -> 0.0 over epochs 1-15, then ~65 ep pure backbone (best mean macro F1)
-    clips_csv=str(DEFAULT_CLIPS_CSV),  # master CSV used to collate the npy arrays this run reads
-    split_column='split_bst_baseline',  # 'split_bst_baseline' or 'split_v2'
-    drop_unknown=False,                 # mirror baseline; ablations 1+2 set this True
-    ablation_id=None,                   # auto-derived from (taxonomy, split_column, drop_unknown) if None
+    use_aux_schedule=True,    # Run B: CG/AP off from start, 80-ep schedule. Null test vs 18_15 and Run A.
+    aux_fade_end_epoch=0,     # epoch at which aux_factor first reaches 0; stays 0 after (ignored when use_aux_schedule=False)
 )
 
 
@@ -693,27 +674,13 @@ if __name__ == '__main__':
     additional_model_info = ''
     taxonomy = TAXONOMIES[hyp.taxonomy]
 
-    # ablation_id tags the collated dir (and ends up in the manifest) so
-    # parallel ablations don't collide. Mirrors the default in
-    # preparing_data/prepare_train_on_shuttleset.py — same convention so the
-    # train script reads exactly the dir collation just wrote.
-    effective_ablation_id = hyp.ablation_id or (
-        f'{taxonomy.name}_{hyp.split_column}'
-        f'_{"dropunk" if hyp.drop_unknown else "keepunk"}'
-    )
-
     str_3d = '_3d' if hyp.use_3d_pose else ''
     match hyp.seq_len:
         case 30:
-            npy_collated_dir = (
-                f'dataset{str_3d}_npy_collated_{effective_ablation_id}'
-            )
+            npy_collated_dir = f'dataset{str_3d}_npy_collated'
             model_info = '3d' if hyp.use_3d_pose else ''
         case 100:
-            npy_collated_dir = (
-                f'dataset{str_3d}_npy_collated_between_2_hits_with_max_limits_seq_100'
-                f'_{effective_ablation_id}'
-            )
+            npy_collated_dir = f'dataset{str_3d}_npy_collated_between_2_hits_with_max_limits_seq_100'
             model_info = f'between_2_hits_with_max_limits_seq_100{str_3d}'
         case _:
             raise NotImplementedError
@@ -762,28 +729,7 @@ if __name__ == '__main__':
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / f'test_{timestamp}.log'
 
-    # Provenance: hash the master CSV so the manifest pins which CSV
-    # produced this run's collated arrays. Fail fast if it's missing — the
-    # same CSV must have been used to generate the collated dir below.
-    clips_csv_path = Path(hyp.clips_csv)
-    if not clips_csv_path.exists():
-        raise FileNotFoundError(
-            f'hyp.clips_csv does not exist: {clips_csv_path}\n'
-            f'  (Run preparing_data.prepare_train_on_shuttleset to generate '
-            f'the collated arrays first.)'
-        )
-    clips_csv_sha = hashlib.sha256(clips_csv_path.read_bytes()).hexdigest()
-    extra = {
-        'data_provenance': {
-            'clips_csv_path': str(clips_csv_path),
-            'clips_csv_sha256': clips_csv_sha,
-            'effective_ablation_id': effective_ablation_id,
-            'npy_collated_dir': npy_collated_dir,
-        },
-    }
-    run_dir, run_id = track_run(
-        config=hyp, run_id=run_id, log_path=log_path, extra=extra,
-    )
+    run_dir, run_id = track_run(config=hyp, run_id=run_id, log_path=log_path)
     weight_dir = run_dir / 'weights'
 
     with open(log_path, 'w') as log_f:
