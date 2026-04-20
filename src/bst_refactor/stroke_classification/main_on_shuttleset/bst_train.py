@@ -150,7 +150,7 @@ hyp = Hyp(
     use_aux_schedule=True,    # Aggressive CG/AP annealing — matches preferred config from run_20260418_151139.
     aux_fade_end_epoch=15,    # cosine fade 1.0 -> 0.0 over epochs 1-15, then ~65 ep pure backbone (best mean macro F1)
     clips_csv=str(DEFAULT_CLIPS_CSV),  # master CSV used to collate the npy arrays this run reads
-    split_column='split_bst_baseline',  # 'split_bst_baseline' or 'split_v2'
+    split_column='split_v2',  # 'split_bst_baseline' or 'split_v2'
     drop_unknown=True,                 # mirror baseline; ablations 1+2 set this True
     ablation_id=None,                   # auto-derived from (taxonomy, split_column, drop_unknown) if None
 )

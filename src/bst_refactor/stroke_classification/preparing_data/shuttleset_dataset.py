@@ -140,6 +140,20 @@ class RandomTranslation_batch(v2.Transform):
 
 
 class Dataset_npy(Dataset):
+    """Deprecated lazy per-clip Dataset.
+
+    Expects the legacy nested ``{root_dir}/{set_name}/{class_folder}/`` layout
+    (pre-Phase-2 pose writer output). Post-Phase-2 the per-clip npy files
+    live flat under a single directory and split/label come from
+    ``clips_master.csv`` at collation time, so this class's directory walk
+    no longer matches what the writers produce. The only caller,
+    ``Task.compare_pred_gt_on_specific_type`` in ``bst_train.py``, is a
+    debug helper that is never invoked from the training or test paths.
+
+    Use ``Dataset_npy_collated`` for BST training. If this helper ever
+    needs to come back, rewrite it CSV-driven along the lines of
+    ``collate_npy``.
+    """
     def __init__(
         self,
         root_dir: Path,
@@ -148,6 +162,14 @@ class Dataset_npy(Dataset):
         seq_len=30,
         taxonomy: Taxonomy = TAXONOMY_RAW_35,
     ):
+        import warnings
+        warnings.warn(
+            'Dataset_npy expects the legacy nested {split}/{class}/ layout '
+            'and will not work against the post-Phase-2 flat per-clip dir. '
+            'Use Dataset_npy_collated for training; rewrite CSV-driven if '
+            'the compare_pred_gt_on_specific_type debug path ever returns.',
+            DeprecationWarning, stacklevel=2,
+        )
         super().__init__()
         assert set_name in ['train', 'val', 'test', 'test_specific'], 'Invalid set_name.'
         assert pose_style in ['J_only', 'JnB_interp', 'JnB_bone', 'Jn2B'], 'Invalid pose_style.'

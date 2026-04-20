@@ -492,18 +492,6 @@ def get_shuttle_result(path: Path, v_width, v_height):
     return normalize_shuttlecock(shuttle_camera, v_width, v_height)
 
 
-def mk_same_dir_structure(src_dir: Path, target_dir: Path, root=True):
-    """The roots can be different. Other subdirectories should be all the same."""
-    if root and not target_dir.is_dir():
-        target_dir.mkdir()
-    for src_sub_dir in src_dir.iterdir():
-        if src_sub_dir.is_dir():
-            target_sub_dir = target_dir / src_sub_dir.name
-            if not target_sub_dir.is_dir():
-                target_sub_dir.mkdir()
-            mk_same_dir_structure(src_sub_dir, target_sub_dir, root=False)
-
-
 def prepare_trajectory(
     my_clips_folder: Path,
     model_folder: Path,
@@ -558,8 +546,9 @@ def prepare_2d_dataset_npy_from_raw_video(
         instead of bounding box diagonal.
     :param joints_center_align: If True, center-align joints within bounding box.
     """
-    # Make sure there are folders that can contain .npy files.
-    mk_same_dir_structure(src_dir=my_clips_folder, target_dir=save_root_dir)
+    # Flat layout: per-clip files sit alongside each other under save_root_dir.
+    # Split + label come from clips_master.csv at collation time (Step 3).
+    save_root_dir.mkdir(parents=True, exist_ok=True)
 
     all_mp4_paths = sorted(my_clips_folder.glob("**/*.mp4"))
 
@@ -567,12 +556,7 @@ def prepare_2d_dataset_npy_from_raw_video(
 
     pbar = tqdm(range(len(all_mp4_paths)), desc="Yield .npy files", unit="video")
     for video_path in all_mp4_paths:
-        # Set the save paths.
-        ball_type_dir = video_path.parent
-        set_split_dir = ball_type_dir.parent
-        save_branch = str(
-            save_root_dir / set_split_dir.name / ball_type_dir.name / video_path.stem
-        )
+        save_branch = str(save_root_dir / video_path.stem)
 
         # Resume check: _failed.npy is saved last, so its existence means all
         # three outputs (_pos, _joints, _failed) are complete for this clip.
@@ -598,9 +582,12 @@ def prepare_2d_dataset_npy_from_raw_video(
             # (F,) — True where MMPose failed to detect 2 players; saved last
             # so its presence is a reliable resume marker for all three outputs
 
-        # Free GPU memory between clips to prevent fragmentation over ~33k clips.
-        gc.collect()
-        torch.cuda.empty_cache()
+            # Free GPU memory after inference to prevent fragmentation over
+            # ~33k clips. Skips don't allocate on GPU, so no cleanup needed
+            # in that branch -- keeps resume-path iterations cheap (~1ms vs
+            # ~100ms when these ran unconditionally).
+            gc.collect()
+            torch.cuda.empty_cache()
 
         pbar.update()
     pbar.close()
@@ -622,8 +609,9 @@ def prepare_3d_dataset_npy_from_raw_video(
     :param resolution_df: DataFrame with video resolutions, indexed by video ID.
     :param all_court_info: Dict mapping video ID to court info (homography, borders).
     """
-    # Make sure there are folders that can contain .npy files.
-    mk_same_dir_structure(src_dir=my_clips_folder, target_dir=save_root_dir)
+    # Flat layout: per-clip files sit alongside each other under save_root_dir.
+    # Split + label come from clips_master.csv at collation time (Step 3).
+    save_root_dir.mkdir(parents=True, exist_ok=True)
 
     all_mp4_paths = sorted(my_clips_folder.glob("**/*.mp4"))
 
@@ -632,12 +620,7 @@ def prepare_3d_dataset_npy_from_raw_video(
 
     pbar = tqdm(range(len(all_mp4_paths)), desc="Yield .npy files", unit="video")
     for video_path in all_mp4_paths:
-        # Set the save paths.
-        ball_type_dir = video_path.parent
-        set_split_dir = ball_type_dir.parent
-        save_branch = str(
-            save_root_dir / set_split_dir.name / ball_type_dir.name / video_path.stem
-        )
+        save_branch = str(save_root_dir / video_path.stem)
 
         # See prepare_2d_dataset_npy_from_raw_video for resume-check rationale.
         if not Path(save_branch + "_failed.npy").exists():
@@ -657,9 +640,11 @@ def prepare_3d_dataset_npy_from_raw_video(
             np.save(save_branch + "_failed.npy", np.array(failed_ls, dtype=bool))
             # (F,) — True where MMPose failed to detect 2 players; saved last
 
-        # Free GPU memory between clips to prevent fragmentation over ~33k clips.
-        gc.collect()
-        torch.cuda.empty_cache()
+            # Free GPU memory after inference to prevent fragmentation over
+            # ~33k clips. Skips don't allocate on GPU, so no cleanup needed
+            # in that branch.
+            gc.collect()
+            torch.cuda.empty_cache()
 
         pbar.update()
     pbar.close()
@@ -1030,7 +1015,7 @@ def main():
         "--clip-npy-dir",
         type=Path,
         default=None,
-        help="FLAT per-clip dir for Step 3 (collation). Defaults to "
+        help="FLAT per-clip dir (Step 2 writer + Step 3 reader). Defaults to "
              "the per-taxonomy preparing_root + "
              "'dataset[_3d]_npy_between_2_hits_with_max_limits_flat'.",
     )
@@ -1059,26 +1044,23 @@ def main():
     )
 
     if args.seq_len == 30:
-        npy_raw_dir = preparing_root / f"dataset{str_3d}_npy"
         npy_collated_dir = preparing_root / (
             f"dataset{str_3d}_npy_collated_{ablation_id}"
         )
+        default_flat_dir = preparing_root / f"dataset{str_3d}_npy_flat"
     else:  # 100
-        npy_raw_dir = (
-            preparing_root / f"dataset{str_3d}_npy_between_2_hits_with_max_limits"
-        )
         npy_collated_dir = preparing_root / (
             f"dataset{str_3d}_npy_collated_between_2_hits_with_max_limits_seq_100"
             f"_{ablation_id}"
         )
+        default_flat_dir = (
+            preparing_root / f"dataset{str_3d}_npy_between_2_hits_with_max_limits_flat"
+        )
 
-    # FLAT per-clip dir for Step 3 (collation). Step 2's writer still emits
-    # the legacy {split}/{class}/ tree under npy_raw_dir until Phase 2.1
-    # rewires it to write flat directly. Until then, the flat dir is the
-    # output of scripts/flatten_copy.sh.
-    flat_clip_npy_dir = args.clip_npy_dir or (
-        preparing_root / f"dataset{str_3d}_npy_between_2_hits_with_max_limits_flat"
-    )
+    # FLAT per-clip dir. Step 2 writes per-clip files here ({clip_stem}_*.npy),
+    # Step 3 reads from here. Split + label come from clips_master.csv at
+    # collation time -- the layout is taxonomy- and split-independent.
+    flat_clip_npy_dir = args.clip_npy_dir or default_flat_dir
 
     # ---- Dry run ----
     if args.dry_run:
@@ -1088,8 +1070,7 @@ def main():
         print(f"  use_3d_pose:      {args.use_3d_pose}")
         print(f"  clips_dir:        {args.clips_dir}")
         print(f"  shuttle_csv_dir:  {args.shuttle_csv_dir}")
-        print(f"  npy_raw_dir:      {npy_raw_dir}  (Step 2 nested writer)")
-        print(f"  flat_clip_npy:    {flat_clip_npy_dir}  (Step 3 reader)")
+        print(f"  flat_clip_npy:    {flat_clip_npy_dir}  (Step 2 writer + Step 3 reader)")
         print(f"  npy_collated:     {npy_collated_dir}")
         print(f"  clips_csv:        {args.clips_csv}")
         print(f"  split_column:     {args.split_column}")
@@ -1130,14 +1111,14 @@ def main():
         if args.use_3d_pose:
             prepare_3d_dataset_npy_from_raw_video(
                 my_clips_folder=args.clips_dir,
-                save_root_dir=npy_raw_dir,
+                save_root_dir=flat_clip_npy_dir,
                 resolution_df=resolution_df,
                 all_court_info=all_court_info,
             )
         else:
             prepare_2d_dataset_npy_from_raw_video(
                 my_clips_folder=args.clips_dir,
-                save_root_dir=npy_raw_dir,
+                save_root_dir=flat_clip_npy_dir,
                 resolution_df=resolution_df,
                 all_court_info=all_court_info,
                 joints_normalized_by_v_height=False,
@@ -1154,7 +1135,7 @@ def main():
         if not flat_clip_npy_dir.exists():
             parser.error(
                 f"flat per-clip dir does not exist: {flat_clip_npy_dir}\n"
-                "  Run scripts/flatten_copy.sh first (or pass --clip-npy-dir)."
+                "  Run Step 2 first (drop --skip-pose) or pass --clip-npy-dir."
             )
         for set_name in ["train", "val", "test"]:
             collate_npy(

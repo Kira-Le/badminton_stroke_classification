@@ -143,7 +143,7 @@ python predict.py --video_file clip.mp4 --tracknet_file ckpts/TrackNet_best.pt \
 
 **Frame-level guarantees:** TrackNetV3's output CSVs always contain a contiguous Frame column `[0, 1, ..., N-1]` matching the input video length. Frames where the shuttle is undetected are written with zeroed coordinates and `Visibility=0` (never skipped), and buffer flushing ensures trailing frames are included. This means `shuttle_csvs_to_npy` can safely call `.set_index('Frame').to_numpy()` without gap-filling or reindexing.
 
-Output: `ShuttleSet/shuttle_npy/{train,val,test}/{Player}_{stroke_type}/{vid}_{set}_{rally}_{ball_round}.npy`
+Output: `ShuttleSet/shuttle_npy/{vid}_{set}_{rally}_{ball_round}.npy` (flat). Split and label assignment are carried by `notebooks/clips_master.csv` at collation time, not by the on-disk directory layout. See `scripts/dir_flatten_refactor.md` for the migration.
 
 Each `.npy` file has shape `(t, 3)`. To get xy-only coordinates: `shuttle[:, :2]`. To get the visibility mask: `shuttle[:, 2]`.
 
@@ -210,19 +210,19 @@ ShuttleSet/
   raw_video/                                    # Step 1
     {id} {match_name}.mp4
   my_raw_video_resolution.csv                   # Step 2
-  clips/                                        # Steps 3-4
+  clips/                                        # Steps 3-4 (still nested)
     train/{Top,Bottom}_{stroke_type}/*.mp4
     val/{Top,Bottom}_{stroke_type}/*.mp4
     test/{Top,Bottom}_{stroke_type}/*.mp4
-  shuttle_csv/                                  # Step 6 (intermediate)
+  shuttle_csv/                                  # Step 6 (intermediate, flat)
     {vid}_{set}_{rally}_{ball_round}_ball.csv
-  shuttle_npy/                                  # Step 6 (final)
-    train/{Top,Bottom}_{stroke_type}/*.npy
-    val/{Top,Bottom}_{stroke_type}/*.npy
-    test/{Top,Bottom}_{stroke_type}/*.npy
+  shuttle_npy/                                  # Step 6 (final, flat)
+    {vid}_{set}_{rally}_{ball_round}.npy
 ```
 
 Clip filenames: `{video_id}_{set}_{rally}_{ball_round}.mp4`
+
+Split and label assignment for `shuttle_npy/` (and the downstream pose npys) come from `notebooks/clips_master.csv` at collation time. The clips directory stays nested for now; flattening it is deferred. See `scripts/dir_flatten_refactor.md` for the migration plan.
 
 ## Pre-existing Input Data
 
@@ -308,9 +308,9 @@ Both architectures read from the same `clips/` and `shuttle_npy/` directories. T
 from pathlib import Path
 clips = sorted(Path('ShuttleSet/clips/train').rglob('*.mp4'))
 
-# Loading shuttle trajectories
+# Loading shuttle trajectories (flat: one file per clip, named after clip stem)
 import numpy as np
-shuttle = np.load('ShuttleSet/shuttle_npy/train/Top_smash/1_1_3_2.npy')
+shuttle = np.load('ShuttleSet/shuttle_npy/1_1_3_2.npy')
 xy = shuttle[:, :2]           # (t, 2) normalized coordinates
 visibility = shuttle[:, 2]    # (t,) detection confidence
 
