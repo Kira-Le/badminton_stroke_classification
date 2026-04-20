@@ -1,7 +1,7 @@
 import { Button } from '../components'
 
 import SingleFileUploader from '../components/SingleFileUploader'
-
+import SearchBar from '../components/SearchBar'
 import style from './Home.module.css'
 
 export default function Home() {
@@ -17,9 +17,11 @@ export default function Home() {
             <p>File Upload:</p>
             <SingleFileUploader/>
           </div>
+          <SearchBar/>
           <div class={style.browse_box}>
 
           </div>
+          
          </>
     )
 }
