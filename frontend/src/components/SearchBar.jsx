@@ -4,6 +4,8 @@
 import {useState, useCallback, useEffect} from 'react'
 import { Search, Mic } from 'lucide-react'
 
+import style from './SearchBar.module.css' // Generated with claude.ai based on tailwinds styling from Search Bar example referenced above
+
 //TODO: Remove below sampleData when connected to API
 const sampleData = [
   {
@@ -69,23 +71,23 @@ const SearchBar = () => {
     }
 
     return (
-        <div className="flex min-h-screen flex-col items-center bg-white p-4">
+        <div className={style.wrapper}>
             <form
             onSubmit={(e) => e.preventDefault()}
-            className="mb-8 w-full max-w-2xl"
+            className={style.form}
             >
-                <div className="relative">
+                <div className={style.inputWrapper}>
                     <input
                     type="text"
                     value={searchTerm}
                     onChange={handleInputChange}
-                    className="w-full rounded-full border border-gray-200 bg-white px-5 py-3 pr-20 text-base shadow-md transition-shadow duration-200 hover:shadow-lg focus:border-gray-300 focus:outline-none"
+                    className={style.input}
                     placeholder="Search by player or tournament name"
                     />
-                    <div className="absolute right-0 top-0 mr-4 mt-3 flex items-center">
+                    <div className={style.buttons}>
                         <button
                         type="button"
-                        className="mr-3 text-gray-400 hover:text-gray-600"
+                        className={style.micButton}
                         onClick={() =>
                             alert(
                                 'Voice search feature not yet implemented!',
@@ -94,22 +96,22 @@ const SearchBar = () => {
                         >
                             <Mic size={20} />{' '}
                         </button>{' '}
-                        <button type="submit" className="text-blue-500 hover:text-blue-600">
+                        <button type="submit" className={style.searchButton}>
                             <Search size={20} />{' '}
                         </button>{' '}
                     </div>{' '}
                 </div>{' '}
             </form>{' '}
             {searchResults.length > 0 && (
-                <div className="w-full max-w-2xl rounded-lg bg-white p-4 shadow-md">
-                    <h2 className="mb-4 text-xl font-bold"> Search Results: </h2>{' '}
-                    <ul>
+                <div className={style.results}>
+                    <h2 className={style.reesultsHeading}> Search Results: </h2>{' '}
+                    <ul className={style.resultsList}>
                         {' '}
                         {searchResults.map((result) => (
-                            <li key={result.id} className="mb-2">
+                            <li key={result.id} className={style.resultsItem}>
                                 <a
                                 href={result.url}
-                                className="text-blue-600 hover:underline"
+                                className={style.resultsLink}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 >
