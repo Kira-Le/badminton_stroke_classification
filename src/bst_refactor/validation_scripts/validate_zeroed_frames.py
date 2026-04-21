@@ -1262,7 +1262,9 @@ def main():
     )
     parser.add_argument(
         "--set-dir", type=Path, default=None,
-        help="Path to ShuttleSet/set/ directory (enables flaw + hit-frame analysis)",
+        help="Path to ShuttleSet/set/ directory (enables flaw + hit-frame "
+             "analysis). If omitted, checks <repo>/src/bst_refactor/ShuttleSet/set "
+             "for a match.csv and uses it when found.",
     )
     parser.add_argument(
         "--hit-window", type=int, default=10,
@@ -1275,6 +1277,14 @@ def main():
              "detection failure analysis using TrackNet visibility column.",
     )
     args = parser.parse_args()
+
+    # Auto-detect --set-dir from the repo-relative location if not passed.
+    # Explicit --set-dir always wins; this only fills a None.
+    if args.set_dir is None:
+        repo_set_dir = Path(__file__).resolve().parents[1] / "ShuttleSet" / "set"
+        if (repo_set_dir / "match.csv").is_file():
+            args.set_dir = repo_set_dir
+            print(f"Auto-detected --set-dir: {args.set_dir}")
 
     taxonomy = TAXONOMIES[args.taxonomy]
 
@@ -1298,8 +1308,11 @@ def main():
             print("Pass --dataset-npy-dir to override.")
             sys.exit(1)
         if len(candidates) > 1:
-            print(f"WARNING: multiple *_flat dirs found, using first: {candidates[0].name}")
-            print(f"  All candidates: {[c.name for c in candidates]}")
+            print(f"ERROR: multiple *_flat dirs found under {args.data_root}:")
+            for c in candidates:
+                print(f"  {c.name}")
+            print("Pass --dataset-npy-dir to pick one explicitly.")
+            sys.exit(1)
         dataset_npy_dir = candidates[0]
 
     if not args.clips_csv.exists():
@@ -1310,13 +1323,14 @@ def main():
     syd_now = datetime.now(ZoneInfo("Australia/Sydney"))
     ts = syd_now.strftime("%Y%m%d_%H%M")
     tax_short = args.taxonomy.replace("_", "")  # "merged_25" -> "merged25"
+    split_short = args.split_column.replace("split_", "").replace("_", "")
 
     # Output dir is always a sibling folder to this script.
     output_dir = Path(__file__).resolve().parent / "zeroed_frames_analysis_outputs"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Tee stdout so we can save a .txt copy.
-    txt_path = output_dir / f"analysis_{tax_short}_{ts}.txt"
+    txt_path = output_dir / f"analysis_{tax_short}_{split_short}_{ts}.txt"
     oob_clips: list[tuple[str, str, int, int]] = []
     hz_data: dict[str, dict[tuple[str, str], list[float]]] = {}
     tee = _Tee()
@@ -1404,8 +1418,8 @@ def main():
                   "(pass --set-dir to enable) ---\n")
 
         # --- Figures ---
-        hist_path = output_dir / f"fail_rate_histogram_{tax_short}_{ts}.png"
-        temp_path = output_dir / f"temporal_pattern_{tax_short}_{ts}.png"
+        hist_path = output_dir / f"fail_rate_histogram_{tax_short}_{split_short}_{ts}.png"
+        temp_path = output_dir / f"temporal_pattern_{tax_short}_{split_short}_{ts}.png"
 
         plot_fail_rate_histogram(records, hist_path)
         print(f"Saved: {hist_path}")
@@ -1415,7 +1429,7 @@ def main():
 
         if hit_lookup:
             profile_path = (
-                output_dir / f"hit_frame_profile_{tax_short}_{ts}.png"
+                output_dir / f"hit_frame_profile_{tax_short}_{split_short}_{ts}.png"
             )
             # Overall fail rate for the reference line (excl. unknown).
             real = [r for r in records if not _is_unknown(r)]
@@ -1441,7 +1455,7 @@ def main():
                 hm_data = hz_data["mmpose"]
                 hm_label = "MMPose"
 
-            hm_path = output_dir / f"hit_zone_heatmap_{tax_short}_{ts}.png"
+            hm_path = output_dir / f"hit_zone_heatmap_{tax_short}_{split_short}_{ts}.png"
             plot_hit_zone_heatmap(
                 hm_data, args.threshold, hm_path,
                 title=f"{hm_label} — % clips >{args.threshold:.0%} "
@@ -1449,7 +1463,7 @@ def main():
             )
             print(f"Saved: {hm_path}")
 
-            surv_path = output_dir / f"surviving_clips_{tax_short}_{ts}.png"
+            surv_path = output_dir / f"surviving_clips_{tax_short}_{split_short}_{ts}.png"
             plot_surviving_clips(
                 hm_data, args.threshold, surv_path,
                 title=f"Surviving clips after >{args.threshold:.0%} "
@@ -1467,7 +1481,7 @@ def main():
 
     # --- Save out-of-bounds clip list (if any) ---
     if oob_clips:
-        oob_path = output_dir / f"hit_oob_clips_{tax_short}_{ts}.txt"
+        oob_path = output_dir / f"hit_oob_clips_{tax_short}_{split_short}_{ts}.txt"
         with open(oob_path, "w") as f:
             f.write("# Clips where the hit-frame index exceeded the clip length.\n")
             f.write("# These were skipped in the hit-frame profile plot.\n")

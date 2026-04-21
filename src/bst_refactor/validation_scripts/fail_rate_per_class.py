@@ -1,29 +1,38 @@
 #!/usr/bin/env python3
 """Per-class MMPose fail-rate stats joined on clips_master.csv.
 
-The existing validate_zeroed_frames.py parses class labels from nested folder
-names (Top_smash/, Bottom_lob/, ...), which reflects the merged_25 extract and
-can't distinguish the classes une_merge_v1 re-exposes (wrist_smash, passive_drop).
+Reads the flat per-clip *_failed.npy files, joins them to clips_master.csv,
+applies the requested taxonomy (+ optional drop_unknown), and prints per-class
+totals. Labels stratify by player_side (Top_smash is separate from Bottom_smash),
+which complements validate_zeroed_frames.py's per-stroke-type view that pools
+Top and Bottom together.
 
-This script reads the flat per-clip *_failed.npy files, joins them to
-clips_master.csv, applies the requested taxonomy (+ optional drop_unknown),
-and prints per-class totals so you can see which une_merge_v1 class is carrying
-the most zeroed frames.
-
-Usage on engelbart (from repo root):
+Usage on engelbart (from repo root) — explicit --dataset-npy-dir:
   python src/bst_refactor/validation_scripts/fail_rate_per_class.py \\
       --clips-csv notebooks/clips_master.csv \\
-      --flat-dir /scratch/comp320a/ShuttleSet_data_merged_25/dataset_npy_between_2_hits_with_max_limits_flat \\
+      --dataset-npy-dir /scratch/comp320a/ShuttleSet_data_merged_25/dataset_npy_between_2_hits_with_max_limits_flat \\
       --split-column split_bst_baseline \\
       --taxonomy une_merge_v1 \\
       --drop-unknown
+
+Or with --data-root auto-discovery (picks the *_flat subdir):
+  python src/bst_refactor/validation_scripts/fail_rate_per_class.py \\
+      --clips-csv notebooks/clips_master.csv \\
+      --data-root /scratch/comp320a/ShuttleSet_data_merged_25 \\
+      --split-column split_bst_baseline \\
+      --taxonomy une_merge_v1 \\
+      --drop-unknown \\
+      --save-txt
 """
 
 from __future__ import annotations
 
 import argparse
+import io
 import sys
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
@@ -44,17 +53,61 @@ def derive_labels(df: pd.DataFrame, taxonomy: Taxonomy) -> pd.Series:
     )
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--clips-csv', type=Path, required=True)
-    parser.add_argument('--flat-dir', type=Path, required=True,
-                        help='Flat per-clip dir holding {clip_stem}_failed.npy')
-    parser.add_argument('--split-column', default='split_bst_baseline')
-    parser.add_argument('--taxonomy', default='une_merge_v1',
-                        choices=list(TAXONOMIES.keys()))
-    parser.add_argument('--drop-unknown', action='store_true')
-    args = parser.parse_args()
+class _Tee:
+    """Minimal stdout tee that also captures output for saving to .txt."""
 
+    def __init__(self):
+        self._buf = io.StringIO()
+        self._stdout = sys.stdout
+
+    def write(self, text: str):
+        self._stdout.write(text)
+        self._buf.write(text)
+
+    def flush(self):
+        self._stdout.flush()
+
+    def get_text(self) -> str:
+        return self._buf.getvalue()
+
+
+def _resolve_dataset_npy_dir(
+    dataset_npy_dir: Path | None, data_root: Path | None,
+) -> Path:
+    """Resolve the flat per-clip npy dir from explicit arg or --data-root discovery.
+
+    Mirrors validate_zeroed_frames.py's auto-discovery: picks the single
+    ``*_flat/`` subdir under ``--data-root``. Fails if zero or multiple
+    candidates match.
+    """
+    if dataset_npy_dir is not None:
+        return dataset_npy_dir
+
+    candidates = [
+        d for d in sorted(data_root.iterdir())
+        if d.is_dir()
+        and "npy" in d.name
+        and "collated" not in d.name
+        and d.name.endswith("_flat")
+    ]
+    if not candidates:
+        print(f"ERROR: no flat per-clip npy dir (*_flat/) found under "
+              f"{data_root}.")
+        print("Contents:", [d.name for d in data_root.iterdir() if d.is_dir()])
+        print("Pass --dataset-npy-dir to override.")
+        sys.exit(1)
+    if len(candidates) > 1:
+        print(f"ERROR: multiple *_flat dirs found under {data_root}:")
+        for c in candidates:
+            print(f"  {c.name}")
+        print("Pass --dataset-npy-dir to pick one explicitly.")
+        sys.exit(1)
+    return candidates[0]
+
+
+def _run(args, dataset_npy_dir: Path) -> None:
+    """Core per-class fail-rate computation and printing. Wrapped so --save-txt
+    can tee stdout around it without duplicating the body."""
     taxonomy = TAXONOMIES[args.taxonomy]
     df = pd.read_csv(args.clips_csv)
     if args.drop_unknown:
@@ -64,7 +117,7 @@ def main() -> int:
     # Per-clip fail stats.
     totals, faileds, missing = [], [], 0
     for stem in df['clip_stem']:
-        path = args.flat_dir / f'{stem}_failed.npy'
+        path = dataset_npy_dir / f'{stem}_failed.npy'
         if not path.exists():
             totals.append(0)
             faileds.append(0)
@@ -77,7 +130,7 @@ def main() -> int:
     df['failed_frames'] = faileds
 
     if missing:
-        print(f'WARNING: {missing} clips had no *_failed.npy in {args.flat_dir}')
+        print(f'WARNING: {missing} clips had no *_failed.npy in {dataset_npy_dir}')
 
     # Aggregate by (split, label).
     agg = (
@@ -107,6 +160,65 @@ def main() -> int:
             ratio = f'{r.failed_frames:,} / {r.total_frames:,}'
             print(f'  {r.label:<30} {r.clips:>6}   {ratio:>22}  '
                   f'{r.fail_rate:>6.2%}')
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--clips-csv', type=Path, required=True)
+    parser.add_argument(
+        '--data-root', type=Path, default=None,
+        help='ShuttleSet_data_{taxonomy} dir. Enables *_flat auto-discovery '
+             '(same pattern as validate_zeroed_frames.py).',
+    )
+    parser.add_argument(
+        '--dataset-npy-dir', type=Path, default=None,
+        help='Flat per-clip dir holding {clip_stem}_failed.npy. '
+             'Required if --data-root is not given.',
+    )
+    parser.add_argument('--split-column', default='split_bst_baseline')
+    parser.add_argument('--taxonomy', default='une_merge_v1',
+                        choices=list(TAXONOMIES.keys()))
+    parser.add_argument('--drop-unknown', action='store_true')
+    parser.add_argument(
+        '--save-txt', action='store_true',
+        help='Tee stdout to zeroed_frames_analysis_outputs/'
+             'fail_rate_per_class_{tax_short}_{split_short}_{ts}.txt.',
+    )
+    args = parser.parse_args()
+
+    if args.dataset_npy_dir is None and args.data_root is None:
+        parser.error("Either --dataset-npy-dir or --data-root is required.")
+
+    dataset_npy_dir = _resolve_dataset_npy_dir(
+        args.dataset_npy_dir, args.data_root,
+    )
+
+    if args.save_txt:
+        tee = _Tee()
+        real_stdout = sys.stdout
+        sys.stdout = tee
+        try:
+            _run(args, dataset_npy_dir)
+        finally:
+            sys.stdout = real_stdout
+
+        syd_now = datetime.now(ZoneInfo("Australia/Sydney"))
+        ts = syd_now.strftime("%Y%m%d_%H%M")
+        tax_short = args.taxonomy.replace("_", "")
+        split_short = args.split_column.replace("split_", "").replace("_", "")
+        output_dir = (
+            Path(__file__).resolve().parent / "zeroed_frames_analysis_outputs"
+        )
+        output_dir.mkdir(parents=True, exist_ok=True)
+        txt_path = (
+            output_dir
+            / f"fail_rate_per_class_{tax_short}_{split_short}_{ts}.txt"
+        )
+        with open(txt_path, "w") as f:
+            f.write(tee.get_text())
+        print(f"Saved: {txt_path}")
+    else:
+        _run(args, dataset_npy_dir)
 
     return 0
 
