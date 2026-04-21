@@ -15,6 +15,10 @@ Expected consumers (not in-repo yet):
 Both should pair the returned lookup with a split + label derivation
 driven by ``notebooks/clips_master.csv``, the same way
 ``collate_npy`` does for the pose + shuttle npys.
+
+For a higher-level API that does the CSV read, taxonomy label derivation,
+and flat shuttle / mmpose path resolution in one call, see
+``pipeline.data_access.get_clip_records``; it calls this helper internally.
 """
 from pathlib import Path
 

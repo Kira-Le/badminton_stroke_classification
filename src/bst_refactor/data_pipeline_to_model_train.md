@@ -326,6 +326,8 @@ class ClipVideoDataset(Dataset):
 
 `_derive_label` applies `taxonomy.merge_map` + `standalone_set` to `(row.raw_type_en, row.player_side)` to produce an int label; see `collate_npy` in `prepare_train_on_shuttleset.py` for the canonical reference implementation. The video decoder (`load_video`) is caller's choice — cv2, decord, or torchvision.io. With this pattern the nested `clips/` layout stays transparent: any `split_column` in `clips_master.csv` (e.g. `split_bst_baseline`, `split_v2`) works without reorganizing the clips tree.
 
+For ad-hoc queries or when a Dataset wants a higher-level "give me clip + shuttle + mmpose triples for this split and class" API, `pipeline.data_access.get_clip_records` wraps the CSV read, taxonomy label derivation, and flat-path resolution into one call (and exposes the same thing via CLI / TUI at `python -m pipeline.data_access`). `clip_index.build_clip_path_index` remains the zero-dep pathlib helper it calls internally for clip-stem lookup.
+
 ---
 
 ### Stage 4 -- Model (`stroke_classification/model/`)

@@ -285,6 +285,7 @@ Update `ShuttleSet/flaw_shot_records.csv`. The pipeline reads it at import time 
 | `verify.py` | Post-generation sanity checks |
 | `build_dataset.py` | One-command orchestrator |
 | `clip_index.py` | `build_clip_path_index(clips_dir)` helper: one-time rglob to build a `{clip_stem -> mp4 Path}` lookup for CSV-driven video-loading Datasets. Used by downstream arch code (Arch 2 3D CNN, Arch 1 wrist crop). |
+| `data_access.py` | CSV-aware access layer on top of `clip_index.py`. `get_clip_records(paths, split=..., taxonomy_class=..., split_column=..., taxonomy_name=..., drop_unknown=...)` reads `clips_master.csv`, derives the folder-style class label under the active taxonomy, and returns `ClipRecord`s pairing clip / flat shuttle / flat mmpose paths. Also exposes a CLI + TUI (`python -m pipeline.data_access`) and a `.env` mechanism for per-environment path config. |
 
 ## Running Individual Steps
 
@@ -358,3 +359,36 @@ class ClipVideoDataset(Dataset):
 `_derive_label` applies `taxonomy.merge_map` + `standalone_set` to `(row.raw_type_en, row.player_side)`, matching what `collate_npy` does for the pose/shuttle npys (see `stroke_classification/preparing_data/prepare_train_on_shuttleset.py`). Pick your own video backend (cv2, decord, torchvision.io) for `load_video`.
 
 This pattern means the nested clips layout is transparent: the same `ClipVideoDataset` works for any `split_column` in `clips_master.csv` without needing to flatten or reorganize `clips/`.
+
+### Higher-level access (`pipeline/data_access.py`)
+
+For ad-hoc "give me the clip / shuttle / mmpose paths for this split and this class" queries, `pipeline.data_access` wraps the CSV read + `build_clip_path_index` + flat-path resolution in one call:
+
+```python
+from pipeline.data_access import DataPaths, get_clip_records
+
+records = get_clip_records(
+    DataPaths(),
+    split='train',
+    taxonomy_class='Top_smash',
+    split_column='split_v2',
+    taxonomy_name='une_merge_v1',
+    drop_unknown=True,
+)
+for r in records:
+    print(r.clip_stem, r.clip, r.shuttle_npy, r.mmpose_joints)
+```
+
+`DataPaths` resolves paths in priority order: constructor arg > environment variable (or `.env` file entry: `BST_CLIPS_DIR`, `BST_SHUTTLE_NPY_DIR`, `BST_MMPOSE_NPY_DIR`, `BST_CLIPS_CSV`) > `pipeline.config` defaults. Copy `.env.example` at the repo root to `.env` to pin paths per environment.
+
+CLI + TUI for quick inspection:
+
+```bash
+python -m pipeline.data_access --summary                        # counts per split+class
+python -m pipeline.data_access --split val --class Top_smash    # list paths
+python -m pipeline.data_access --split-column split_v2 --summary
+python -m pipeline.data_access --list-classes                   # active taxonomy's classes
+python -m pipeline.data_access                                   # interactive TUI
+```
+
+`clip_index.build_clip_path_index` remains the zero-dep pathlib helper for Datasets that just need `{stem -> Path}`; `data_access` is the CSV-aware layer above it.

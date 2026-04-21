@@ -1,21 +1,29 @@
 """Access ShuttleSet clips, shuttle npy, and mmpose npy filtered by split and taxonomy class.
 
-On-disk layout (all three trees mirror the same structure)
-----------------------------------------------------------
-clips_dir/
-  {split}/                   # train | val | test
-    {taxonomy_class}/        # e.g. Top_smash, Bottom_lob, unknown
-      {match}_{set}_{rally}_{ball}.mp4
+On-disk layout (post-Phase-2)
+-----------------------------
+clips_dir/                       # Still nested (Phase 3 flattening deferred).
+  {split_bst_baseline}/          # train | val | test, historical partition only.
+    {folder_name}/               # e.g. Top_smash, Bottom_lob, unknown.
+      {clip_stem}.mp4
 
-shuttle_npy_dir/             # same layout, .npy instead of .mp4
-mmpose_npy_dir/              # same layout, {stem}_joints.npy + {stem}_pos.npy per clip
-                             # only present after prepare_train_on_shuttleset.py Step 2
+shuttle_npy_dir/                 # Flat after Phase 2.2.
+  {clip_stem}.npy
+
+mmpose_npy_dir/                  # Flat after Phase 2.1; only present once pose
+  {clip_stem}_joints.npy         # extraction has run.
+  {clip_stem}_pos.npy
+
+Split and taxonomy class both come from ``notebooks/clips_master.csv`` rather
+than the folder structure. This lets the same backend serve any split column
+(``split_bst_baseline``, ``split_v2``, future ablations) without reorganising
+the clips tree.
 
 Taxonomy class names
 --------------------
-The default taxonomy is 'une_merge_v1' (25 classes):
+The default taxonomy is 'une_merge_v1' (29 classes):
   Top_<stroke> / Bottom_<stroke> for each of the 14 base types, plus 'unknown'.
-List all classes actually present on disk:
+List all classes for the active taxonomy:
 
     python -m pipeline.data_access --list-classes
 
@@ -23,20 +31,31 @@ Python API
 ----------
     from pipeline.data_access import get_clip_records, DataPaths
 
-    # Defaults: clips and shuttle_npy from pipeline.config paths, no mmpose dir.
+    # Defaults: clips, shuttle_npy, clips_master from pipeline.config paths.
+    # mmpose_npy_dir is left None until BST_MMPOSE_NPY_DIR is set or passed in.
     paths = DataPaths()
 
     # Filter by split and/or class. Both are optional.
-    records = get_clip_records(paths, split='val', taxonomy_class='Top_smash')
+    records = get_clip_records(
+        paths,
+        split='val',
+        taxonomy_class='Top_smash',
+        split_column='split_bst_baseline',
+        taxonomy_name='une_merge_v1',
+    )
 
     for r in records:
-        print(r.clip)           # Path to .mp4
-        print(r.shuttle_npy)    # Path to shuttle .npy, or None if missing
-        print(r.mmpose_joints)  # Path to _joints.npy, or None if not generated yet
+        print(r.clip)           # Path to .mp4, or None if not on disk.
+        print(r.shuttle_npy)    # Path to shuttle .npy, or None if missing.
+        print(r.mmpose_joints)  # Path to _joints.npy, or None if not generated.
 
-    # When mmpose data exists, pass its root directory:
-    paths = DataPaths(mmpose_npy_dir=Path('preparing_data/ShuttleSet_data_une_merge_v1/dataset_npy'))
-    records = get_clip_records(paths, split='train')
+    # When mmpose data exists, pass its flat root directory.
+    paths = DataPaths(
+        mmpose_npy_dir=Path(
+            'preparing_data/ShuttleSet_data_une_merge_v1/'
+            'dataset_npy_between_2_hits_with_max_limits_flat'
+        )
+    )
 
 CLI usage
 ---------
@@ -51,63 +70,89 @@ Run from the project root (or any directory with pipeline importable):
     # Count table for one class across all splits
     python -m pipeline.data_access --class Top_smash --summary
 
-    # TSV of all file paths (clip, shuttle, mmpose) — redirect to file for later use
+    # Switch to the split_v2 ablation column
+    python -m pipeline.data_access --split-column split_v2 --summary
+
+    # Drop unknown-type rows before counting (matches collate_npy behaviour)
+    python -m pipeline.data_access --drop-unknown --summary
+
+    # TSV of all file paths (clip, shuttle, mmpose) -- redirect to file
     python -m pipeline.data_access --split train > train_paths.tsv
 
-    # List all class folder names found on disk
+    # List all class names in the active taxonomy and exit
     python -m pipeline.data_access --list-classes
 
     # Override default data paths (e.g. different HPC scratch location)
-    python -m pipeline.data_access --clips-dir /scratch/comp320a/ShuttleSet/clips \\
-                                   --shuttle-npy-dir /scratch/comp320a/ShuttleSet/shuttle_npy \\
-                                   --summary
+    python -m pipeline.data_access \\
+        --clips-dir /scratch/comp320a/ShuttleSet/clips \\
+        --shuttle-npy-dir /scratch/comp320a/ShuttleSet/shuttle_npy_flat \\
+        --summary
 
     # Include mmpose paths once pose estimation has been run
     python -m pipeline.data_access \\
-        --mmpose-npy-dir preparing_data/ShuttleSet_data_une_merge_v1/dataset_npy \\
+        --mmpose-npy-dir /scratch/comp320a/ShuttleSet_data_merged_25/\\
+dataset_npy_between_2_hits_with_max_limits_flat \\
         --summary
 
 Environment / .env file
 -----------------------
-Instead of passing flags every time, set paths in a .env file at the project root
-(copy .env.example and fill in your values):
+Instead of passing flags every time, set paths in a .env file at the project
+root (copy .env.example and fill in your values):
 
     BST_CLIPS_DIR=/scratch/comp320a/ShuttleSet/clips
-    BST_SHUTTLE_NPY_DIR=/scratch/comp320a/ShuttleSet/shuttle_npy
-    BST_MMPOSE_NPY_DIR=          # leave blank until mmpose data is generated
+    BST_SHUTTLE_NPY_DIR=/scratch/comp320a/ShuttleSet/shuttle_npy_flat
+    BST_MMPOSE_NPY_DIR=/scratch/comp320a/ShuttleSet_data_merged_25/dataset_npy_between_2_hits_with_max_limits_flat
+    BST_CLIPS_CSV=/home/username/badminton_stroke_classifier/notebooks/clips_master.csv
 
 Then just run with no flags:
 
     python -m pipeline.data_access --summary
     python -m pipeline.data_access          # interactive TUI
 
-Shell exports take precedence over .env, so you can always override on the fly:
+Shell exports take precedence over .env, so on-the-fly overrides work:
 
     BST_CLIPS_DIR=/other/path python -m pipeline.data_access --summary
+
+Relationship to ``clip_index.py``
+---------------------------------
+``pipeline.clip_index.build_clip_path_index(clips_dir)`` is the zero-dep pathlib
+helper that builds a ``{clip_stem -> Path}`` lookup. ``data_access`` calls it
+internally to resolve clip paths against the still-nested clips tree. Use
+``clip_index`` directly when you only need the stem-to-path map; use
+``data_access`` when you also want split + taxonomy filtering and paired
+shuttle / mmpose resolution.
 """
 from __future__ import annotations
 
 import argparse
 import os
+from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable
 
+import pandas as pd
+
+from pipeline.clip_index import build_clip_path_index
 from pipeline.config import (
     CLIPS_OUTPUT_DIR,
+    DEFAULT_TAXONOMY,
     SHUTTLE_OUTPUT_DIR,
     TAXONOMIES,
-    DEFAULT_TAXONOMY,
     Taxonomy,
 )
 
 
 SPLITS = ('train', 'val', 'test')
 
-# .env is searched for in the project root (two levels up from this file:
-# pipeline/ -> bst_refactor/ -> project root).
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+DEFAULT_SPLIT_COLUMN = 'split_bst_baseline'
+
+# .env is searched for in the project root. data_access.py lives at
+# src/bst_refactor/pipeline/, so four .parent hops land at the repo root.
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
 _DOTENV_PATH = _PROJECT_ROOT / '.env'
+
+# Default clips_master.csv location (repo-relative).
+_DEFAULT_CLIPS_CSV = _PROJECT_ROOT / 'notebooks' / 'clips_master.csv'
 
 
 def _load_dotenv(path: Path = _DOTENV_PATH) -> None:
@@ -127,7 +172,8 @@ def _load_dotenv(path: Path = _DOTENV_PATH) -> None:
                 continue
             key, _, value = line.partition('=')
             key = key.strip()
-            value = value.strip().strip('"').strip("'")
+            # Strip inline comments (# after the value) then surrounding quotes.
+            value = value.split('#', 1)[0].strip().strip('"').strip("'")
             if key and key not in os.environ:
                 os.environ[key] = value
 
@@ -136,48 +182,44 @@ _load_dotenv()
 
 
 def _env_path(var: str, default: Path) -> Path:
-    """Return Path from env var if set, otherwise the default.
-
-    :param var: Environment variable name.
-    :param default: Fallback path.
-    :return: Resolved path.
-    """
+    """Return Path from env var if set, otherwise the default."""
     val = os.environ.get(var, '').strip()
     return Path(val) if val else default
 
 
 def _env_path_or_none(var: str) -> Path | None:
-    """Return Path from env var if set and non-empty, otherwise None.
-
-    :param var: Environment variable name.
-    :return: Path or None.
-    """
+    """Return Path from env var if set and non-empty, otherwise None."""
     val = os.environ.get(var, '').strip()
     return Path(val) if val else None
 
 
 @dataclass
 class DataPaths:
-    """Root directories for each data type.
+    """Root directories for each data type plus the master clips CSV.
 
     Path resolution order (highest to lowest priority):
-      1. Value passed directly to the constructor
-      2. Environment variable (or .env file entry)
-      3. Default from pipeline.config
+      1. Value passed directly to the constructor.
+      2. Environment variable (or .env file entry).
+      3. Default from ``pipeline.config`` / repo root.
 
     Environment variables:
-      BST_CLIPS_DIR        — root clips directory
-      BST_SHUTTLE_NPY_DIR  — root shuttle npy directory
-      BST_MMPOSE_NPY_DIR   — root mmpose per-clip npy directory (omit if not generated)
+      BST_CLIPS_DIR        -- root clips directory (nested by split/class).
+      BST_SHUTTLE_NPY_DIR  -- flat shuttle npy directory.
+      BST_MMPOSE_NPY_DIR   -- flat mmpose per-clip npy directory (omit if not
+                              generated yet).
+      BST_CLIPS_CSV        -- path to clips_master.csv.
 
     These can be set in a .env file at the project root (see .env.example).
 
-    :param clips_dir: Root of the clips tree (contains train/val/test subdirs).
-    :param shuttle_npy_dir: Root of the shuttle npy tree (mirrors clips_dir).
-    :param mmpose_npy_dir: Root of the mmpose per-clip npy tree, or None if
-        pose estimation has not been run. Expected layout:
-        ``{mmpose_npy_dir}/{split}/{taxonomy_class}/{clip_stem}_joints.npy``
-        (alongside ``_pos.npy``).
+    :param clips_dir: Root of the clips tree. Still nested
+        ``{split_bst_baseline}/{folder_name}/{stem}.mp4`` (Phase 3 flattening
+        deferred).
+    :param shuttle_npy_dir: Flat shuttle npy dir: ``{stem}.npy`` per clip.
+    :param mmpose_npy_dir: Flat mmpose per-clip npy dir holding
+        ``{stem}_joints.npy`` and ``{stem}_pos.npy``, or None if pose
+        extraction has not been run.
+    :param clips_csv: Path to ``notebooks/clips_master.csv``, the source of
+        truth for split + taxonomy-class assignment per clip.
     """
 
     clips_dir: Path = field(
@@ -189,97 +231,165 @@ class DataPaths:
     mmpose_npy_dir: Path | None = field(
         default_factory=lambda: _env_path_or_none('BST_MMPOSE_NPY_DIR')
     )
+    clips_csv: Path = field(
+        default_factory=lambda: _env_path('BST_CLIPS_CSV', _DEFAULT_CLIPS_CSV)
+    )
 
 
 @dataclass
 class ClipRecord:
     """Paths for a single clip and its associated data files.
 
-    :param split: Dataset split this clip belongs to ('train', 'val', or 'test').
-    :param taxonomy_class: Class folder name, e.g. 'Top_smash' or 'unknown'.
-    :param clip: Path to the .mp4 clip file.
-    :param shuttle_npy: Path to the shuttle trajectory .npy, or None if missing.
-    :param mmpose_joints: Path to the ``_joints.npy`` file, or None if not available.
-    :param mmpose_pos: Path to the ``_pos.npy`` file, or None if not available.
+    :param split: Dataset split ('train', 'val', or 'test') as read from the
+        CSV ``split_column``.
+    :param taxonomy_class: Derived class label under the active taxonomy, e.g.
+        'Top_smash' or 'unknown'. This matches the folder name in the nested
+        clips tree.
+    :param clip_stem: Clip identifier, e.g. '1_1_3_2'.
+    :param clip: Path to the .mp4 clip file, or None if the stem is not found
+        on disk.
+    :param shuttle_npy: Path to the flat shuttle .npy, or None if missing.
+    :param mmpose_joints: Path to the flat ``_joints.npy``, or None if missing
+        or mmpose_npy_dir is not set.
+    :param mmpose_pos: Path to the flat ``_pos.npy``, or None if missing or
+        mmpose_npy_dir is not set.
     """
 
     split: str
     taxonomy_class: str
-    clip: Path
+    clip_stem: str
+    clip: Path | None
     shuttle_npy: Path | None
     mmpose_joints: Path | None
     mmpose_pos: Path | None
 
 
-def _class_dirs(split_dir: Path) -> Iterable[Path]:
-    """Yield class subdirectories inside a split directory."""
-    if not split_dir.is_dir():
-        return
-    for d in sorted(split_dir.iterdir()):
-        if d.is_dir():
-            yield d
+def _derive_class_label(
+    raw_type_en: str, player_side: str, taxonomy: Taxonomy,
+) -> str:
+    """Apply the taxonomy's merge_map + standalone_set to produce a folder-style label.
+
+    Standalone types (e.g. 'unknown') come through unprefixed; everything else
+    gets a ``Top_`` / ``Bottom_`` prefix. Matches ``collate_npy`` and
+    ``validate_zeroed_frames._derive_stroke_player`` so all three backends
+    label a given CSV row identically.
+    """
+    merge_map = taxonomy.merge_map or {}
+    merged = merge_map.get(raw_type_en, raw_type_en)
+    if merged in taxonomy.standalone_set:
+        return merged
+    return f'{player_side}_{merged}'
 
 
 def get_clip_records(
     paths: DataPaths,
     split: str | None = None,
     taxonomy_class: str | None = None,
-    taxonomy: Taxonomy | None = None,
+    split_column: str = DEFAULT_SPLIT_COLUMN,
+    taxonomy_name: str = DEFAULT_TAXONOMY,
+    drop_unknown: bool = False,
 ) -> list[ClipRecord]:
-    """Return ClipRecords filtered by split and/or taxonomy class.
+    """Return ClipRecords read from ``clips_master.csv`` under the active taxonomy.
 
-    :param paths: Root directories for each data type.
+    Reads the master CSV, filters by ``split`` / ``taxonomy_class`` /
+    ``drop_unknown``, derives the folder-style class label via the active
+    taxonomy, and resolves each row's paired files on disk: clip from the
+    still-nested clips tree (via ``clip_index.build_clip_path_index``),
+    shuttle and mmpose files from the flat post-Phase-2 dirs.
+
+    Files missing on disk resolve to None on the record rather than dropping
+    the row. That keeps the result aligned with the CSV and lets callers
+    distinguish "CSV says this clip exists but its shuttle wasn't extracted"
+    from "this clip isn't in the CSV at all".
+
+    :param paths: Root directories for each data type plus the master CSV.
     :param split: One of 'train', 'val', 'test', or None for all splits.
-    :param taxonomy_class: Exact class folder name (e.g. 'Top_smash'), or None
-        for all classes. Use ``taxonomy.class_list()`` to enumerate valid names.
-    :param taxonomy: If provided, validates that ``taxonomy_class`` (when given)
-        is a recognised class in this taxonomy.
-    :raises ValueError: If split or taxonomy_class are not valid.
-    :return: List of ClipRecord, one per .mp4 file matching the filter.
+    :param taxonomy_class: Derived class label (e.g. 'Top_smash', 'unknown'),
+        or None for all classes. Use ``TAXONOMIES[taxonomy_name].class_list()``
+        to enumerate valid names.
+    :param split_column: Column in clips_csv giving the train/val/test
+        assignment, e.g. 'split_bst_baseline' (default) or 'split_v2'.
+    :param taxonomy_name: Key into ``TAXONOMIES`` picking the merge_map +
+        standalone_set used for label derivation and class validation.
+    :param drop_unknown: If True, drop rows where ``raw_type_en == 'unknown'``
+        before label derivation. Matches collate_npy semantics.
+    :raises ValueError: If ``split`` or ``taxonomy_class`` are not valid under
+        the chosen taxonomy.
+    :raises KeyError: If ``split_column`` is not a column in clips_csv or
+        ``taxonomy_name`` is not in TAXONOMIES.
+    :return: List of ClipRecord in CSV row order.
     """
     if split is not None and split not in SPLITS:
-        raise ValueError(f"split must be one of {SPLITS}, got {split!r}")
+        raise ValueError(f'split must be one of {SPLITS}, got {split!r}')
 
-    if taxonomy is not None and taxonomy_class is not None:
+    if taxonomy_name not in TAXONOMIES:
+        raise KeyError(
+            f'taxonomy_name {taxonomy_name!r} not in TAXONOMIES: '
+            f'{sorted(TAXONOMIES)}'
+        )
+    taxonomy = TAXONOMIES[taxonomy_name]
+
+    if taxonomy_class is not None:
         valid_classes = set(taxonomy.class_list())
         if taxonomy_class not in valid_classes:
             raise ValueError(
-                f"{taxonomy_class!r} is not a class in taxonomy {taxonomy.name!r}. "
-                f"Valid classes: {sorted(valid_classes)}"
+                f'{taxonomy_class!r} is not a class in taxonomy '
+                f'{taxonomy.name!r}. Valid classes: {sorted(valid_classes)}'
             )
 
-    target_splits = [split] if split else list(SPLITS)
+    df = pd.read_csv(paths.clips_csv)
+    if split_column not in df.columns:
+        raise KeyError(
+            f'split_column {split_column!r} not in clips_csv columns: '
+            f'{list(df.columns)}'
+        )
+    df = df[df[split_column].isin(SPLITS)].copy()
+    if drop_unknown:
+        df = df[df['raw_type_en'] != 'unknown'].copy()
+    if split is not None:
+        df = df[df[split_column] == split].copy()
+
+    if df.empty:
+        return []
+
+    # Build stem-to-path lookup once. Empty / missing clips_dir yields {}.
+    path_by_stem: dict[str, Path]
+    if paths.clips_dir.is_dir():
+        path_by_stem = build_clip_path_index(paths.clips_dir)
+    else:
+        path_by_stem = {}
+
     records: list[ClipRecord] = []
+    for row in df.itertuples(index=False):
+        stem = row.clip_stem
+        label = _derive_class_label(
+            row.raw_type_en, row.player_side, taxonomy,
+        )
+        if taxonomy_class is not None and label != taxonomy_class:
+            continue
 
-    for sp in target_splits:
-        split_clips_dir = paths.clips_dir / sp
-        for cls_dir in _class_dirs(split_clips_dir):
-            cls_name = cls_dir.name
-            if taxonomy_class is not None and cls_name != taxonomy_class:
-                continue
+        clip = path_by_stem.get(stem)
 
-            for clip_path in sorted(cls_dir.glob('*.mp4')):
-                stem = clip_path.stem
+        shuttle = paths.shuttle_npy_dir / f'{stem}.npy'
+        shuttle = shuttle if shuttle.exists() else None
 
-                shuttle = paths.shuttle_npy_dir / sp / cls_name / f'{stem}.npy'
-                shuttle = shuttle if shuttle.exists() else None
+        joints: Path | None = None
+        pos: Path | None = None
+        if paths.mmpose_npy_dir is not None:
+            j = paths.mmpose_npy_dir / f'{stem}_joints.npy'
+            p = paths.mmpose_npy_dir / f'{stem}_pos.npy'
+            joints = j if j.exists() else None
+            pos = p if p.exists() else None
 
-                joints: Path | None = None
-                pos: Path | None = None
-                if paths.mmpose_npy_dir is not None:
-                    j = paths.mmpose_npy_dir / sp / cls_name / f'{stem}_joints.npy'
-                    p = paths.mmpose_npy_dir / sp / cls_name / f'{stem}_pos.npy'
-                    joints = j if j.exists() else None
-                    pos = p if p.exists() else None
-
-                records.append(ClipRecord(
-                    split=sp,
-                    taxonomy_class=cls_name,
-                    clip=clip_path,
-                    shuttle_npy=shuttle,
-                    mmpose_joints=joints,
-                    mmpose_pos=pos,
-                ))
+        records.append(ClipRecord(
+            split=getattr(row, split_column),
+            taxonomy_class=label,
+            clip_stem=stem,
+            clip=clip,
+            shuttle_npy=shuttle,
+            mmpose_joints=joints,
+            mmpose_pos=pos,
+        ))
 
     return records
 
@@ -288,22 +398,38 @@ def summarise(
     paths: DataPaths,
     split: str | None = None,
     taxonomy_class: str | None = None,
+    split_column: str = DEFAULT_SPLIT_COLUMN,
+    taxonomy_name: str = DEFAULT_TAXONOMY,
+    drop_unknown: bool = False,
 ) -> None:
     """Print a per-split, per-class count table for the filtered selection.
 
     :param paths: Root directories for each data type.
     :param split: Split filter, or None for all.
     :param taxonomy_class: Class filter, or None for all.
+    :param split_column: CSV column giving the split assignment.
+    :param taxonomy_name: Key into TAXONOMIES for label derivation.
+    :param drop_unknown: Pass-through to ``get_clip_records``.
     """
-    records = get_clip_records(paths, split=split, taxonomy_class=taxonomy_class)
+    records = get_clip_records(
+        paths,
+        split=split,
+        taxonomy_class=taxonomy_class,
+        split_column=split_column,
+        taxonomy_name=taxonomy_name,
+        drop_unknown=drop_unknown,
+    )
 
-    from collections import defaultdict
     counts: dict[str, dict[str, dict[str, int]]] = defaultdict(
-        lambda: defaultdict(lambda: {'clips': 0, 'shuttle': 0, 'mmpose': 0})
+        lambda: defaultdict(
+            lambda: {'clips': 0, 'clips_on_disk': 0, 'shuttle': 0, 'mmpose': 0}
+        )
     )
     for r in records:
         c = counts[r.split][r.taxonomy_class]
         c['clips'] += 1
+        if r.clip is not None:
+            c['clips_on_disk'] += 1
         if r.shuttle_npy:
             c['shuttle'] += 1
         if r.mmpose_joints:
@@ -315,23 +441,26 @@ def summarise(
         print(f'\n{sp}:')
         for cls_name, c in sorted(counts[sp].items()):
             mmpose_str = f"  mmpose={c['mmpose']}" if paths.mmpose_npy_dir else ''
-            print(f"  {cls_name:<40}  clips={c['clips']}  shuttle={c['shuttle']}{mmpose_str}")
+            print(
+                f"  {cls_name:<40}  clips={c['clips']}"
+                f"  on_disk={c['clips_on_disk']}"
+                f"  shuttle={c['shuttle']}{mmpose_str}"
+            )
 
     total = len(records)
+    on_disk_total = sum(1 for r in records if r.clip is not None)
     shuttle_total = sum(1 for r in records if r.shuttle_npy)
-    print(f'\nTotal: {total} clips, {shuttle_total} shuttle npys')
+    print(
+        f'\nTotal: {total} clip rows, {on_disk_total} clips on disk, '
+        f'{shuttle_total} shuttle npys'
+    )
     if paths.mmpose_npy_dir:
         mmpose_total = sum(1 for r in records if r.mmpose_joints)
         print(f'       {mmpose_total} mmpose npy sets')
 
 
 def _menu(prompt: str, options: list[str]) -> str:
-    """Print a numbered menu and return the chosen option.
-
-    :param prompt: Question to display above the options.
-    :param options: List of option strings.
-    :return: The selected option string.
-    """
+    """Print a numbered menu and return the chosen option."""
     print(f'\n{prompt}')
     for i, opt in enumerate(options, 1):
         print(f'  {i}) {opt}')
@@ -342,80 +471,136 @@ def _menu(prompt: str, options: list[str]) -> str:
         print(f'  Enter a number between 1 and {len(options)}.')
 
 
-def interactive(paths: DataPaths) -> None:
+def interactive(
+    paths: DataPaths,
+    split_column: str = DEFAULT_SPLIT_COLUMN,
+    taxonomy_name: str = DEFAULT_TAXONOMY,
+) -> None:
     """Step-through TUI: pick split, class, and output type interactively.
 
     :param paths: Root directories for each data type.
+    :param split_column: Initial split column; overridable at the split-column prompt.
+    :param taxonomy_name: Initial taxonomy; overridable at the taxonomy prompt.
     """
-    # Step 1: split
+    # Step 0: split column (only the columns present in the CSV).
+    df = pd.read_csv(paths.clips_csv)
+    available_split_cols = [c for c in df.columns if c.startswith('split_')]
+    if not available_split_cols:
+        print(f'No split_* columns found in {paths.clips_csv}.')
+        return
+    if split_column not in available_split_cols:
+        split_column = available_split_cols[0]
+    split_column = _menu('Select split column:', available_split_cols)
+
+    # Step 1: taxonomy.
+    taxonomy_name = _menu('Select taxonomy:', list(TAXONOMIES))
+
+    # Step 2: split.
     split_choice = _menu('Select split:', ['all'] + list(SPLITS))
     split = None if split_choice == 'all' else split_choice
 
-    # Step 2: class — discover from disk so the list reflects what's actually there
-    seen: set[str] = set()
-    for sp in ([split] if split else list(SPLITS)):
-        for d in _class_dirs(paths.clips_dir / sp):
-            seen.add(d.name)
-    class_options = ['all'] + sorted(seen)
-    class_choice = _menu('Select class:', class_options)
+    # Step 3: taxonomy class (drawn from the active taxonomy).
+    class_options = ['all'] + TAXONOMIES[taxonomy_name].class_list()
+    class_choice = _menu('Select taxonomy class:', class_options)
     taxonomy_class = None if class_choice == 'all' else class_choice
 
-    # Step 3: output
+    # Step 4: drop_unknown flag.
+    drop_choice = _menu('Drop raw_type_en == "unknown"?', ['no', 'yes'])
+    drop_unknown = drop_choice == 'yes'
+
+    # Step 5: output.
     output_choice = _menu('Show:', ['summary table', 'file paths'])
 
     print()
     if output_choice == 'summary table':
-        summarise(paths, split=split, taxonomy_class=taxonomy_class)
+        summarise(
+            paths,
+            split=split,
+            taxonomy_class=taxonomy_class,
+            split_column=split_column,
+            taxonomy_name=taxonomy_name,
+            drop_unknown=drop_unknown,
+        )
     else:
-        records = get_clip_records(paths, split=split, taxonomy_class=taxonomy_class)
+        records = get_clip_records(
+            paths,
+            split=split,
+            taxonomy_class=taxonomy_class,
+            split_column=split_column,
+            taxonomy_name=taxonomy_name,
+            drop_unknown=drop_unknown,
+        )
         for r in records:
+            clip_str = str(r.clip) if r.clip else 'MISSING_CLIP'
             shuttle_str = str(r.shuttle_npy) if r.shuttle_npy else 'MISSING'
             mmpose_str = str(r.mmpose_joints) if r.mmpose_joints else 'NO_MMPOSE'
-            print(f'{r.split}\t{r.taxonomy_class}\t{r.clip}\t{shuttle_str}\t{mmpose_str}')
+            print(
+                f'{r.split}\t{r.taxonomy_class}\t{r.clip_stem}\t'
+                f'{clip_str}\t{shuttle_str}\t{mmpose_str}'
+            )
 
 
-if __name__ == '__main__':
+def _build_cli() -> argparse.ArgumentParser:
+    """Build the argparse parser. Factored out for testability."""
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         '--split', choices=list(SPLITS), default=None,
-        help='Filter to one split (default: all splits)',
+        help='Filter to one split (default: all splits).',
     )
     parser.add_argument(
         '--class', dest='taxonomy_class', default=None,
-        help='Filter to one taxonomy class folder, e.g. Top_smash (default: all)',
+        help='Filter to one taxonomy class, e.g. Top_smash (default: all).',
+    )
+    parser.add_argument(
+        '--split-column', default=DEFAULT_SPLIT_COLUMN,
+        help=f'CSV column giving train/val/test (default: {DEFAULT_SPLIT_COLUMN}).',
     )
     parser.add_argument(
         '--taxonomy', choices=list(TAXONOMIES), default=DEFAULT_TAXONOMY,
-        help=f'Taxonomy for class validation (default: {DEFAULT_TAXONOMY})',
+        help=f'Taxonomy for label derivation and class validation '
+             f'(default: {DEFAULT_TAXONOMY}).',
+    )
+    parser.add_argument(
+        '--drop-unknown', action='store_true',
+        help='Drop rows with raw_type_en == "unknown" before label derivation.',
     )
     parser.add_argument(
         '--clips-dir', type=Path, default=None,
-        help='Root clips directory (overrides BST_CLIPS_DIR env var and config default)',
+        help='Root clips directory (overrides BST_CLIPS_DIR + config default).',
     )
     parser.add_argument(
         '--shuttle-npy-dir', type=Path, default=None,
-        help='Root shuttle npy directory (overrides BST_SHUTTLE_NPY_DIR env var and config default)',
+        help='Flat shuttle npy directory (overrides BST_SHUTTLE_NPY_DIR '
+             '+ config default).',
     )
     parser.add_argument(
         '--mmpose-npy-dir', type=Path, default=None,
-        help='Root mmpose per-clip npy directory (overrides BST_MMPOSE_NPY_DIR env var)',
+        help='Flat mmpose per-clip npy directory (overrides BST_MMPOSE_NPY_DIR).',
+    )
+    parser.add_argument(
+        '--clips-csv', type=Path, default=None,
+        help='Path to clips_master.csv (overrides BST_CLIPS_CSV + repo default).',
     )
     parser.add_argument(
         '--summary', action='store_true',
-        help='Print per-split/class count table instead of individual paths',
+        help='Print per-split/class count table instead of individual paths.',
     )
     parser.add_argument(
         '--list-classes', action='store_true',
-        help='List all class names found on disk for the given split and exit',
+        help='List the class names for the active taxonomy and exit.',
     )
-    args = parser.parse_args()
+    return parser
 
-    taxonomy = TAXONOMIES[args.taxonomy]
-    # Build DataPaths — only pass CLI values that were explicitly set so that
-    # DataPaths.default_factory can pick up env vars / .env for anything omitted.
+
+def main(argv: list[str] | None = None) -> None:
+    """CLI entrypoint. ``argv=None`` uses ``sys.argv[1:]``."""
+    args = _build_cli().parse_args(argv)
+
+    # Build DataPaths -- only pass CLI values that were explicitly set so that
+    # DataPaths' default_factory can pick up env vars / .env for anything omitted.
     path_kwargs = {}
     if args.clips_dir is not None:
         path_kwargs['clips_dir'] = args.clips_dir
@@ -423,30 +608,50 @@ if __name__ == '__main__':
         path_kwargs['shuttle_npy_dir'] = args.shuttle_npy_dir
     if args.mmpose_npy_dir is not None:
         path_kwargs['mmpose_npy_dir'] = args.mmpose_npy_dir
+    if args.clips_csv is not None:
+        path_kwargs['clips_csv'] = args.clips_csv
     paths = DataPaths(**path_kwargs)
 
-    # No flags passed — launch interactive TUI
-    no_flags = not any([args.split, args.taxonomy_class, args.summary, args.list_classes])
+    # No filters + no action flags -> launch the TUI.
+    no_flags = not any([
+        args.split, args.taxonomy_class, args.summary, args.list_classes,
+    ])
     if no_flags:
-        interactive(paths)
+        interactive(
+            paths,
+            split_column=args.split_column,
+            taxonomy_name=args.taxonomy,
+        )
     elif args.list_classes:
-        target_splits = [args.split] if args.split else list(SPLITS)
-        seen: set[str] = set()
-        for sp in target_splits:
-            for d in _class_dirs(paths.clips_dir / sp):
-                seen.add(d.name)
-        for name in sorted(seen):
+        for name in TAXONOMIES[args.taxonomy].class_list():
             print(name)
     elif args.summary:
-        summarise(paths, split=args.split, taxonomy_class=args.taxonomy_class)
+        summarise(
+            paths,
+            split=args.split,
+            taxonomy_class=args.taxonomy_class,
+            split_column=args.split_column,
+            taxonomy_name=args.taxonomy,
+            drop_unknown=args.drop_unknown,
+        )
     else:
         records = get_clip_records(
             paths,
             split=args.split,
             taxonomy_class=args.taxonomy_class,
-            taxonomy=taxonomy,
+            split_column=args.split_column,
+            taxonomy_name=args.taxonomy,
+            drop_unknown=args.drop_unknown,
         )
         for r in records:
+            clip_str = str(r.clip) if r.clip else 'MISSING_CLIP'
             shuttle_str = str(r.shuttle_npy) if r.shuttle_npy else 'MISSING'
             mmpose_str = str(r.mmpose_joints) if r.mmpose_joints else 'NO_MMPOSE'
-            print(f'{r.split}\t{r.taxonomy_class}\t{r.clip}\t{shuttle_str}\t{mmpose_str}')
+            print(
+                f'{r.split}\t{r.taxonomy_class}\t{r.clip_stem}\t'
+                f'{clip_str}\t{shuttle_str}\t{mmpose_str}'
+            )
+
+
+if __name__ == '__main__':
+    main()
