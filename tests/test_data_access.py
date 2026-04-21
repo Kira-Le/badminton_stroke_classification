@@ -245,9 +245,9 @@ def test_clip_path_resolved_from_nested_tree():
         records = get_clip_records(
             paths, split='train', taxonomy_class='Top_smash',
         )
-    assert all(r.clip is not None and r.clip.exists() for r in records)
-    assert all(r.clip.suffix == '.mp4' for r in records)
-    assert all(r.clip.stem == r.clip_stem for r in records)
+        assert all(r.clip is not None and r.clip.exists() for r in records)
+        assert all(r.clip.suffix == '.mp4' for r in records)
+        assert all(r.clip.stem == r.clip_stem for r in records)
 
 
 def test_clip_path_is_none_when_mp4_missing():
@@ -263,10 +263,10 @@ def test_shuttle_npy_resolved_flat_when_present():
         records = get_clip_records(
             paths, split='train', taxonomy_class='Top_smash',
         )
-    assert all(r.shuttle_npy is not None for r in records)
-    assert all(r.shuttle_npy.exists() for r in records)
-    # Flat layout: shuttle sits directly under shuttle_npy_dir.
-    assert all(r.shuttle_npy.parent == paths.shuttle_npy_dir for r in records)
+        assert all(r.shuttle_npy is not None for r in records)
+        assert all(r.shuttle_npy.exists() for r in records)
+        # Flat layout: shuttle sits directly under shuttle_npy_dir.
+        assert all(r.shuttle_npy.parent == paths.shuttle_npy_dir for r in records)
 
 
 def test_shuttle_npy_is_none_when_missing():
@@ -293,12 +293,12 @@ def test_mmpose_resolved_flat_when_present():
         records = get_clip_records(
             paths, split='train', taxonomy_class='Top_smash',
         )
-    assert all(r.mmpose_joints is not None for r in records)
-    assert all(r.mmpose_pos is not None for r in records)
-    assert all(r.mmpose_joints.exists() for r in records)
-    assert all(
-        r.mmpose_joints.parent == paths.mmpose_npy_dir for r in records
-    )
+        assert all(r.mmpose_joints is not None for r in records)
+        assert all(r.mmpose_pos is not None for r in records)
+        assert all(r.mmpose_joints.exists() for r in records)
+        assert all(
+            r.mmpose_joints.parent == paths.mmpose_npy_dir for r in records
+        )
 
 
 def test_record_stem_matches_clip_and_shuttle():
