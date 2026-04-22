@@ -165,6 +165,13 @@ def normalize_joints(
     - `bbox`: (m, 4), m=2.
 
     Output: (m, J, 2), m=2.
+
+    Signature defaults preserved verbatim from BST upstream for canonical
+    accuracy. The CLI invocation in ``main()`` below overrides
+    ``center_align`` to True (matches BST upstream's own CLI default;
+    committed ShuttleSet extracts were produced with this override).
+    ``v_height=None`` is canonical at both layers: the signature default
+    and the CLI call agree, so no flip happens there.
     """
     # If v_height == None and center_align == False,
     # this normalization method is same as that used in TemPose.

@@ -23,7 +23,7 @@ Usage on engelbart (whole-clip, the original criterion):
         --split-column split_v2 \\
         --threshold 0.50 \\
         --exclude-unknown \\
-        --output /home/ahalperi/badminton_stroke_classifier/scratch/architecture_notes/busted_clips_phase1.txt
+        --output /home/ahalperi/badminton_stroke_classifier/scratch/architecture_notes/busted_whole_clips_phase1.txt
 
 Hit-zone criterion (matches the hit_zone_heatmap filter):
 
