@@ -21,29 +21,25 @@ mlflow.db
 .idea
 
 #local
+.worktrees/
+.env
 .venv
 venv/
+# Local mirror of the engelbart raw-extract output (rsync'd per-clip *_raw_*.npy files).
+# Multi-GB depending on how many clips are pulled; never worth committing.
+scratch/raw_extract_local/
 #symlinks
 src/bst_refactor/ShuttleSet/raw_video
 src/bst_refactor/ShuttleSet/clips
 src/bst_refactor/ShuttleSet/shuttle_csv
 src/bst_refactor/ShuttleSet/shuttle_npy
+src/bst_refactor/stroke_classification/preparing_data/ShuttleSet_data_une_merge_v1
 #wildcard for various taxonomies--could cause a problem if you unluckily picked this root name
 src/bst_refactor/stroke_classification/preparing_data/ShuttleSet_data_*
 src/bst_refactor/stroke_classification/main_on_shuttleset/tmp/
 src/bst_refactor/stroke_classification/main_on_shuttleset/preparing_data
 
-#model weights
-
-#per-run weight subfolders created by bst_train.py (timestamped) -- ignored by default
-src/bst_refactor/stroke_classification/main_on_shuttleset/weight/run_*/
-
-#best base bst_cg_ap
-src/bst_refactor/stroke_classification/main_on_shuttleset/weight/bst_cg_ap_base_17_04_2026/*
-!src/bst_refactor/stroke_classification/main_on_shuttleset/weight/bst_cg_ap_base_17_04_2026/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25_2.pt
-
-#best bst_cg_ap model (lower learning rate)
-#tactical unignore
-!src/bst_refactor/stroke_classification/main_on_shuttleset/weight/run_20260417_191851/
-src/bst_refactor/stroke_classification/main_on_shuttleset/weight/run_20260417_191851/*
-!src/bst_refactor/stroke_classification/main_on_shuttleset/weight/run_20260417_191851/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25.pt
+# Model weights + TB logs for stroke_classification (including per-run
+# tactical unignores for best checkpoints) live in
+# src/bst_refactor/stroke_classification/.gitignore so this file doesn't
+# get swamped as more runs pile up.

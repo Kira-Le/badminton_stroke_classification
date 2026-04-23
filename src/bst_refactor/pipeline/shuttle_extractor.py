@@ -251,27 +251,29 @@ def shuttle_csvs_to_npy(
 ) -> None:
     """Convert TrackNetV3 CSV outputs to normalized .npy files.
 
-    Mirrors the clip directory structure so each clip has a corresponding
-    shuttle .npy file:
-      clips/train/Top_smash/1_1_3_2.mp4  ->  shuttle_npy/train/Top_smash/1_1_3_2.npy
+    Writes flat: each clip gets one .npy named after its stem. Split and
+    class labels are carried by clips_master.csv at collation time, not by
+    directory structure.
+
+      clips/train/Top_smash/1_1_3_2.mp4  ->  shuttle_npy/1_1_3_2.npy
 
     :param clips_dir: Root clips directory (used to discover all clips).
     :param csv_dir: Directory containing TrackNetV3 CSV outputs.
         Defaults to clips_dir/../shuttle_csv.
-    :param npy_output_dir: Output directory for normalized .npy files.
+    :param npy_output_dir: Output directory for normalized .npy files (flat).
     :param resolution_csv_path: Path to video resolution CSV (for normalization).
     """
     if csv_dir is None:
         csv_dir = _default_csv_dir(clips_dir)
+
+    npy_output_dir.mkdir(parents=True, exist_ok=True)
 
     res_df = pd.read_csv(resolution_csv_path).set_index('id')
     converted = 0
     missing = 0
 
     for clip_path in sorted(clips_dir.rglob('*.mp4')):
-        # Determine output path (mirror directory structure)
-        rel = clip_path.relative_to(clips_dir)
-        npy_path = npy_output_dir / rel.with_suffix('.npy')
+        npy_path = npy_output_dir / (clip_path.stem + '.npy')
 
         if npy_path.exists():
             continue
@@ -305,7 +307,6 @@ def shuttle_csvs_to_npy(
         shuttle_camera = df[['X', 'Y', 'Visibility']].to_numpy().astype(float)
         shuttle_norm = normalize_shuttlecock(shuttle_camera, v_width, v_height)
 
-        npy_path.parent.mkdir(parents=True, exist_ok=True)
         np.save(str(npy_path), shuttle_norm)
         converted += 1
 

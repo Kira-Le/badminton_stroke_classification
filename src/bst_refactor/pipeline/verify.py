@@ -203,25 +203,21 @@ def verify_shuttle_sync(
 ) -> bool:
     """Check that every clip has a corresponding shuttle .npy file.
 
+    Clips live nested under clips_dir (split/class/); shuttle .npy files
+    live flat under shuttle_dir. Matching is by clip stem.
+
     Only runs if shuttle_dir exists (step 6 may not have been run yet).
 
-    :param clips_dir: Root clips directory.
-    :param shuttle_dir: Root shuttle .npy directory.
+    :param clips_dir: Root clips directory (nested).
+    :param shuttle_dir: Root shuttle .npy directory (flat).
     :return: True if all clips have matching .npy files, or if shuttle_dir doesn't exist.
     """
     if not shuttle_dir.is_dir():
         print('SKIP: Shuttle directory not found (step 6 may not have run).')
         return True
 
-    clip_stems = set()
-    for mp4 in clips_dir.rglob('*.mp4'):
-        rel = mp4.relative_to(clips_dir).with_suffix('.npy')
-        clip_stems.add(rel)
-
-    npy_stems = set()
-    for npy in shuttle_dir.rglob('*.npy'):
-        rel = npy.relative_to(shuttle_dir)
-        npy_stems.add(rel)
+    clip_stems = {mp4.stem for mp4 in clips_dir.rglob('*.mp4')}
+    npy_stems = {npy.stem for npy in shuttle_dir.rglob('*.npy')}
 
     missing_npy = clip_stems - npy_stems
     orphan_npy = npy_stems - clip_stems

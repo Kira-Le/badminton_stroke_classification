@@ -165,6 +165,13 @@ def normalize_joints(
     - `bbox`: (m, 4), m=2.
 
     Output: (m, J, 2), m=2.
+
+    Signature defaults preserved verbatim from BST upstream for canonical
+    accuracy. The CLI invocation in ``main()`` below overrides
+    ``center_align`` to True (matches BST upstream's own CLI default;
+    committed ShuttleSet extracts were produced with this override).
+    ``v_height=None`` is canonical at both layers: the signature default
+    and the CLI call agree, so no flip happens there.
     """
     # If v_height == None and center_align == False,
     # this normalization method is same as that used in TemPose.
@@ -492,18 +499,6 @@ def get_shuttle_result(path: Path, v_width, v_height):
     return normalize_shuttlecock(shuttle_camera, v_width, v_height)
 
 
-def mk_same_dir_structure(src_dir: Path, target_dir: Path, root=True):
-    """The roots can be different. Other subdirectories should be all the same."""
-    if root and not target_dir.is_dir():
-        target_dir.mkdir()
-    for src_sub_dir in src_dir.iterdir():
-        if src_sub_dir.is_dir():
-            target_sub_dir = target_dir / src_sub_dir.name
-            if not target_sub_dir.is_dir():
-                target_sub_dir.mkdir()
-            mk_same_dir_structure(src_sub_dir, target_sub_dir, root=False)
-
-
 def prepare_trajectory(
     my_clips_folder: Path,
     model_folder: Path,
@@ -558,8 +553,9 @@ def prepare_2d_dataset_npy_from_raw_video(
         instead of bounding box diagonal.
     :param joints_center_align: If True, center-align joints within bounding box.
     """
-    # Make sure there are folders that can contain .npy files.
-    mk_same_dir_structure(src_dir=my_clips_folder, target_dir=save_root_dir)
+    # Flat layout: per-clip files sit alongside each other under save_root_dir.
+    # Split + label come from clips_master.csv at collation time (Step 3).
+    save_root_dir.mkdir(parents=True, exist_ok=True)
 
     all_mp4_paths = sorted(my_clips_folder.glob("**/*.mp4"))
 
@@ -567,12 +563,7 @@ def prepare_2d_dataset_npy_from_raw_video(
 
     pbar = tqdm(range(len(all_mp4_paths)), desc="Yield .npy files", unit="video")
     for video_path in all_mp4_paths:
-        # Set the save paths.
-        ball_type_dir = video_path.parent
-        set_split_dir = ball_type_dir.parent
-        save_branch = str(
-            save_root_dir / set_split_dir.name / ball_type_dir.name / video_path.stem
-        )
+        save_branch = str(save_root_dir / video_path.stem)
 
         # Resume check: _failed.npy is saved last, so its existence means all
         # three outputs (_pos, _joints, _failed) are complete for this clip.
@@ -598,9 +589,12 @@ def prepare_2d_dataset_npy_from_raw_video(
             # (F,) — True where MMPose failed to detect 2 players; saved last
             # so its presence is a reliable resume marker for all three outputs
 
-        # Free GPU memory between clips to prevent fragmentation over ~33k clips.
-        gc.collect()
-        torch.cuda.empty_cache()
+            # Free GPU memory after inference to prevent fragmentation over
+            # ~33k clips. Skips don't allocate on GPU, so no cleanup needed
+            # in that branch -- keeps resume-path iterations cheap (~1ms vs
+            # ~100ms when these ran unconditionally).
+            gc.collect()
+            torch.cuda.empty_cache()
 
         pbar.update()
     pbar.close()
@@ -622,8 +616,9 @@ def prepare_3d_dataset_npy_from_raw_video(
     :param resolution_df: DataFrame with video resolutions, indexed by video ID.
     :param all_court_info: Dict mapping video ID to court info (homography, borders).
     """
-    # Make sure there are folders that can contain .npy files.
-    mk_same_dir_structure(src_dir=my_clips_folder, target_dir=save_root_dir)
+    # Flat layout: per-clip files sit alongside each other under save_root_dir.
+    # Split + label come from clips_master.csv at collation time (Step 3).
+    save_root_dir.mkdir(parents=True, exist_ok=True)
 
     all_mp4_paths = sorted(my_clips_folder.glob("**/*.mp4"))
 
@@ -632,12 +627,7 @@ def prepare_3d_dataset_npy_from_raw_video(
 
     pbar = tqdm(range(len(all_mp4_paths)), desc="Yield .npy files", unit="video")
     for video_path in all_mp4_paths:
-        # Set the save paths.
-        ball_type_dir = video_path.parent
-        set_split_dir = ball_type_dir.parent
-        save_branch = str(
-            save_root_dir / set_split_dir.name / ball_type_dir.name / video_path.stem
-        )
+        save_branch = str(save_root_dir / video_path.stem)
 
         # See prepare_2d_dataset_npy_from_raw_video for resume-check rationale.
         if not Path(save_branch + "_failed.npy").exists():
@@ -657,12 +647,17 @@ def prepare_3d_dataset_npy_from_raw_video(
             np.save(save_branch + "_failed.npy", np.array(failed_ls, dtype=bool))
             # (F,) — True where MMPose failed to detect 2 players; saved last
 
-        # Free GPU memory between clips to prevent fragmentation over ~33k clips.
-        gc.collect()
-        torch.cuda.empty_cache()
+            # Free GPU memory after inference to prevent fragmentation over
+            # ~33k clips. Skips don't allocate on GPU, so no cleanup needed
+            # in that branch.
+            gc.collect()
+            torch.cuda.empty_cache()
 
         pbar.update()
     pbar.close()
+
+
+VALID_POSE_STYLES: tuple[str, ...] = ("J_only", "JnB_interp", "JnB_bone", "Jn2B")
 
 
 def pad_and_augment_one_npy_video(
@@ -671,8 +666,13 @@ def pad_and_augment_one_npy_video(
     pos: np.ndarray,
     shuttle: np.ndarray,
     bone_pairs: list[int, int],
+    pose_styles: frozenset[str] = frozenset({"JnB_bone"}),
 ):
-    """Pad to uniform sequence length and compute bone/interpolation augmentations.
+    """Pad to uniform sequence length and compute requested pose augmentations.
+
+    Only the pose styles in ``pose_styles`` are computed and returned; the
+    derived arrays (``create_bones``, ``interpolate_joints``) are skipped if
+    nothing downstream needs them.
 
     :param seq_len: Target sequence length. Shorter clips are zero-padded; longer
         clips are strided (subsampled) to fit.
@@ -680,8 +680,12 @@ def pad_and_augment_one_npy_video(
     :param pos: Player court positions, shape (t, 2, xy).
     :param shuttle: Shuttle coordinates, shape (t, xy).
     :param bone_pairs: List of (start_joint, end_joint) index pairs for bone computation.
-    :return: Tuple of (J_only, JnB_interp, JnB_bone, Jn2B, pos, shuttle, video_len)
-        where video_len is the number of real (non-padded) frames.
+    :param pose_styles: Which pose representations to compute. Subset of
+        ``VALID_POSE_STYLES``. Defaults to ``{'JnB_bone'}`` (the only style
+        BST training has ever used in this tracker).
+    :return: Tuple of (pose_dict, pos, shuttle, video_len) where pose_dict maps
+        each requested style name to its (t, 2, K, d) array and video_len is
+        the number of real (non-padded) frames.
     """
     joints = joints.astype(np.float32)
     pos = pos.astype(np.float32)
@@ -690,15 +694,28 @@ def pad_and_augment_one_npy_video(
     joints, pos, shuttle, new_video_len = make_seq_len_same(
         seq_len, joints, pos, shuttle
     )
-    # assert len(shuttle) == seq_len, f'{seq_len}, {len(joints)}, {len(pos)}, {len(shuttle)}'
 
-    joints_interpolated = interpolate_joints(joints, bone_pairs)
-    bones = create_bones(joints, bone_pairs)
+    pose_dict: dict[str, np.ndarray] = {}
 
-    JnB_bone = np.concatenate((joints, bones), axis=-2)
-    Jn2B = np.concatenate((joints_interpolated, bones), axis=-2)
+    if "J_only" in pose_styles:
+        pose_dict["J_only"] = joints
 
-    return joints, joints_interpolated, JnB_bone, Jn2B, pos, shuttle, new_video_len
+    # bones is needed for JnB_bone and Jn2B; interpolated joints for JnB_interp and Jn2B.
+    needs_bones = bool(pose_styles & {"JnB_bone", "Jn2B"})
+    needs_interp = bool(pose_styles & {"JnB_interp", "Jn2B"})
+    bones = create_bones(joints, bone_pairs) if needs_bones else None
+    joints_interpolated = (
+        interpolate_joints(joints, bone_pairs) if needs_interp else None
+    )
+
+    if "JnB_bone" in pose_styles:
+        pose_dict["JnB_bone"] = np.concatenate((joints, bones), axis=-2)
+    if "JnB_interp" in pose_styles:
+        pose_dict["JnB_interp"] = joints_interpolated
+    if "Jn2B" in pose_styles:
+        pose_dict["Jn2B"] = np.concatenate((joints_interpolated, bones), axis=-2)
+
+    return pose_dict, pos, shuttle, new_video_len
 
 
 def collate_npy(
@@ -706,23 +723,35 @@ def collate_npy(
     set_name: str,
     seq_len: int,
     save_dir: Path,
+    clips_csv: Path,
+    split_column: str,
     taxonomy: Taxonomy = TAXONOMY_UNE_MERGE_V1,
+    drop_unknown: bool = False,
     shuttle_csv_dir: Path | None = None,
     resolution_df: pd.DataFrame | None = None,
+    pose_styles: frozenset[str] = frozenset({"JnB_bone"}),
 ):
     """Collate per-clip .npy files into stacked batch arrays for one split.
 
-    Loads all *_joints.npy, *_pos.npy, *_failed.npy from root_dir/set_name,
-    reads shuttle trajectories from the canonical CSV dir, aligns temporal
+    Reads split assignment and label from the master clips CSV, resolves
+    per-clip files at FLAT path ``{root_dir}/{clip_stem}_*.npy``, reads
+    shuttle trajectories from the canonical CSV dir, aligns temporal
     dimensions, applies failed-frame masking, pads to uniform seq_len,
     computes bone vectors and interpolations, then saves the stacked arrays
-    into save_dir/set_name/.
+    into ``save_dir/set_name/``.
 
-    :param root_dir: Directory containing train/val/test subdirectories with per-clip .npy files.
+    :param root_dir: FLAT per-clip dir containing
+        ``{clip_stem}_{joints,pos,failed}.npy`` for every clip.
     :param set_name: One of 'train', 'val', 'test'.
     :param seq_len: Target sequence length (frames). Clips are padded/strided to this length.
     :param save_dir: Output directory. A set_name/ subdirectory is created inside.
-    :param taxonomy: Taxonomy defining the class list for label indexing.
+    :param clips_csv: Master clips CSV (one row per clip) providing split
+        assignment (``split_column``), ``raw_type_en``, ``player_side``,
+        ``clip_stem``.
+    :param split_column: Column in ``clips_csv`` to use for split assignment,
+        e.g. ``'split_bst_baseline'`` or ``'split_v2'``.
+    :param taxonomy: Taxonomy defining the class list and merge_map.
+    :param drop_unknown: If True, drop rows where ``raw_type_en == 'unknown'``.
     :param shuttle_csv_dir: Directory containing TrackNetV3 shuttle CSVs
         ({clip}_ball.csv). Required.
     :param resolution_df: DataFrame with video resolutions (width/height), indexed
@@ -734,19 +763,62 @@ def collate_npy(
     if resolution_df is None:
         raise ValueError("resolution_df is required")
 
-    class_ls = taxonomy.class_list()
+    # Filter the master CSV down to this split (and optionally drop unknown).
+    clips_df = pd.read_csv(clips_csv)
+    if split_column not in clips_df.columns:
+        raise KeyError(
+            f"split_column {split_column!r} not in clips_csv columns: "
+            f"{list(clips_df.columns)}"
+        )
+    clips_df = clips_df[clips_df[split_column] == set_name].copy()
+    if drop_unknown:
+        clips_df = clips_df[clips_df["raw_type_en"] != "unknown"]
 
-    # load .npy branch names
-    data_branches = []
-    labels = []
-    target_dir = root_dir / set_name
-    for typ in target_dir.iterdir():
-        if not typ.is_dir():
+    # Derive the folder-style label string per clip via the taxonomy:
+    # merge_map normalises rare subtypes to their parent; standalone types
+    # (e.g. 'unknown') skip the side prefix; everything else becomes
+    # f'{Top|Bottom}_{merged_type}' so it lines up with class_list().
+    class_ls = taxonomy.class_list()
+    class_to_idx = {s: i for i, s in enumerate(class_ls)}
+    standalone_set = taxonomy.standalone_set
+    merge_map = taxonomy.merge_map or {}
+
+    data_branches: list[str] = []
+    labels_ls: list[int] = []
+    missing = 0
+    for raw_type, side, stem in zip(
+        clips_df["raw_type_en"],
+        clips_df["player_side"],
+        clips_df["clip_stem"],
+    ):
+        merged = merge_map.get(raw_type, raw_type)
+        label_str = merged if merged in standalone_set else f"{side}_{merged}"
+        if label_str not in class_to_idx:
+            raise ValueError(
+                f"Derived label {label_str!r} for clip {stem!r} not in "
+                f"taxonomy {taxonomy.name!r}.class_list()"
+            )
+        branch = str(root_dir / stem)
+        # Skip clips whose flat per-clip files are absent. verify_flatten.py
+        # should have ruled this out before the originals were deleted, but
+        # the check is cheap and prevents a confusing ENOENT mid-collation.
+        if not Path(branch + "_pos.npy").exists():
+            missing += 1
             continue
-        shots = sorted([str(s).replace("_pos.npy", "") for s in typ.glob("*_pos.npy")])
-        data_branches += shots
-        labels.append(np.full(len(shots), class_ls.index(typ.name), dtype=np.int64))
-    labels = np.concatenate(labels)
+        data_branches.append(branch)
+        labels_ls.append(class_to_idx[label_str])
+
+    if missing:
+        print(
+            f"  [{set_name}] WARNING: {missing} clips in master CSV had no "
+            f"flat per-clip files under {root_dir}; skipped."
+        )
+    labels = np.asarray(labels_ls, dtype=np.int64)
+    print(
+        f"  [{set_name}] {len(data_branches)} clips after filter "
+        f"(taxonomy={taxonomy.name}, split_column={split_column}, "
+        f"drop_unknown={drop_unknown})."
+    )
 
     # load .npy files
     print(f"Load .npy files for {set_name} set ...")
@@ -803,10 +875,17 @@ def collate_npy(
 
         shuttle_ls.append(shuttle)
 
+    bad_styles = set(pose_styles) - set(VALID_POSE_STYLES)
+    if bad_styles:
+        raise ValueError(
+            f"Unknown pose_styles {sorted(bad_styles)!r}; "
+            f"valid choices: {VALID_POSE_STYLES}"
+        )
+
     bone_pairs = get_bone_pairs(skeleton_format="coco")
 
-    # Pad and Create bones and Interpolate
-    print("Pad, Create bones and Interpolate ...")
+    # Pad and compute only the requested pose representations.
+    print(f"Pad, Create bones and Interpolate (pose_styles={sorted(pose_styles)}) ...")
     with ProcessPoolExecutor() as executor:
         tasks: list[Future] = []
 
@@ -819,31 +898,23 @@ def collate_npy(
                     pos=pos,
                     shuttle=shuttle,
                     bone_pairs=bone_pairs,
+                    pose_styles=pose_styles,
                 )
             )
 
-        J_ls = []
-        JnB_interp_ls = []
-        JnB_bone_ls = []
-        Jn2B_ls = []
+        pose_ls: dict[str, list[np.ndarray]] = {k: [] for k in pose_styles}
         pos_ls = []
         shuttle_ls = []
         videos_len = []
 
         for task in tasks:
-            J_only, JnB_interp, JnB_bone, Jn2B, pos, shuttle, v_len = task.result()
-            J_ls.append(J_only)
-            JnB_interp_ls.append(JnB_interp)
-            JnB_bone_ls.append(JnB_bone)
-            Jn2B_ls.append(Jn2B)
+            pose_dict, pos, shuttle, v_len = task.result()
+            for k, arr in pose_dict.items():
+                pose_ls[k].append(arr)
             pos_ls.append(pos)
             shuttle_ls.append(shuttle)
             videos_len.append(v_len)
 
-    J_only = np.stack(J_ls)
-    JnB_interp = np.stack(JnB_interp_ls)
-    JnB_bone = np.stack(JnB_bone_ls)
-    Jn2B = np.stack(Jn2B_ls)
     pos = np.stack(pos_ls)
     shuttle = np.stack(shuttle_ls)
     videos_len = np.stack(videos_len)
@@ -856,10 +927,8 @@ def collate_npy(
     if not set_dir.is_dir():
         set_dir.mkdir()
 
-    np.save(str(set_dir / "J_only.npy"), J_only)
-    np.save(str(set_dir / "JnB_interp.npy"), JnB_interp)
-    np.save(str(set_dir / "JnB_bone.npy"), JnB_bone)
-    np.save(str(set_dir / "Jn2B.npy"), Jn2B)
+    for k, arrs in pose_ls.items():
+        np.save(str(set_dir / f"{k}.npy"), np.stack(arrs))
     np.save(str(set_dir / "pos.npy"), pos)
     np.save(str(set_dir / "shuttle.npy"), shuttle)
     np.save(str(set_dir / "videos_len.npy"), videos_len)
@@ -942,6 +1011,52 @@ def main():
         help=f"Directory with TrackNetV3 shuttle CSVs (default: {SHUTTLE_CSV_DIR})",
     )
 
+    # Step 3 (collation) configuration: drives split + label assignment from
+    # the master clips CSV instead of the on-disk folder layout. The flat
+    # per-clip dir holds {clip_stem}_*.npy files shared across all ablations;
+    # the collated dir is per-ablation (encodes taxonomy + split + drop policy).
+    parser.add_argument(
+        "--clips-csv",
+        type=Path,
+        default=Path(__file__).resolve().parents[4] / "notebooks" / "clips_master.csv",
+        help="Master clips CSV with split + label per clip "
+             "(default: <repo>/notebooks/clips_master.csv).",
+    )
+    parser.add_argument(
+        "--split-column",
+        default="split_bst_baseline",
+        choices=["split_bst_baseline", "split_v2"],
+        help="Column in clips_csv giving train/val/test assignment "
+             "(default: split_bst_baseline).",
+    )
+    parser.add_argument(
+        "--drop-unknown",
+        action="store_true",
+        help="Drop clips with raw_type_en == 'unknown' before collation.",
+    )
+    parser.add_argument(
+        "--ablation-id",
+        default=None,
+        help="Tag suffix on the collated output dir so multiple ablations "
+             "don't collide. Defaults to "
+             "'<taxonomy>_<split_column>_<dropunk|keepunk>'.",
+    )
+    parser.add_argument(
+        "--clip-npy-dir",
+        type=Path,
+        default=None,
+        help="FLAT per-clip dir (Step 2 writer + Step 3 reader). Defaults to "
+             "the per-taxonomy preparing_root + "
+             "'dataset[_3d]_npy_between_2_hits_with_max_limits_flat'.",
+    )
+    parser.add_argument(
+        "--pose-styles",
+        default="JnB_bone",
+        help="Comma-separated pose representations to compute and save at "
+             "Step 3. Default 'JnB_bone' (the only style BST training has "
+             f"used in this tracker). Valid choices: {','.join(VALID_POSE_STYLES)}.",
+    )
+
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -958,16 +1073,47 @@ def main():
     )
     preparing_root.mkdir(parents=True, exist_ok=True)
 
+    # Default ablation_id encodes the (taxonomy, split, drop) tuple so each
+    # config writes to its own collated dir without collision.
+    ablation_id = args.ablation_id or (
+        f"{taxonomy.name}_{args.split_column}"
+        f"_{'dropunk' if args.drop_unknown else 'keepunk'}"
+    )
+
+    # Parse + validate --pose-styles.
+    pose_styles = frozenset(s.strip() for s in args.pose_styles.split(",") if s.strip())
+    bad_styles = pose_styles - set(VALID_POSE_STYLES)
+    if bad_styles:
+        parser.error(
+            f"Unknown --pose-styles entries {sorted(bad_styles)!r}; "
+            f"valid: {','.join(VALID_POSE_STYLES)}"
+        )
+
+    # Collated dir naming (post-2026-04-21 convention):
+    #   npy_[3d_][seq{N}_]{ablation_id}
+    #     - '3d_' prefix only when use_3d_pose=True
+    #     - 'seq{N}_' prefix only when seq_len != 100 (the default)
+    #     - ablation_id = '{taxonomy}_{split_column}_{drop}'
+    # Shorter than the pre-Phase-2
+    # 'dataset_npy_collated_between_2_hits_with_max_limits_seq_100_...' prefix;
+    # the clip-windowing info that used to be in the name is still recorded
+    # in manifest.yaml:config.
+    three_d_tag = "3d_" if args.use_3d_pose else ""
+    seq_tag = "" if args.seq_len == 100 else f"seq{args.seq_len}_"
+    npy_collated_dir = preparing_root / (
+        f"npy_{three_d_tag}{seq_tag}{ablation_id}"
+    )
     if args.seq_len == 30:
-        npy_raw_dir = preparing_root / f"dataset{str_3d}_npy"
-        npy_collated_dir = preparing_root / f"dataset{str_3d}_npy_collated"
+        default_flat_dir = preparing_root / f"dataset{str_3d}_npy_flat"
     else:  # 100
-        npy_raw_dir = (
-            preparing_root / f"dataset{str_3d}_npy_between_2_hits_with_max_limits"
+        default_flat_dir = (
+            preparing_root / f"dataset{str_3d}_npy_between_2_hits_with_max_limits_flat"
         )
-        npy_collated_dir = preparing_root / (
-            f"dataset{str_3d}_npy_collated_between_2_hits_with_max_limits_seq_100"
-        )
+
+    # FLAT per-clip dir. Step 2 writes per-clip files here ({clip_stem}_*.npy),
+    # Step 3 reads from here. Split + label come from clips_master.csv at
+    # collation time -- the layout is taxonomy- and split-independent.
+    flat_clip_npy_dir = args.clip_npy_dir or default_flat_dir
 
     # ---- Dry run ----
     if args.dry_run:
@@ -977,8 +1123,13 @@ def main():
         print(f"  use_3d_pose:      {args.use_3d_pose}")
         print(f"  clips_dir:        {args.clips_dir}")
         print(f"  shuttle_csv_dir:  {args.shuttle_csv_dir}")
-        print(f"  npy_raw_dir:      {npy_raw_dir}")
+        print(f"  flat_clip_npy:    {flat_clip_npy_dir}  (Step 2 writer + Step 3 reader)")
         print(f"  npy_collated:     {npy_collated_dir}")
+        print(f"  clips_csv:        {args.clips_csv}")
+        print(f"  split_column:     {args.split_column}")
+        print(f"  drop_unknown:     {args.drop_unknown}")
+        print(f"  ablation_id:      {ablation_id}")
+        print(f"  pose_styles:      {sorted(pose_styles)}")
         print(f'  homography:       {SET_INFO_DIR / "homography.csv"}')
         print(f"  resolution:       {RESOLUTION_CSV_PATH}")
         print(f'\n  Step 1 (trajectory): {"SKIP" if args.skip_trajectory else "RUN"}')
@@ -1014,14 +1165,14 @@ def main():
         if args.use_3d_pose:
             prepare_3d_dataset_npy_from_raw_video(
                 my_clips_folder=args.clips_dir,
-                save_root_dir=npy_raw_dir,
+                save_root_dir=flat_clip_npy_dir,
                 resolution_df=resolution_df,
                 all_court_info=all_court_info,
             )
         else:
             prepare_2d_dataset_npy_from_raw_video(
                 my_clips_folder=args.clips_dir,
-                save_root_dir=npy_raw_dir,
+                save_root_dir=flat_clip_npy_dir,
                 resolution_df=resolution_df,
                 all_court_info=all_court_info,
                 joints_normalized_by_v_height=False,
@@ -1033,13 +1184,24 @@ def main():
     # ---- Step 3: Collation ----
     if not args.skip_collate:
         print("\n--- Step 3: Collate .npy files ---")
+        if not args.clips_csv.exists():
+            parser.error(f"--clips-csv path does not exist: {args.clips_csv}")
+        if not flat_clip_npy_dir.exists():
+            parser.error(
+                f"flat per-clip dir does not exist: {flat_clip_npy_dir}\n"
+                "  Run Step 2 first (drop --skip-pose) or pass --clip-npy-dir."
+            )
         for set_name in ["train", "val", "test"]:
             collate_npy(
-                root_dir=npy_raw_dir,
+                root_dir=flat_clip_npy_dir,
                 set_name=set_name,
                 seq_len=args.seq_len,
                 save_dir=npy_collated_dir,
+                clips_csv=args.clips_csv,
+                split_column=args.split_column,
+                pose_styles=pose_styles,
                 taxonomy=taxonomy,
+                drop_unknown=args.drop_unknown,
                 shuttle_csv_dir=args.shuttle_csv_dir,
                 resolution_df=resolution_df,
             )

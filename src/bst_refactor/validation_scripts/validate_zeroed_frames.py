@@ -19,13 +19,19 @@ a 2×2 overlap analysis, and hit-frame proximity breakdowns.
 Outputs (text + PNGs) are saved to a sibling folder:
     validation_scripts/zeroed_frames_analysis_outputs/
 
+CSV-driven: splits and labels come from ``notebooks/clips_master.csv``.
+Per-clip npy files are resolved flat under ``{dataset_npy_dir}/{clip_stem}_*.npy``
+and ``{shuttle_npy_dir}/{clip_stem}.npy``.
+
 Usage:
     python validate_zeroed_frames.py \
-        --data-root /path/to/ShuttleSet_data_merged_25 \
-        --taxonomy merged_25 \
+        --data-root /path/to/ShuttleSet_data_une_merge_v1 \
+        --clips-csv /path/to/notebooks/clips_master.csv \
+        --taxonomy une_merge_v1 \
+        --split-column split_bst_baseline \
         --threshold 0.5 \
         --set-dir /path/to/ShuttleSet/set \
-        --shuttle-npy-dir /path/to/ShuttleSet/shuttle_npy
+        --shuttle-npy-dir /path/to/ShuttleSet/shuttle_npy_flat
 """
 import argparse
 import io
@@ -42,6 +48,11 @@ import pandas as pd
 import matplotlib
 matplotlib.use("Agg")  # headless backend for HPC (no X11 display)
 import matplotlib.pyplot as plt  # noqa: E402
+
+BST_REFACTOR_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(BST_REFACTOR_ROOT))
+
+from pipeline.config import TAXONOMIES, Taxonomy  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -138,8 +149,7 @@ def build_flaw_lookup(set_dir: Path) -> dict[str, bool]:
 
 
 def _load_shuttle_vis(
-    shuttle_npy_dir: Path, split: str, folder_name: str,
-    clip_name: str, n_frames: int,
+    shuttle_npy_dir: Path, clip_name: str, n_frames: int,
 ) -> np.ndarray | None:
     """Load shuttle visibility from shuttle NPY and return as a bad-frame mask.
 
@@ -152,7 +162,7 @@ def _load_shuttle_vis(
 
     :return: Boolean array of shape (n_frames,) or None if file not found.
     """
-    shuttle_path = shuttle_npy_dir / split / folder_name / f"{clip_name}.npy"
+    shuttle_path = shuttle_npy_dir / f"{clip_name}.npy"
     if not shuttle_path.exists():
         return None
     shuttle_arr = np.load(shuttle_path)  # (t, 3)
@@ -162,103 +172,128 @@ def _load_shuttle_vis(
     return vis[:min_len] == 0  # invert: True = shuttle NOT detected (bad)
 
 
+def _derive_stroke_player(
+    raw_type_en: str, player_side: str, taxonomy: Taxonomy,
+) -> tuple[str, str]:
+    """Apply the taxonomy's merge_map and standalone_set to a clips_master row.
+
+    Returns (player, stroke_type) where player is 'Top' / 'Bottom' for prefixed
+    classes or '' for unprefixed standalone classes (e.g. 'unknown').
+    """
+    merge_map = taxonomy.merge_map or {}
+    merged = merge_map.get(raw_type_en, raw_type_en)
+    if merged in taxonomy.standalone_set:
+        return "", merged
+    return player_side, merged
+
+
 def scan_clips(
     dataset_npy_dir: Path,
+    clips_csv: Path,
+    split_column: str,
+    taxonomy: Taxonomy,
     flaw_lookup: dict[str, bool] | None = None,
     shuttle_npy_dir: Path | None = None,
 ) -> list[ClipRecord]:
-    """Walk the dataset_npy/ tree and load every *_failed.npy file.
+    """Iterate clips_master.csv and load every clip's *_failed.npy.
 
-    Computes per-clip failure stats and temporal bins in a single pass.
-    Optionally loads shuttle visibility from shuttle NPYs.
+    Split and label come from the CSV (``split_column``, ``raw_type_en``,
+    ``player_side``, ``clip_stem``); per-clip files resolve flat at
+    ``{dataset_npy_dir}/{clip_stem}_failed.npy`` and
+    ``{shuttle_npy_dir}/{clip_stem}.npy``. Clips whose _failed.npy is absent
+    (no pose extraction run yet) are silently skipped and counted.
 
-    :param dataset_npy_dir: Path to the dataset_npy/ directory.
+    :param dataset_npy_dir: Flat per-clip npy directory.
+    :param clips_csv: Master clips CSV (one row per clip).
+    :param split_column: Column in clips_csv giving train/val/test assignment.
+    :param taxonomy: Taxonomy for merge_map + standalone_set label derivation.
     :param flaw_lookup: Optional dict from build_flaw_lookup(). If provided,
                         each clip's is_flaw field is populated from it.
-    :param shuttle_npy_dir: Optional path to ShuttleSet/shuttle_npy/.
-                            Mirrors the clip directory structure.
+    :param shuttle_npy_dir: Optional path to flat shuttle NPY dir.
     :return: List of ClipRecord namedtuples, sorted by (split, stroke, clip).
     """
-    records: list[ClipRecord] = []
-    shuttle_miss = 0  # clips where shuttle NPY wasn't found
+    df = pd.read_csv(clips_csv)
+    if split_column not in df.columns:
+        raise KeyError(
+            f"split_column {split_column!r} not in clips_csv columns: "
+            f"{list(df.columns)}"
+        )
+    df = df[df[split_column].isin(SPLITS)].copy()
 
-    for split in SPLITS:
-        split_dir = dataset_npy_dir / split
-        if not split_dir.is_dir():
-            print(f"  WARNING: split directory not found: {split_dir}")
+    records: list[ClipRecord] = []
+    shuttle_miss = 0      # clips where shuttle NPY wasn't found
+    missing_files = 0     # clips in CSV with no _failed.npy on disk
+
+    for row in df.itertuples(index=False):
+        split = getattr(row, split_column)
+        clip_name = row.clip_stem
+        player, stroke_type = _derive_stroke_player(
+            row.raw_type_en, row.player_side, taxonomy,
+        )
+        folder_name = f"{player}_{stroke_type}" if player else stroke_type
+        rel_path = f"{split}/{folder_name}/{clip_name}"
+
+        fpath = dataset_npy_dir / f"{clip_name}_failed.npy"
+        if not fpath.exists():
+            missing_files += 1
             continue
 
-        for class_dir in sorted(split_dir.iterdir()):
-            if not class_dir.is_dir():
-                continue
+        arr = np.load(fpath)
+        is_flaw = flaw_lookup.get(clip_name) if flaw_lookup else None
 
-            # Parse player prefix.  Folders are like "Top_smash", "Bottom_lob",
-            # or unprefixed like "unknown".
-            folder_name = class_dir.name
-            if folder_name.startswith("Top_"):
-                player, stroke_type = "Top", folder_name[4:]
-            elif folder_name.startswith("Bottom_"):
-                player, stroke_type = "Bottom", folder_name[7:]
-            else:
-                player, stroke_type = "", folder_name
+        total = len(arr)
+        if total == 0:
+            print(f"  WARNING: 0-frame clip: {fpath}")
+            records.append(ClipRecord(
+                clip_name=clip_name,
+                rel_path=rel_path,
+                split=split,
+                stroke_type=stroke_type,
+                player=player,
+                total_frames=0,
+                failed_frames=0,
+                fail_rate=0.0,
+                temporal_bins=np.zeros(N_TEMPORAL_BINS),
+                is_flaw=is_flaw,
+                failed_arr=arr,
+            ))
+            continue
 
-            for fpath in sorted(class_dir.glob("*_failed.npy")):
-                clip_name = fpath.name.removesuffix("_failed.npy")
-                arr = np.load(fpath)
-                is_flaw = flaw_lookup.get(clip_name) if flaw_lookup else None
+        failed = int(np.sum(arr))
+        fail_rate = failed / total
 
-                total = len(arr)
-                if total == 0:
-                    print(f"  WARNING: 0-frame clip: {fpath}")
-                    records.append(ClipRecord(
-                        clip_name=clip_name,
-                        rel_path=f"{split}/{folder_name}/{clip_name}",
-                        split=split,
-                        stroke_type=stroke_type,
-                        player=player,
-                        total_frames=0,
-                        failed_frames=0,
-                        fail_rate=0.0,
-                        temporal_bins=np.zeros(N_TEMPORAL_BINS),
-                        is_flaw=is_flaw,
-                        failed_arr=arr,
-                    ))
-                    continue
+        # Temporal bins: split the clip into N equal segments and
+        # compute the mean failure rate in each.
+        bins = np.array_split(arr, N_TEMPORAL_BINS)
+        temporal = np.array(
+            [float(np.mean(b)) if len(b) > 0 else np.nan for b in bins]
+        )
 
-                failed = int(np.sum(arr))
-                fail_rate = failed / total
+        # Shuttle visibility (optional).
+        shuttle_vis = None
+        if shuttle_npy_dir:
+            shuttle_vis = _load_shuttle_vis(shuttle_npy_dir, clip_name, total)
+            if shuttle_vis is None:
+                shuttle_miss += 1
 
-                # Temporal bins: split the clip into N equal segments and
-                # compute the mean failure rate in each.
-                bins = np.array_split(arr, N_TEMPORAL_BINS)
-                temporal = np.array(
-                    [float(np.mean(b)) if len(b) > 0 else np.nan for b in bins]
-                )
+        records.append(ClipRecord(
+            clip_name=clip_name,
+            rel_path=rel_path,
+            split=split,
+            stroke_type=stroke_type,
+            player=player,
+            total_frames=total,
+            failed_frames=failed,
+            fail_rate=fail_rate,
+            temporal_bins=temporal,
+            is_flaw=is_flaw,
+            failed_arr=arr,
+            shuttle_vis=shuttle_vis,
+        ))
 
-                # Shuttle visibility (optional).
-                shuttle_vis = None
-                if shuttle_npy_dir:
-                    shuttle_vis = _load_shuttle_vis(
-                        shuttle_npy_dir, split, folder_name, clip_name, total,
-                    )
-                    if shuttle_vis is None:
-                        shuttle_miss += 1
-
-                records.append(ClipRecord(
-                    clip_name=clip_name,
-                    rel_path=f"{split}/{folder_name}/{clip_name}",
-                    split=split,
-                    stroke_type=stroke_type,
-                    player=player,
-                    total_frames=total,
-                    failed_frames=failed,
-                    fail_rate=fail_rate,
-                    temporal_bins=temporal,
-                    is_flaw=is_flaw,
-                    failed_arr=arr,
-                    shuttle_vis=shuttle_vis,
-                ))
-
+    if missing_files:
+        print(f"  WARNING: {missing_files} clips in {clips_csv.name} had no "
+              f"_failed.npy under {dataset_npy_dir}; skipped.")
     if shuttle_npy_dir and shuttle_miss:
         print(f"  WARNING: {shuttle_miss} clips had no matching shuttle NPY")
 
@@ -1197,11 +1232,29 @@ def main():
     )
     parser.add_argument(
         "--data-root", type=Path, required=True,
-        help="Path to ShuttleSet_data_{taxonomy} directory",
+        help="Path to ShuttleSet_data_{taxonomy} directory (holds the flat "
+             "per-clip npy subdir).",
     )
     parser.add_argument(
-        "--taxonomy", type=str, default="merged_25",
-        help="Taxonomy name (used in filenames and display headers)",
+        "--dataset-npy-dir", type=Path, default=None,
+        help="Flat per-clip npy directory. Defaults to auto-discovery under "
+             "--data-root (picks the first *_flat/ subdir that isn't collated).",
+    )
+    parser.add_argument(
+        "--clips-csv", type=Path,
+        default=Path(__file__).resolve().parents[3] / "notebooks" / "clips_master.csv",
+        help="Master clips CSV. Defaults to <repo>/notebooks/clips_master.csv.",
+    )
+    parser.add_argument(
+        "--split-column", type=str, default="split_bst_baseline",
+        help="Column in clips_csv giving train/val/test assignment "
+             "(default: split_bst_baseline).",
+    )
+    parser.add_argument(
+        "--taxonomy", type=str, default="une_merge_v1",
+        choices=list(TAXONOMIES.keys()),
+        help="Taxonomy for label derivation, filenames, and display headers "
+             "(default: une_merge_v1).",
     )
     parser.add_argument(
         "--threshold", type=float, default=0.5,
@@ -1209,7 +1262,9 @@ def main():
     )
     parser.add_argument(
         "--set-dir", type=Path, default=None,
-        help="Path to ShuttleSet/set/ directory (enables flaw + hit-frame analysis)",
+        help="Path to ShuttleSet/set/ directory (enables flaw + hit-frame "
+             "analysis). If omitted, checks <repo>/src/bst_refactor/ShuttleSet/set "
+             "for a match.csv and uses it when found.",
     )
     parser.add_argument(
         "--hit-window", type=int, default=10,
@@ -1218,44 +1273,64 @@ def main():
     )
     parser.add_argument(
         "--shuttle-npy-dir", type=Path, default=None,
-        help="Path to ShuttleSet/shuttle_npy/ directory. Enables shuttle "
+        help="Path to the flat shuttle npy directory. Enables shuttle "
              "detection failure analysis using TrackNet visibility column.",
     )
     args = parser.parse_args()
 
-    # Auto-discover the per-clip npy directory.  The name varies by windowing
-    # strategy (e.g. "dataset_npy_between_2_hits_with_max_limits" for seq_len=100,
-    # plain "dataset_npy" for seq_len=30).  We glob for directories matching
-    # "dataset*npy*" that contain at least one split subfolder, and exclude the
-    # collated directories (those contain stacked arrays, not per-clip files).
-    candidates = [
-        d for d in sorted(args.data_root.iterdir())
-        if d.is_dir()
-        and "npy" in d.name
-        and "collated" not in d.name
-        and any((d / s).is_dir() for s in SPLITS)
-    ]
-    if not candidates:
-        print(f"ERROR: no dataset_npy* directory with split folders found in "
-              f"{args.data_root}")
-        print("Contents:", [d.name for d in args.data_root.iterdir() if d.is_dir()])
+    # Auto-detect --set-dir from the repo-relative location if not passed.
+    # Explicit --set-dir always wins; this only fills a None.
+    if args.set_dir is None:
+        repo_set_dir = Path(__file__).resolve().parents[1] / "ShuttleSet" / "set"
+        if (repo_set_dir / "match.csv").is_file():
+            args.set_dir = repo_set_dir
+            print(f"Auto-detected --set-dir: {args.set_dir}")
+
+    taxonomy = TAXONOMIES[args.taxonomy]
+
+    # Resolve the flat per-clip npy directory. Prefer explicit --dataset-npy-dir,
+    # else auto-discover under --data-root: first *_flat/ subdir that isn't the
+    # collated output.
+    if args.dataset_npy_dir is not None:
+        dataset_npy_dir = args.dataset_npy_dir
+    else:
+        candidates = [
+            d for d in sorted(args.data_root.iterdir())
+            if d.is_dir()
+            and "npy" in d.name
+            and "collated" not in d.name
+            and d.name.endswith("_flat")
+        ]
+        if not candidates:
+            print(f"ERROR: no flat per-clip npy dir (*_flat/) found under "
+                  f"{args.data_root}.")
+            print("Contents:", [d.name for d in args.data_root.iterdir() if d.is_dir()])
+            print("Pass --dataset-npy-dir to override.")
+            sys.exit(1)
+        if len(candidates) > 1:
+            print(f"ERROR: multiple *_flat dirs found under {args.data_root}:")
+            for c in candidates:
+                print(f"  {c.name}")
+            print("Pass --dataset-npy-dir to pick one explicitly.")
+            sys.exit(1)
+        dataset_npy_dir = candidates[0]
+
+    if not args.clips_csv.exists():
+        print(f"ERROR: clips_csv not found: {args.clips_csv}")
         sys.exit(1)
-    if len(candidates) > 1:
-        print(f"WARNING: multiple npy dirs found, using first: {candidates[0].name}")
-        print(f"  All candidates: {[c.name for c in candidates]}")
-    dataset_npy_dir = candidates[0]
 
     # Sydney timestamp for output filenames.
     syd_now = datetime.now(ZoneInfo("Australia/Sydney"))
     ts = syd_now.strftime("%Y%m%d_%H%M")
     tax_short = args.taxonomy.replace("_", "")  # "merged_25" -> "merged25"
+    split_short = args.split_column.replace("split_", "").replace("_", "")
 
     # Output dir is always a sibling folder to this script.
     output_dir = Path(__file__).resolve().parent / "zeroed_frames_analysis_outputs"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Tee stdout so we can save a .txt copy.
-    txt_path = output_dir / f"analysis_{tax_short}_{ts}.txt"
+    txt_path = output_dir / f"analysis_{tax_short}_{split_short}_{ts}.txt"
     oob_clips: list[tuple[str, str, int, int]] = []
     hz_data: dict[str, dict[tuple[str, str], list[float]]] = {}
     tee = _Tee()
@@ -1284,11 +1359,16 @@ def main():
 
         # --- Scan ---
         print(f"Scanning {dataset_npy_dir} ...")
+        print(f"  clips_csv: {args.clips_csv}")
+        print(f"  split_column: {args.split_column}   taxonomy: {taxonomy.name}")
         if shuttle_npy_dir:
             print(f"  + loading shuttle visibility from {shuttle_npy_dir}")
         print()
         records = scan_clips(
             dataset_npy_dir,
+            clips_csv=args.clips_csv,
+            split_column=args.split_column,
+            taxonomy=taxonomy,
             flaw_lookup=flaw_lookup,
             shuttle_npy_dir=shuttle_npy_dir,
         )
@@ -1338,8 +1418,8 @@ def main():
                   "(pass --set-dir to enable) ---\n")
 
         # --- Figures ---
-        hist_path = output_dir / f"fail_rate_histogram_{tax_short}_{ts}.png"
-        temp_path = output_dir / f"temporal_pattern_{tax_short}_{ts}.png"
+        hist_path = output_dir / f"fail_rate_histogram_{tax_short}_{split_short}_{ts}.png"
+        temp_path = output_dir / f"temporal_pattern_{tax_short}_{split_short}_{ts}.png"
 
         plot_fail_rate_histogram(records, hist_path)
         print(f"Saved: {hist_path}")
@@ -1349,7 +1429,7 @@ def main():
 
         if hit_lookup:
             profile_path = (
-                output_dir / f"hit_frame_profile_{tax_short}_{ts}.png"
+                output_dir / f"hit_frame_profile_{tax_short}_{split_short}_{ts}.png"
             )
             # Overall fail rate for the reference line (excl. unknown).
             real = [r for r in records if not _is_unknown(r)]
@@ -1375,7 +1455,7 @@ def main():
                 hm_data = hz_data["mmpose"]
                 hm_label = "MMPose"
 
-            hm_path = output_dir / f"hit_zone_heatmap_{tax_short}_{ts}.png"
+            hm_path = output_dir / f"hit_zone_heatmap_{tax_short}_{split_short}_{ts}.png"
             plot_hit_zone_heatmap(
                 hm_data, args.threshold, hm_path,
                 title=f"{hm_label} — % clips >{args.threshold:.0%} "
@@ -1383,7 +1463,7 @@ def main():
             )
             print(f"Saved: {hm_path}")
 
-            surv_path = output_dir / f"surviving_clips_{tax_short}_{ts}.png"
+            surv_path = output_dir / f"surviving_clips_{tax_short}_{split_short}_{ts}.png"
             plot_surviving_clips(
                 hm_data, args.threshold, surv_path,
                 title=f"Surviving clips after >{args.threshold:.0%} "
@@ -1401,7 +1481,7 @@ def main():
 
     # --- Save out-of-bounds clip list (if any) ---
     if oob_clips:
-        oob_path = output_dir / f"hit_oob_clips_{tax_short}_{ts}.txt"
+        oob_path = output_dir / f"hit_oob_clips_{tax_short}_{split_short}_{ts}.txt"
         with open(oob_path, "w") as f:
             f.write("# Clips where the hit-frame index exceeded the clip length.\n")
             f.write("# These were skipped in the hit-frame profile plot.\n")

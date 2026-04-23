@@ -135,7 +135,7 @@ prepare_train_on_shuttleset.py    main() dispatches 3 steps
                  |             zero shuttle coords where _failed is True
                  +-- pad_and_augment_one_npy_video() per clip (ProcessPoolExecutor)
                  +-- np.stack() all clips into batch arrays
-                 +-- save J_only.npy, JnB_interp.npy, JnB_bone.npy, Jn2B.npy, ...
+                 +-- save {pose_style}.npy per --pose-styles (default: JnB_bone.npy), ...
 ```
 
 ### Per-clip processing detail
@@ -150,11 +150,13 @@ For each clip, `detect_players_2d()`:
 
 ### Output format per clip
 
+Files land flat under `save_root_dir`, one set per clip stem. Split and label assignment come from `notebooks/clips_master.csv` at collation time, not from the on-disk directory layout. See `scratch/architecture_notes/completed_general_refactors/dir_flatten_refactor.md` for the flatten refactor.
+
 | File | Shape | Contents |
 |------|-------|----------|
-| `*_joints.npy` | `(F, 2, 17, 2)` or `(F, 2, 17, 3)` | Normalized joint keypoints (2D or 3D) |
-| `*_pos.npy` | `(F, 2, 2)` | Court-projected player positions |
-| `*_failed.npy` | `(F,)` bool | True where MMPose failed to detect 2 players |
+| `{clip_stem}_joints.npy` | `(F, 2, 17, 2)` or `(F, 2, 17, 3)` | Normalized joint keypoints (2D or 3D) |
+| `{clip_stem}_pos.npy` | `(F, 2, 2)` | Court-projected player positions |
+| `{clip_stem}_failed.npy` | `(F,)` bool | True where MMPose failed to detect 2 players |
 
 Shuttle data (`*_shuttle.npy`) is no longer saved per-clip by the pose step. It is read from `ShuttleSet/shuttle_csv/` and merged at collation time (Step 3).
 

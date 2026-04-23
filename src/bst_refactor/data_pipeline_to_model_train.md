@@ -95,7 +95,7 @@ The pipeline downloads match videos, cuts them into labeled stroke clips, option
 | `clip_generator.py` | Extracts individual stroke clips from full match videos. Reads ShuttleSet CSV annotations (Chinese column names), maps A/B players to Top/Bottom, filters excluded videos and removed shots, and organizes clips into `{split}/{Player}_{stroke_type}/` folders. | `generate_all_clips()`, `apply_class_merge()` (moves clips from rare subtype folders into their parent type folders per the active taxonomy's merge map). Three clip window modes: `middle_in_a_sec`, `between_2_hits`, `between_2_hits_with_max_limits` (default, clamps to 1.5s each side). |
 | `player_mapping.py` | Maps the A/B player labels in ShuttleSet annotations to Top/Bottom court positions. Handles set-3 court switches. | `get_top_bottom_mapping(video_id, set_num)`. |
 | `verify.py` | Post-generation sanity checks: all splits present, no clips from excluded videos, no removed shots, merged subtype folders empty, no orphan files. | `verify_splits_present()`, `verify_no_excluded()`, `verify_no_removed_shots()`, `verify_class_merge()`, `verify_shuttle_sync()`, `print_dataset_summary()`. |
-| `shuttle_extractor.py` | Runs TrackNetV3 on each clip to detect shuttle positions, then converts CSVs to normalized `(t, 3)` numpy arrays `[x_norm, y_norm, visibility]`. Uses **batch mode** (`batch_predict.py`) to load models once per worker and iterate over clips in-process, avoiding the ~8s model-reload per clip. Uses the default `eval_mode='weight'` (full temporal ensemble) for maximum detection accuracy. `--batch_size` (default 32, configurable via CLI) controls GPU utilization. Inference runs in **FP32** to preserve detection accuracy on fast-moving shuttles (FP16 rounding can flip the 0.5 heatmap threshold on faint responses). Frames are pre-resized during loading using PIL BICUBIC (bit-identical to the Dataset's own resize). VideoCapture handles are explicitly released and `gc.collect()` + `torch.cuda.empty_cache()` run between clips to prevent resource exhaustion. `--workers N` launches N parallel batch workers, each with its own model copy (use 1 on V100 16GB, 2+ on larger GPUs). On V100 16GB, batch_size 16 fits most clips; a few may OOM, so re-run with batch_size 8 to pick up stragglers (resume logic skips clips that already have CSVs). `--dry-run` processes clips without writing output files (for testing). TrackNetV3 shares the BST training venv. **Pretrained weights** (`ckpts/TrackNet_best.pt`, `ckpts/InpaintNet_best.pt`) must be downloaded separately (~150 MB, gitignored) — see `TrackNetV3/README.md`. | `extract_all_shuttles(tracknet_dir, tracknet_python, max_workers, batch_size, dry_run)`, `shuttle_csvs_to_npy()`. Intermediate output: `ShuttleSet/shuttle_csv/` (flat dir of per-clip CSVs, taxonomy/split independent). Final output: `ShuttleSet/shuttle_npy/{split}/{Player}_{stroke_type}/{clip}.npy`. |
+| `shuttle_extractor.py` | Runs TrackNetV3 on each clip to detect shuttle positions, then converts CSVs to normalized `(t, 3)` numpy arrays `[x_norm, y_norm, visibility]`. Uses **batch mode** (`batch_predict.py`) to load models once per worker and iterate over clips in-process, avoiding the ~8s model-reload per clip. Uses the default `eval_mode='weight'` (full temporal ensemble) for maximum detection accuracy. `--batch_size` (default 32, configurable via CLI) controls GPU utilization. Inference runs in **FP32** to preserve detection accuracy on fast-moving shuttles (FP16 rounding can flip the 0.5 heatmap threshold on faint responses). Frames are pre-resized during loading using PIL BICUBIC (bit-identical to the Dataset's own resize). VideoCapture handles are explicitly released and `gc.collect()` + `torch.cuda.empty_cache()` run between clips to prevent resource exhaustion. `--workers N` launches N parallel batch workers, each with its own model copy (use 1 on V100 16GB, 2+ on larger GPUs). On V100 16GB, batch_size 16 fits most clips; a few may OOM, so re-run with batch_size 8 to pick up stragglers (resume logic skips clips that already have CSVs). `--dry-run` processes clips without writing output files (for testing). TrackNetV3 shares the BST training venv. **Pretrained weights** (`ckpts/TrackNet_best.pt`, `ckpts/InpaintNet_best.pt`) must be downloaded separately (~150 MB, gitignored) — see `TrackNetV3/README.md`. | `extract_all_shuttles(tracknet_dir, tracknet_python, max_workers, batch_size, dry_run)`, `shuttle_csvs_to_npy()`. Intermediate output: `ShuttleSet/shuttle_csv/` (flat dir of per-clip CSVs, taxonomy/split independent). Final output: `ShuttleSet/shuttle_npy/{clip}.npy` (flat; split + label come from `notebooks/clips_master.csv` at collation time). |
 | `court_utils.py` | Optional. Homography-based camera-to-court coordinate projection. Not required for the core pipeline. | `project_to_court()`, `normalize_court_position()`. |
 
 #### Pipeline output structure
@@ -104,17 +104,17 @@ The pipeline downloads match videos, cuts them into labeled stroke clips, option
 ShuttleSet/
   raw_video/                         # Full match videos
   my_raw_video_resolution.csv        # Width/height per video
-  clips/                             # Labeled stroke clips
+  clips/                             # Labeled stroke clips (still nested)
     train/{Top,Bottom}_{type}/*.mp4
     val/{Top,Bottom}_{type}/*.mp4
     test/{Top,Bottom}_{type}/*.mp4
-  shuttle_csv/                       # TrackNetV3 intermediate CSVs
+  shuttle_csv/                       # TrackNetV3 intermediate CSVs (flat)
     {vid}_{set}_{rally}_{ball_round}_ball.csv
-  shuttle_npy/                       # Shuttle trajectories (optional)
-    train/{Top,Bottom}_{type}/*.npy
-    val/{Top,Bottom}_{type}/*.npy
-    test/{Top,Bottom}_{type}/*.npy
+  shuttle_npy/                       # Shuttle trajectories (flat, optional)
+    {vid}_{set}_{rally}_{ball_round}.npy
 ```
+
+Split and label assignment for `shuttle_npy/` (and downstream pose npys) come from `notebooks/clips_master.csv` at collation time, not from directory structure. The clips directory stays nested for now. See `scratch/architecture_notes/completed_general_refactors/dir_flatten_refactor.md` for the migration.
 
 #### Key concepts
 
@@ -184,27 +184,29 @@ Key flags: `--seq-len` (30 or 100), `--taxonomy` (`une_merge_v1`, `merged_25`, o
 
 3. **Shuttle normalization** (`normalize_shuttlecock`): Shuttle xy divided by video resolution to get [0,1] range. Done at collation time (Step 3). Frames where pose detection failed (recorded in `_failed.npy` by Step 2) have their shuttle coordinates zeroed out. This zeroing is baked into the saved collated `shuttle.npy` -- the model receives pre-zeroed data, not a separate mask. The per-clip `_failed.npy` files preserve the raw boolean mask for debugging or future use, but the source `shuttle_csv/` files are never modified.
 
-4. **Padding and augmentation** (`pad_and_augment_one_npy_video`): Each sample is padded (or strided) to a fixed `seq_len` (30 or 100 frames). Four pose representations are pre-computed:
+4. **Padding and augmentation** (`pad_and_augment_one_npy_video`): Each sample is padded (or strided) to a fixed `seq_len` (30 or 100 frames). Four pose representations are supported; only those passed in `--pose-styles` (default `JnB_bone`) are computed and saved:
    - `J_only`: raw joints `(t, 2, 17, 2)`
    - `JnB_interp`: joints + bone midpoints `(t, 2, 36, 2)`
-   - `JnB_bone`: joints + bone vectors `(t, 2, 36, 2)`
+   - `JnB_bone`: joints + bone vectors `(t, 2, 36, 2)` — **default**, what BST training loads
    - `Jn2B`: interpolated joints + bone vectors `(t, 2, 55, 2)`
 
 5. **Collation** (`collate_npy`): All samples in a split are stacked into single arrays and saved:
-   - `{pose_style}.npy`, `pos.npy`, `shuttle.npy`, `videos_len.npy`, `labels.npy`
+   - `{pose_style}.npy` (one file per requested style), `pos.npy`, `shuttle.npy`, `videos_len.npy`, `labels.npy`
 
 #### Collated output structure
 
 ```
-preparing_data/ShuttleSet_data_{taxonomy.name}/dataset_npy_collated/
+preparing_data/ShuttleSet_data_{taxonomy.name}/npy_[3d_][seq{N}_]{ablation_id}/
   train/
-    J_only.npy, JnB_interp.npy, JnB_bone.npy, Jn2B.npy
+    JnB_bone.npy                                    # default single pose file
     pos.npy, shuttle.npy, videos_len.npy, labels.npy
   val/
     ...
   test/
     ...
 ```
+
+Passing `--pose-styles J_only,JnB_bone,Jn2B` (etc.) saves the listed styles instead.
 
 For example, `ShuttleSet_data_une_merge_v1/`, `ShuttleSet_data_merged_25/`, or `ShuttleSet_data_raw_35/`.
 
@@ -258,7 +260,7 @@ Bridges collated `.npy` files to PyTorch `DataLoader`s. Imports `Taxonomy` from 
 | `Dataset_npy_collated` | Primary Dataset class for BST. Loads pre-collated arrays from disk. Supports `train_partial` to use a fraction of training data. Returns `(human_pose, pos, shuttle), video_len, label` per sample. **Filters out zero-length clips at load time** (see known divergence below). |
 | `Dataset_npy_collated_one_side` | Single-side variant: filters to Top or Bottom labels only (halves the dataset). **Requires `unknown_first=True`** — asserts at init. Uses the position of `'unknown'` in `class_list()` to find the Top/Bottom label boundary. |
 | `Dataset_npy_collated_single_pose` | Extracts only the acting player's pose per sample (Top or Bottom). **Requires `unknown_first=True`** — same label-boundary assumption as `Dataset_npy_collated_one_side`. |
-| `Dataset_npy` | Alternative that loads per-clip `.npy` files on-the-fly (slower, but doesn't require pre-collation). Accepts a `taxonomy` parameter for label indexing. Applies `RandomTranslation` during training. |
+| `Dataset_npy` | **Deprecated.** Legacy lazy loader that walks `{root}/{split}/{class}/` — the pre-Phase-2 nested layout the pose writers no longer produce. Kept only for the unused `compare_pred_gt_on_specific_type` debug helper. Use `Dataset_npy_collated` for training. |
 | `prepare_npy_collated_loaders()` | Convenience function: creates train/val/test `DataLoader`s from a collated directory. |
 | `make_seq_len_same()` | Pads or strides a sample to match `seq_len`. Shared between `Dataset_npy` and `collate_npy`. |
 | `create_bones()` / `interpolate_joints()` | Bone vector and midpoint computation from joint arrays. |
@@ -288,6 +290,44 @@ video_len:   (batch,)
 labels:      (batch,)
 ```
 
+#### Loading clip video frames (`pipeline/clip_index.py`)
+
+`Dataset_npy_collated` covers pose + shuttle + position streams from the npy collated dir. For any model that also needs the raw `.mp4` clip frames (Arch 2 3D CNN, Arch 1 wrist crop), the clips directory is still nested as `{split}/{Top,Bottom}_{stroke_type}/*.mp4` (Phase 3 flattening is deferred). Rather than walk the tree per `__getitem__`, use `pipeline.clip_index.build_clip_path_index(clips_dir)` to build a `{clip_stem -> Path}` lookup once at Dataset `__init__`; subsequent per-sample lookup is O(1).
+
+Skeleton showing the CSV-driven pattern (split + label come from `clips_master.csv` with taxonomy applied at init, matching how `collate_npy` builds its npy arrays):
+
+```python
+import pandas as pd
+from torch.utils.data import Dataset
+
+from pipeline.clip_index import build_clip_path_index
+from pipeline.config import CLIPS_OUTPUT_DIR, TAXONOMIES
+
+
+class ClipVideoDataset(Dataset):
+    def __init__(self, clips_csv, split_column, taxonomy_name,
+                 split='train', clips_dir=CLIPS_OUTPUT_DIR):
+        df = pd.read_csv(clips_csv)
+        df = df[df[split_column] == split]
+        taxonomy = TAXONOMIES[taxonomy_name]
+        self._path_by_stem = build_clip_path_index(clips_dir)
+        self.items = [
+            (row.clip_stem, _derive_label(row, taxonomy))
+            for row in df.itertuples()
+        ]
+
+    def __len__(self):
+        return len(self.items)
+
+    def __getitem__(self, i):
+        stem, label = self.items[i]
+        return load_video(self._path_by_stem[stem]), label
+```
+
+`_derive_label` applies `taxonomy.merge_map` + `standalone_set` to `(row.raw_type_en, row.player_side)` to produce an int label; see `collate_npy` in `prepare_train_on_shuttleset.py` for the canonical reference implementation. The video decoder (`load_video`) is caller's choice — cv2, decord, or torchvision.io. With this pattern the nested `clips/` layout stays transparent: any `split_column` in `clips_master.csv` (e.g. `split_bst_baseline`, `split_v2`) works without reorganizing the clips tree.
+
+For ad-hoc queries or when a Dataset wants a higher-level "give me clip + shuttle + mmpose triples for this split and class" API, `pipeline.data_access.get_clip_records` wraps the CSV read, taxonomy label derivation, and flat-path resolution into one call (and exposes the same thing via CLI / TUI at `python -m pipeline.data_access`). `clip_index.build_clip_path_index` remains the zero-dep pathlib helper it calls internally for clip-stem lookup.
+
 ---
 
 ### Stage 4 -- Model (`stroke_classification/model/`)
@@ -306,9 +346,18 @@ labels:      (batch,)
 3. **Temporal Transformer**: each of the 3 streams (player1, player2, shuttle) gets a learnable CLS token prepended, positional embeddings added, then processed by shared self-attention layers independently. Padding mask prevents attention to zero-padded frames.
 4. **Cross Transformer**: each player's frame-level representation attends to the shuttle's representation via cross-attention (player queries, shuttle provides keys+values).
 5. **Interactional Transformer**: combines player-shuttle interactions across players with another CLS token and self-attention.
-6. **CG (Clean Gate)** -- optional: subtracts shared player noise from shuttle CLS via learned MLP.
-7. **AP (Aim Player)** -- optional: weights player contributions by cosine similarity to shuttle CLS.
+6. **CG (Clean Gate)** -- optional: subtracts shared player noise from shuttle CLS via learned MLP. Scaled by `cg_factor` buffer (see CG/AP warm-start schedule below).
+7. **AP (Aim Player)** -- optional: weights player contributions by cosine similarity to shuttle CLS. Alpha multipliers blend toward pass-through via `ap_factor` buffer (see CG/AP warm-start schedule below).
 8. **MLP Head**: concatenated CLS tokens -> LayerNorm -> MLP -> class logits.
+
+#### CG/AP warm-start schedule (BST_CG_AP only)
+
+A cosine schedule fades CG and AP out across training so the transformer backbone takes over. The model holds two scalar buffers (`cg_factor`, `ap_factor`, both in `[0, 1]`) that modulate the two optional blocks:
+
+- CG: `shuttle_cls = shuttle_cls - cg_factor * dirt`. At `cg_factor=0` the subtraction vanishes.
+- AP: `eff_a_p1 = ap_factor * alpha + (1 - ap_factor)`, `eff_a_p2 = ap_factor * (1 - alpha) + (1 - ap_factor)`. At `ap_factor=0` both multipliers become exactly 1.0 (`p1_conclusion` and `p2_conclusion` pass through unchanged). At `ap_factor=1` the original AP gating is recovered.
+
+The training loop calls `model.set_schedule_factors(cg_factor, ap_factor)` once per epoch with a factor from `aux_schedule_factor(epoch, fade_end_epoch)` (cosine from 1.0 at epoch 1 to 0.0 at `fade_end_epoch`, pinned at 0 after). CG and AP currently share one factor. The buffers are part of `state_dict`, so the best-F1 checkpoint captures whichever value was active at that epoch; `task.test()` runs with those restored values, no override. Controls live in the `hyp` namedtuple in `bst_train.py` (see Stage 5).
 
 #### BST variants
 
@@ -340,11 +389,11 @@ BST_CG_AP = BST(use_ppf=True,  use_cg=True,  use_ap=True)   # Full model
 
 | Name | Role |
 |------|------|
-| `Hyp` (namedtuple) | Experiment hyperparameters: `n_epochs=1600`, `batch_size=128`, `lr=5e-4`, `warm_up_step=400`, `early_stop_n_epochs=300`, `taxonomy='merged_25'` (key into `TAXONOMIES`; options: `'une_merge_v1'`, `'merged_25'`, `'raw_35'`), `seq_len=100`, `pose_style='JnB_bone'`, `use_3d_pose=False`, `train_partial=1.0`. Edit these to configure experiments. <br><br>_**Active retune (2026-04-17):** the defaults above match the original BST paper recipe but the cosine schedule never actually decays inside our useful training window (best epoch ~41 out of 1600 per TB run `Apr17_13-04-35`). Current attempt trims `n_epochs=120`, `warm_up_step=100`, `early_stop_n_epochs=40`, and pushes the scheduler's `num_cycles` from 0.25 to 0.5 so the LR reaches 0 by end-of-schedule. Old values are preserved (commented) in `bst_train.py` for easy revert; reasoning is in the block above `hyp` there and in `scratch/architecture_notes/arch_1_directions.md` Q4._ |
+| `Hyp` (namedtuple) | Experiment hyperparameters: `n_epochs=1600`, `batch_size=128`, `lr=5e-4`, `warm_up_step=400`, `early_stop_n_epochs=300`, `taxonomy='merged_25'` (key into `TAXONOMIES`; options: `'une_merge_v1'`, `'merged_25'`, `'raw_35'`), `seq_len=100`, `pose_style='JnB_bone'`, `use_3d_pose=False`, `train_partial=1.0`, `use_aux_schedule=True`, `aux_fade_end_epoch=60`. Edit these to configure experiments. <br><br>_**Active retune (2026-04-17):** the defaults above match the original BST paper recipe but the cosine schedule never actually decays inside our useful training window (best epoch ~41 out of 1600 per TB run `Apr17_13-04-35`). Current attempt trims `n_epochs=120`, `warm_up_step=100`, `early_stop_n_epochs=40`, and pushes the scheduler's `num_cycles` from 0.25 to 0.5 so the LR reaches 0 by end-of-schedule. Old values are preserved (commented) in `bst_train.py` for easy revert; reasoning is in the block above `hyp` there and in `scratch/architecture_notes/arch_1_directions.md` Q4._ <br><br>_**CG/AP warm-start schedule (2026-04-18):** the BST_CG_AP variant now fades its two optional heuristic blocks out over training so the transformer backbone has a pure-solo phase to find its own peak. `use_aux_schedule=True` turns it on, `aux_fade_end_epoch=60` sets the epoch at which the scaling factor first reaches 0 (stays 0 after). Cosine shape, shared factor across CG and AP. At the historical peak epoch 41 the factor is ~0.23 (vs 1.0 baseline), so CG/AP contribution is cut by ~77% in the peak region; epochs 60+ run backbone only. `use_aux_schedule=False` pins the factor at 1.0 for the whole run and reproduces the unscheduled BST_CG_AP baseline exactly. Full rationale and extension path to per-module fade timings is in the block above `hyp` in `bst_train.py` and in the **Stage 4 -- CG/AP warm-start schedule** section above._ |
 | `train_one_epoch()` | Standard PyTorch training loop: forward pass, cross-entropy loss (with label smoothing 0.1), backward, optimizer step, scheduler step. Applies `RandomTranslation_batch` to joints (not bones). |
 | `validate()` | Evaluates on val set. Accumulates per-class TP/FP/FN across batches, computes macro F1 and min-class F1. |
 | `test()` | Runs inference on test set, returns `(predictions, ground_truth)` tensors. |
-| `train_network()` | Full training loop with AdamW optimizer, cosine LR schedule with warmup, early stopping on macro F1, and best-checkpoint saving. Logs per-epoch scalars (`Loss/Train`, `Loss/Val`, `F1/Val_macro`, `F1/Val_min`) plus an end-of-run **HParams** entry: best + 2nd-best macro F1 and min F1 (with their epochs), best val loss (with epoch), and `stopped_epoch`. `stopped_epoch - best/macro_f1_epoch == early_stop_n_epochs` confirms a clean early-stop vs a crash. |
+| `train_network()` | Full training loop with AdamW optimizer, cosine LR schedule with warmup, early stopping on macro F1, and best-checkpoint saving. Applies the CG/AP warm-start schedule at the top of each epoch via `model.set_schedule_factors(cg_factor, ap_factor)`. Logs per-epoch scalars (`Loss/Train`, `Loss/Val`, `F1/Val_macro`, `F1/Val_min`, `Schedule/aux_factor`) plus an end-of-run **HParams** entry: best + 2nd-best macro F1 and min F1 (with their epochs), best val loss (with epoch), and `stopped_epoch`. `stopped_epoch - best/macro_f1_epoch == early_stop_n_epochs` confirms a clean early-stop vs a crash. |
 | `Tee` (class) | Duplicates writes across multiple streams (terminal + file). Used by `__main__` to auto-tee test output to `test_logs/test_<timestamp>.log` so test metrics survive a dropped terminal. Training output stays terminal-only (TB has it). |
 | `MODELS` (dict) | Maps variant names (`'BST_0'`, `'BST'`, etc.) to pre-configured partials imported from `bst.py`. Used by `get_network_architecture()` to instantiate the model without local flag dicts. |
 | `Task` (class) | Orchestrates the full workflow: `prepare_dataloaders()` -> `get_network_architecture()` -> `seek_network_weights()` (loads existing or trains) -> `test()`. |
@@ -360,13 +409,35 @@ Task()
   .test_topk_acc(k=2)
 ```
 
-The `__main__` block runs 3 serial trials (serial_no 1-3) to measure variance. Bump the `range(1, 4)` back to `range(1, 6)` to restore the original 5-trial sweep. Each invocation mints one timestamp and uses it for both (a) a per-run weight folder `weight/run_<timestamp>/` and (b) the test log `test_logs/test_<timestamp>.log`, so artefacts for a single invocation line up on disk. All three serials' weights and test output go into that pair. `Task.test()` and `task.test_topk_acc()` are wrapped in `redirect_stdout(Tee(sys.stdout, log_f))` so test metrics land in both the terminal and the log file. Set `resume_from = '<run_folder_name>'` at the top of `__main__` to re-test an existing run's weights without retraining; leave it `None` for normal fresh-train behaviour.
+The `__main__` block runs 5 serial trials (`range(1, 6)`) to measure seed variance. Each invocation mints one timestamp and uses it to name both (a) the run folder `experiments/run_<timestamp>/` (holding `manifest.yaml`, `weights/`, and `tb/serial_N/`) and (b) the test log `test_logs/test_<timestamp>.log`, so artefacts for a single invocation line up on disk. All five serials' weights, per-serial TB event dirs, and test output land under that run folder. `Task.test()` and `task.test_topk_acc()` are wrapped in `redirect_stdout(Tee(sys.stdout, log_f))` so test metrics land in both the terminal and the log file. The script is wired into `run_tracker.py` with two function calls (`track_run` + `track_serial`) so the manifest captures hparams + per-serial metrics automatically; see the **Run tracker + aggregator** section below. Set `resume_from = '<run_folder_name>'` at the top of `__main__` to re-test an existing run's weights without retraining; leave it `None` for normal fresh-train behaviour.
 
 #### Outputs
 
-- **Model weights** (`main_on_shuttleset/weight/run_<timestamp>/*.pt`): Best-validation-F1 checkpoint per trial, saved into the invocation's run folder. The `run_*/` subfolders are git-ignored by default (reproducible and too large to track wholesale). An explicit `!` override in `.gitignore` keeps the current best-of-runs serial-2 weight tracked at the top-level `weight/` path as a shared baseline; promote a new best by copying it up to the top level and adjusting the ignore rules.
-- **TensorBoard logs** (`main_on_shuttleset/runs/<timestamp>_<hostname>/`): Per-epoch scalar curves (train/val loss, val macro/min F1) plus an **HParams** row per run with best/2nd-best macro F1 and min F1, best val loss, their epochs, and `stopped_epoch`. The HParams tab gives a sortable cross-run comparison. Tracked in git so the team can review training results. <br><br>_Structure on disk: one subfolder per `train_network()` call (one per serial), so a 3-serial invocation produces 3 timestamped subfolders two hours apart. Each subfolder holds **two** event files: a larger one (60-70 KB) with the per-epoch scalar curves written during training, and a tiny one (~1.6 KB) with the end-of-run HParams summary. PyTorch writes the HParams summary to its own event file rather than appending to the scalar file, which is why every subfolder contains two files instead of one._
-- **Test logs** (`main_on_shuttleset/test_logs/test_<timestamp>.log`): All serials' test-set output (`=== Serial N (...) ===` headers, macro F1 table, accuracy, top-2 accuracy) auto-captured so metrics survive a dropped terminal. Grep with `grep -E 'Accuracy|macro' test_logs/test_*.log` for a tidy summary.
+Every invocation writes under `main_on_shuttleset/experiments/<run_id>/`, where `<run_id>` is `run_<timestamp>` on a fresh run or the `resume_from` folder name on a re-test. That folder is the single collection point: manifest + per-serial weights + per-serial TB dirs all live side by side.
+
+- **Manifest** (`experiments/<run_id>/manifest.yaml`): source of truth for hparams, git SHA + host, per-serial metrics (`macro_f1`, `min_f1`, `accuracy`, `top2_accuracy`, `num_strokes`), paths to each serial's weight file and TB dir, plus a `log_path:` pointer back to the matching test log. Tracked in git.
+- **Best-model notes** (`experiments/<run_id>/best_model_id.txt`): freeform notes flagging the best-performing serial(s) and the config context, written by hand after eyeballing the test log. Tracked in git alongside the manifest.
+- **Model weights** (`experiments/<run_id>/weights/bst_CG_AP_..._merged_25[_N].pt`): one best-validation-F1 checkpoint per serial. Gitignored by default; `src/bst_refactor/stroke_classification/.gitignore` carries a per-run tactical `!` unignore for the serial(s) flagged in `best_model_id.txt`, so git history stays small while the best checkpoints are still shareable.
+- **TensorBoard logs** (`experiments/<run_id>/tb/serial_N/`): per-serial event directories grouped under one run folder. Launch with `tensorboard --logdir experiments/<run_id>/tb` to see all serials of a run in one view. Each subfolder holds **two** event files: a larger one (60-70 KB) with the per-epoch scalar curves (train/val loss, val macro/min F1, `Schedule/aux_factor`) and a tiny one (~1.6 KB) with the end-of-run HParams summary (best/2nd-best macro F1 and min F1, best val loss, their epochs, `stopped_epoch`). Gitignored.
+- **Test logs** (`main_on_shuttleset/test_logs/test_<timestamp>.log`): all serials' test-set output (`=== Serial N (...) ===` headers, macro F1 table, accuracy, top-2 accuracy) auto-captured via the `Tee` class so metrics survive a dropped terminal. One file per script invocation; the run's manifest points at it via `log_path:`. Grep with `grep -E 'Accuracy|macro' test_logs/test_*.log` for a quick summary across runs, or use `run_overview.py` for a proper tabulation.
+
+#### Run tracker + aggregator
+
+Cross-run comparison and the optional Aim UI are handled by the YAML-based tracker at `src/bst_refactor/run_tracker.py`. `bst_train.py` wires it in with two function calls (`track_run` + `track_serial`), so any future training script (Arch 2 3D CNN, or any further extension) can plug in the same way. Full details in [`src/bst_refactor/run_tracker.md`](run_tracker.md).
+
+- **`run_overview.py`** aggregates every `experiments/<run_id>/manifest.yaml` into one table with mean / stdev / max per metric across serials:
+  ```bash
+  cd main_on_shuttleset
+  python ../../run_overview.py                              # default: experiments/
+  python ../../run_overview.py -c n_epochs,use_aux_schedule -m macro_f1,min_f1
+  ```
+- **`aim_backfill.py`** mirrors every manifest into the Aim UI with per-serial test-log blocks as descriptions, auto-derived tags (`legacy`, `no_aux_anneal` / `anneal_gentle` / `anneal_aggressive` / `cg_ap_off_from_start`, `best`), and readable names. Idempotent via stable `run_hash`, so it is safe to re-run any time Aim wasn't installed during training, or after editing manifest notes / tags:
+  ```bash
+  pip install aim
+  cd main_on_shuttleset
+  python ../../aim_backfill.py
+  aim up                                                    # UI at http://localhost:43800
+  ```
 
 ---
 
@@ -405,11 +476,11 @@ pipeline/build_dataset.py             # Orchestrates Steps 1-6 (--taxonomy flag)
     |
     v  (produces ShuttleSet/clips/ and ShuttleSet/shuttle_npy/)
     |
-preparing_data/prepare_train_on_shuttleset.py  (--taxonomy flag)
-  -> MMPose (2D/3D pose estimation)   # Extract joints, positions
-  -> collate_npy(taxonomy=...)         # Pad, augment, stack into batch arrays
+preparing_data/prepare_train_on_shuttleset.py  (--taxonomy, --split-column, --drop-unknown, --clip-npy-dir)
+  -> MMPose (2D/3D pose estimation)   # Writes {clip_stem}_*.npy flat
+  -> collate_npy(clips_csv, split_column, taxonomy, ...)  # CSV-driven; stacks per ablation
     |
-    v  (produces preparing_data/ShuttleSet_data_{taxonomy.name}/dataset_npy_collated/)
+    v  (produces preparing_data/ShuttleSet_data_{taxonomy.name}/npy_[3d_][seq{N}_]{ablation_id}/)
     |
 validation_scripts/validate_zeroed_frames.py  # Data quality check (optional, pre-training)
   -> validation_scripts/hit_frame_lookup.py   # Hit-frame index derivation from set CSVs

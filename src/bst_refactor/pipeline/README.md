@@ -143,7 +143,7 @@ python predict.py --video_file clip.mp4 --tracknet_file ckpts/TrackNet_best.pt \
 
 **Frame-level guarantees:** TrackNetV3's output CSVs always contain a contiguous Frame column `[0, 1, ..., N-1]` matching the input video length. Frames where the shuttle is undetected are written with zeroed coordinates and `Visibility=0` (never skipped), and buffer flushing ensures trailing frames are included. This means `shuttle_csvs_to_npy` can safely call `.set_index('Frame').to_numpy()` without gap-filling or reindexing.
 
-Output: `ShuttleSet/shuttle_npy/{train,val,test}/{Player}_{stroke_type}/{vid}_{set}_{rally}_{ball_round}.npy`
+Output: `ShuttleSet/shuttle_npy/{vid}_{set}_{rally}_{ball_round}.npy` (flat). Split and label assignment are carried by `notebooks/clips_master.csv` at collation time, not by the on-disk directory layout. See `scratch/architecture_notes/completed_general_refactors/dir_flatten_refactor.md` for the migration.
 
 Each `.npy` file has shape `(t, 3)`. To get xy-only coordinates: `shuttle[:, :2]`. To get the visibility mask: `shuttle[:, 2]`.
 
@@ -210,19 +210,19 @@ ShuttleSet/
   raw_video/                                    # Step 1
     {id} {match_name}.mp4
   my_raw_video_resolution.csv                   # Step 2
-  clips/                                        # Steps 3-4
+  clips/                                        # Steps 3-4 (still nested)
     train/{Top,Bottom}_{stroke_type}/*.mp4
     val/{Top,Bottom}_{stroke_type}/*.mp4
     test/{Top,Bottom}_{stroke_type}/*.mp4
-  shuttle_csv/                                  # Step 6 (intermediate)
+  shuttle_csv/                                  # Step 6 (intermediate, flat)
     {vid}_{set}_{rally}_{ball_round}_ball.csv
-  shuttle_npy/                                  # Step 6 (final)
-    train/{Top,Bottom}_{stroke_type}/*.npy
-    val/{Top,Bottom}_{stroke_type}/*.npy
-    test/{Top,Bottom}_{stroke_type}/*.npy
+  shuttle_npy/                                  # Step 6 (final, flat)
+    {vid}_{set}_{rally}_{ball_round}.npy
 ```
 
 Clip filenames: `{video_id}_{set}_{rally}_{ball_round}.mp4`
+
+Split and label assignment for `shuttle_npy/` (and the downstream pose npys) come from `notebooks/clips_master.csv` at collation time. The clips directory stays nested for now; flattening it is deferred. See `scratch/architecture_notes/completed_general_refactors/dir_flatten_refactor.md` for the migration plan.
 
 ## Pre-existing Input Data
 
@@ -284,6 +284,8 @@ Update `ShuttleSet/flaw_shot_records.csv`. The pipeline reads it at import time 
 | `court_utils.py` | Optional homography-based court projection utilities |
 | `verify.py` | Post-generation sanity checks |
 | `build_dataset.py` | One-command orchestrator |
+| `clip_index.py` | `build_clip_path_index(clips_dir)` helper: one-time rglob to build a `{clip_stem -> mp4 Path}` lookup for CSV-driven video-loading Datasets. Used by downstream arch code (Arch 2 3D CNN, Arch 1 wrist crop). |
+| `data_access.py` | CSV-aware access layer on top of `clip_index.py`. `get_clip_records(paths, split=..., taxonomy_class=..., split_column=..., taxonomy_name=..., drop_unknown=...)` reads `clips_master.csv`, derives the folder-style class label under the active taxonomy, and returns `ClipRecord`s pairing clip / flat shuttle / flat mmpose paths. Also exposes a CLI + TUI (`python -m pipeline.data_access`) and a `.env` mechanism for per-environment path config. |
 
 ## Running Individual Steps
 
@@ -303,14 +305,16 @@ Both architectures read from the same `clips/` and `shuttle_npy/` directories. T
 
 **Next step for BST:** Run `stroke_classification/preparing_data/prepare_train_on_shuttleset.py` to extract poses (MMPose) and collate into batch-ready arrays. See `data_pipeline_to_model_train.md` at the project root for the full pipeline-to-training walkthrough. For the COCO 17-keypoint joint index map, bone pairs, and JnB representations, see [`keypoints_schema.md`](../stroke_classification/preparing_data/keypoints_schema.md).
 
-```python
-# Loading clips (example)
-from pathlib import Path
-clips = sorted(Path('ShuttleSet/clips/train').rglob('*.mp4'))
+### Split + label source
 
-# Loading shuttle trajectories
+Split (train/val/test) and class label for every clip come from `notebooks/clips_master.csv` at collation time, not from the on-disk folder layout. The clips directory is still nested as `{split}/{Top,Bottom}_{stroke_type}/*.mp4` (Phase 3 flattening is deferred), but the `{split}/` parent reflects the historical `split_bst_baseline` partition only — any new ablation split (e.g. `split_v2`) is applied via the CSV.
+
+### Loading shuttle / label data (flat)
+
+```python
+# Loading shuttle trajectories (flat: one file per clip, named after clip stem)
 import numpy as np
-shuttle = np.load('ShuttleSet/shuttle_npy/train/Top_smash/1_1_3_2.npy')
+shuttle = np.load('ShuttleSet/shuttle_npy/1_1_3_2.npy')
 xy = shuttle[:, :2]           # (t, 2) normalized coordinates
 visibility = shuttle[:, 2]    # (t,) detection confidence
 
@@ -318,5 +322,73 @@ visibility = shuttle[:, 2]    # (t,) detection confidence
 from pipeline.config import TAXONOMIES, DEFAULT_TAXONOMY
 labels_29 = TAXONOMIES[DEFAULT_TAXONOMY].class_list()  # 29 classes (une_merge_v1)
 labels_25 = TAXONOMIES['merged_25'].class_list()       # 25 classes
-labels_35 = TAXONOMIES['raw_35'].class_list()           # 35 classes
+labels_35 = TAXONOMIES['raw_35'].class_list()          # 35 classes
 ```
+
+### Loading clip frames (video-Dataset pattern)
+
+Any `Dataset` that needs per-clip video frames should use `pipeline.clip_index.build_clip_path_index` to get an O(1) `clip_stem -> Path` lookup once at `__init__` against the still-nested clips dir, then pair it with a CSV-driven split + label. Skeleton:
+
+```python
+import pandas as pd
+from torch.utils.data import Dataset
+
+from pipeline.clip_index import build_clip_path_index
+from pipeline.config import CLIPS_OUTPUT_DIR, TAXONOMIES
+
+class ClipVideoDataset(Dataset):
+    def __init__(self, clips_csv, split_column, taxonomy_name,
+                 split='train', clips_dir=CLIPS_OUTPUT_DIR):
+        df = pd.read_csv(clips_csv)
+        df = df[df[split_column] == split]
+        taxonomy = TAXONOMIES[taxonomy_name]
+        self._path_by_stem = build_clip_path_index(clips_dir)
+        self.items = [
+            (row.clip_stem, _derive_label(row, taxonomy))
+            for row in df.itertuples()
+        ]
+
+    def __len__(self):
+        return len(self.items)
+
+    def __getitem__(self, i):
+        stem, label = self.items[i]
+        return load_video(self._path_by_stem[stem]), label
+```
+
+`_derive_label` applies `taxonomy.merge_map` + `standalone_set` to `(row.raw_type_en, row.player_side)`, matching what `collate_npy` does for the pose/shuttle npys (see `stroke_classification/preparing_data/prepare_train_on_shuttleset.py`). Pick your own video backend (cv2, decord, torchvision.io) for `load_video`.
+
+This pattern means the nested clips layout is transparent: the same `ClipVideoDataset` works for any `split_column` in `clips_master.csv` without needing to flatten or reorganize `clips/`.
+
+### Higher-level access (`pipeline/data_access.py`)
+
+For ad-hoc "give me the clip / shuttle / mmpose paths for this split and this class" queries, `pipeline.data_access` wraps the CSV read + `build_clip_path_index` + flat-path resolution in one call:
+
+```python
+from pipeline.data_access import DataPaths, get_clip_records
+
+records = get_clip_records(
+    DataPaths(),
+    split='train',
+    taxonomy_class='Top_smash',
+    split_column='split_v2',
+    taxonomy_name='une_merge_v1',
+    drop_unknown=True,
+)
+for r in records:
+    print(r.clip_stem, r.clip, r.shuttle_npy, r.mmpose_joints)
+```
+
+`DataPaths` resolves paths in priority order: constructor arg > environment variable (or `.env` file entry: `BST_CLIPS_DIR`, `BST_SHUTTLE_NPY_DIR`, `BST_MMPOSE_NPY_DIR`, `BST_CLIPS_CSV`) > `pipeline.config` defaults. Copy `.env.example` at the repo root to `.env` to pin paths per environment.
+
+CLI + TUI for quick inspection:
+
+```bash
+python -m pipeline.data_access --summary                        # counts per split+class
+python -m pipeline.data_access --split val --class Top_smash    # list paths
+python -m pipeline.data_access --split-column split_v2 --summary
+python -m pipeline.data_access --list-classes                   # active taxonomy's classes
+python -m pipeline.data_access                                   # interactive TUI
+```
+
+`clip_index.build_clip_path_index` remains the zero-dep pathlib helper for Datasets that just need `{stem -> Path}`; `data_access` is the CSV-aware layer above it.

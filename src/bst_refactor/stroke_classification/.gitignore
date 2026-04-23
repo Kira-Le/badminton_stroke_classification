@@ -1,0 +1,40 @@
+# Model weights for the stroke_classification subtree.
+# Scoped here (not the repo-root .gitignore) so per-run tactical unignores
+# don't clutter the global file as more runs pile up.
+
+# Run layout: main_on_shuttleset/experiments/<run_id>/.
+# manifest.yaml, best_model_id.txt, and TB event files stay tracked (all
+# small, source of truth for hparams + results + training curves). Only
+# weights (large) are ignored by default; tactical unignores below pick the
+# best checkpoint per run.
+main_on_shuttleset/experiments/*/weights/*
+
+# Aim experiment tracker cache (optional UI, local only; created in cwd when
+# aim_backfill.py or `aim up` runs from main_on_shuttleset/).
+main_on_shuttleset/.aim/
+
+# Best checkpoints per run (tactical unignores).
+
+# bst_cg_ap_base_17_04_2026: pre-tracker baseline (paper hyperparams + TrackNetV3 WITH inpaint). S2 best.
+!main_on_shuttleset/experiments/bst_cg_ap_base_17_04_2026/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25_2.pt
+
+# run_20260417_191851: retuned-LR baseline, 120 epochs, no CG/AP anneal. S1 best on every metric.
+!main_on_shuttleset/experiments/run_20260417_191851/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25.pt
+
+# run_20260418_104152: first CG/AP anneal pass, 120ep / fade end 60. S3 best on every metric.
+!main_on_shuttleset/experiments/run_20260418_104152/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25_3.pt
+
+# run_20260418_151139: aggressive CG/AP anneal, 80ep / fade end 15. S2 best (top accuracy 0.850, macro F1 0.831).
+!main_on_shuttleset/experiments/run_20260418_151139/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25_2.pt
+
+# run_20260418_174238: Run A paired control, CG/AP on throughout, 80ep. S3 best (macro F1 0.828, min F1 0.603).
+!main_on_shuttleset/experiments/run_20260418_174238/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25_3.pt
+
+# run_20260418_234822: Run B null arm, CG/AP always off, 80ep. S2 best (macro F1 0.830, accuracy 0.842).
+!main_on_shuttleset/experiments/run_20260418_234822/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25_2.pt
+
+# run_20260420_141629: V3 ablation, une_merge_v1 + bst baseline split + drop_unknown, 80ep. S3 best (macro 0.772, min 0.381, acc 0.791).
+!main_on_shuttleset/experiments/run_20260420_141629/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_3.pt
+
+# run_20260420_171101: V4 ablation, une_merge_v1 + split_v2 + drop_unknown, 80ep. S2 best (macro 0.743, min 0.432, acc 0.766).
+!main_on_shuttleset/experiments/run_20260420_171101/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_2.pt
