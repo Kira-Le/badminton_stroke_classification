@@ -253,12 +253,16 @@ def _pick_one_frame(
     return picks, court_base_pos, kps_f, bboxes_f
 
 
-def apply(raw: RawClip, ctx: ClipContext, **hyperparams) -> HeuristicOutput:
-    """Apply the sticky_anchor heuristic to a raw clip."""
-    from preparing_data.prepare_train_on_shuttleset import (  # noqa: PLC0415
-        normalize_joints,
-    )
+def _run_clip(
+    raw: RawClip, ctx: ClipContext, normalize_joints, **hyperparams,
+) -> tuple[HeuristicOutput, np.ndarray]:
+    """Drive the per-frame loop and return ``(output, ema_history)``.
 
+    ``normalize_joints`` is injected so the caller controls how keypoints
+    are normalised. ``ema_history`` has shape ``(F, 2, 2)`` and records the
+    post-update EMA at the end of every frame; the public ``apply`` wrapper
+    discards it, tests use it.
+    """
     prior_weight = hyperparams.get("prior_weight", 0.75)
     ema_alpha = hyperparams.get("ema_alpha", 0.1)
     sanity_ceiling = hyperparams.get("sanity_ceiling", 0.6)
@@ -275,6 +279,7 @@ def apply(raw: RawClip, ctx: ClipContext, **hyperparams) -> HeuristicOutput:
     failed = np.zeros(num_frames, dtype=bool)
     pos = np.zeros((num_frames, 2, 2), dtype=np.float64)
     joints = np.zeros((num_frames, 2, J, 2), dtype=np.float64)
+    ema_history = np.zeros((num_frames, 2, 2), dtype=np.float64)
 
     # Per-slot EMA, initialised to halfcourt_centre.
     ema = halfcourt_centre.copy()
@@ -292,6 +297,7 @@ def apply(raw: RawClip, ctx: ClipContext, **hyperparams) -> HeuristicOutput:
         if result is None:
             failed[f] = True
             ema[:] = halfcourt_centre
+            ema_history[f] = ema
             continue
 
         picks, court_base_pos, kps_f, bboxes_f = result
@@ -316,5 +322,16 @@ def apply(raw: RawClip, ctx: ClipContext, **hyperparams) -> HeuristicOutput:
                 ema[s] = ema_alpha * cbp + (1 - ema_alpha) * ema[s]
 
         failed[f] = frame_has_zero
+        ema_history[f] = ema
 
-    return HeuristicOutput(pos=pos, joints=joints, failed=failed)
+    return HeuristicOutput(pos=pos, joints=joints, failed=failed), ema_history
+
+
+def apply(raw: RawClip, ctx: ClipContext, **hyperparams) -> HeuristicOutput:
+    """Apply the sticky_anchor heuristic to a raw clip."""
+    from preparing_data.prepare_train_on_shuttleset import (  # noqa: PLC0415
+        normalize_joints,
+    )
+
+    output, _ema_history = _run_clip(raw, ctx, normalize_joints, **hyperparams)
+    return output
