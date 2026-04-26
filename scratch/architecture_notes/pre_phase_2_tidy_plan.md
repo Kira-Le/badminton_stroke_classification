@@ -411,6 +411,41 @@ This is why bare imports like `from bst_common import build_bst_network` (in `bs
 
 **Status:** Deferred until the user has signed off on the current bit-exact smoke results. Then runs as a standalone follow-up commit (or sibling branch, depending on preferred review surface) before X3D-S work begins.
 
+### Step Q (lint-debt cleanup — deferred follow-up after step P)
+
+**Surfaced 2026-04-26 from a noqa audit across the last week's commits.**
+
+Tally of noqa additions across recent branches: 30 occurrences. The dominant chunk (~22 of 30) is collateral damage from the no-`__init__.py`/sys.path-hack pattern step P fixes: every `# noqa: E402` (`module-level-import-not-at-top-of-file`) sits below a `sys.path.append(...)` block, and several `# noqa: PLC0415` (`import-outside-top-level`) sit on imports that were forced inside functions because the sys.path setup needed to run first. **Step P removes all of those automatically.**
+
+The remainder is real lint debt that step P does *not* fix. Step Q audits the survivors:
+
+1. **`pipeline.data_access` side-effect import** in `apply_heuristic.py`:
+   ```python
+   import pipeline.data_access  # noqa: E402,F401
+   ```
+   Imported only to trigger `.env` loading on first import — F401 fires because the imported name is unused. Replace with an explicit `pipeline.data_access.load_dotenv_for_env_overrides()` (or whatever the function is named once exposed) and call it directly. Removes the noqa and ends an opaque import-for-side-effect pattern.
+
+2. **`BLE001` (broad-exception) suppressions, ~2 occurrences:**
+   ```python
+   except Exception:  # noqa: BLE001
+   ```
+   Audit each site, narrow to specific exception types where possible, or keep `except Exception` with a comment justifying the broad catch. The lint rule is correct that bare-Exception catches are rarely the intent.
+
+3. **`PLC0415` lazy-import audit in `sticky_anchor.py`:**
+   - `_compute_halfcourt_centres` line 88: `from pipeline.court_utils import normalize_position`
+   - `_project_bbox_bottom_centre` line 111: `from pipeline.court_utils import normalize_position, to_court_coordinate`
+   - `apply()` line 334: `from preparing_data.prepare_train_on_shuttleset import normalize_joints`
+
+   The third is a deliberate mmpose-isolation pattern (loading `prepare_train_on_shuttleset` triggers MMPose at import time, which would force every heuristic-package consumer to install MMPose even when they don't need it). Add a one-line comment explaining why the import is deferred. Investigate whether the first two have a similar justification or whether they can lift to module top safely; if they can, lift them and drop the noqas.
+
+4. **General principle going forward:** treat `# noqa` as a tool of last resort. When ruff complains, default-ask is "is the lint rule correct?" before silencing. Most of the time it is.
+
+**Blast radius:** small. Items 1 + 2 each touch one or two files. Item 3 touches `sticky_anchor.py` only.
+
+**Cost:** ~20-30 min total.
+
+**Status:** Deferred to follow step P. Ordered after P because step P first eliminates the bulk of the noqa weight, leaving items 1-3 as the ones genuinely worth auditing per-site.
+
 ---
 
 ## Sticky_anchor Tier 1 test list
