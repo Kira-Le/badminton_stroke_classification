@@ -1,5 +1,4 @@
-# Consolidated BST training script for ShuttleSet
-# Replaces: bst_main.py, bst_main_summary_writer.py, bst_backbone_main.py
+# BST training script for ShuttleSet.
 #
 # PyTorch training loop overview (differs significantly from TF/Keras):
 #   TF:      model.compile(optimizer, loss) -> model.fit(data)  (one line trains everything)
@@ -49,14 +48,11 @@ DEFAULT_CLIPS_CSV = REPO_ROOT / 'notebooks' / 'clips_master.csv'
 
 # ==========================================================================
 # Hyperparameters — edit these to change experiment configuration.
-# namedtuple is just an immutable struct: hyp.lr, hyp.batch_size, etc.
+# Active LR + aux schedule rationale: scratch/architecture_notes/arch_1_directions.md.
+# Dated retune history: scratch/architecture_notes/historical_bst.md section 3.
 # ==========================================================================
-# Data-source knobs (clips_csv, split_column, drop_unknown, ablation_id) feed
-# scratch/architecture_notes/completed_general_refactors/dir_flatten_refactor.md
-# Phase 1: collation reads split + label from
-# the master CSV instead of the on-disk folder layout. ablation_id tags the
-# collated dir so multiple ablations don't collide; it defaults to a tuple of
-# (taxonomy, split_column, drop_unknown) when None.
+# ablation_id tags the collated dir so multiple ablations don't collide;
+# it defaults to a tuple of (taxonomy, split_column, drop_unknown) when None.
 Hyp = namedtuple('Hyp', [
     'n_epochs', 'batch_size', 'lr', 'warm_up_step',
     'taxonomy', 'seq_len', 'early_stop_n_epochs',
@@ -64,81 +60,23 @@ Hyp = namedtuple('Hyp', [
     'use_aux_schedule', 'aux_fade_end_epoch',
     'clips_csv', 'split_column', 'drop_unknown', 'ablation_id',
 ])
-# --------------------------------------------------------------------------
-# LR-SCHEDULE RETUNE (2026-04-17)
-# --------------------------------------------------------------------------
-# The original BST recipe used n_epochs=1600, warm_up_step=400, patience=300,
-# with a cosine scheduler at num_cycles=0.25 (see line below). In practice
-# on ShuttleSet + merged_25, the TB log from run Apr17_13-04-35 showed:
-#     - best F1_macro 0.8311 at epoch 41
-#     - best F1_min   0.6250 at epoch 53
-#     - best Val_loss 1.0032 at epoch 27
-#     - training stopped at epoch 341 (patience fired)
-# Convergence is well before epoch 60. At n_epochs=1600, num_cycles=0.25,
-# the LR is still ~99.98% of peak at epoch 41, so cosine decay never
-# actually bites during the useful window — the model just drifts under
-# near-peak LR for hundreds of epochs and overfits.
-# Retuned values (active block below) match the schedule to observed
-# convergence: ~4-epoch warmup, short cosine that reaches 0 at the end,
-# and patience tightened to 40 epochs to stay meaningful at the new
-# length. n_epochs has since been shortened again (120 -> 80) to pair
-# with the AUX-SCHEDULE block; see that block for rationale. The old
-# values are preserved (commented) for easy revert.
-# --------------------------------------------------------------------------
-# AUX-SCHEDULE (CG/AP warm-start-to-fade)
-# --------------------------------------------------------------------------
-# Hypothesis: Clean Gate and Aim Player are heuristics. They accelerate
-# early convergence while the LR is hot, but they also constrain the
-# representation the transformer backbone can learn. Annealing them out
-# during training should let the backbone find a richer representation.
-#
-# Implementation: a scalar aux_factor in [0, 1] scales CG's dirt subtraction
-# and blends AP's alpha multipliers toward pass-through (1.0). The schedule
-# is cosine from epoch 1 (factor=1.0) to aux_fade_end_epoch (factor=0.0),
-# then pinned at 0 for the rest of training (pure-backbone phase).
-#
-# Knobs (both below in the hyp block):
-#   use_aux_schedule  -- False pins factor at 1.0 all run, reproducing the
-#                        unscheduled BST_CG_AP baseline exactly.
-#   aux_fade_end_epoch -- epoch at which the factor first reaches 0. Set
-#                         well below n_epochs to guarantee a long pure-
-#                         backbone tail. At 15 with n_epochs=80: warm-start
-#                         is ~20% of training, then 65 epochs of pure-
-#                         backbone at cooling LR — framed as warm-start
-#                         then finetune. A prior 60/120 schedule put peaks
-#                         inside the fade window (factor still 0.6-0.74 at
-#                         pick time for 2 of 3 seeds), which diluted the
-#                         signal into noise; the only seed that picked deep
-#                         in the fade (factor ~0.1) showed the hoped-for
-#                         min-F1 lift.
-#
-# CG and AP currently share one factor (set_schedule_factors passes the
-# same value to both). If a later ablation wants independent fade timing,
-# split into cg_fade_end_epoch and ap_fade_end_epoch and pass two values
-# through aux_schedule_factor into set_schedule_factors.
-#
-# Test-time behaviour: the best checkpoint captures cg_factor and ap_factor
-# as buffers in state_dict. task.test() runs forward with those restored
-# values, so the final test metric reflects whichever factor was active at
-# the best-F1 epoch. Nothing forces them to 0 or 1 at test time.
-# --------------------------------------------------------------------------
 hyp = Hyp(
-    n_epochs=80,              # compressed warm-start-then-finetune schedule
-    early_stop_n_epochs=40,   # patience ~half the run
+    n_epochs=80,
+    early_stop_n_epochs=40,
     batch_size=128,
-    lr=5e-4,                  # initial learning rate (cosine-annealed during training)
-    warm_up_step=100,         # was 400 — ~4 epochs of warmup instead of ~17
-    taxonomy='une_merge_v1_nosides',   # V3 ablation: 29-class scheme, unknown dropped.
-    seq_len=100,              # frames per sample (must match data preprocessing)
-    pose_style='JnB_bone',   # 'J_only'=joints, 'JnB_bone'=joints+bones, 'Jn2B'=joints+2xbones
-    use_3d_pose=False,        # True for xyz keypoints, False for xy only
-    train_partial=1.0,        # fraction of training set to use (1.0 = all)
-    use_aux_schedule=True,    # Aggressive CG/AP annealing — matches preferred config from run_20260418_151139.
-    aux_fade_end_epoch=15,    # cosine fade 1.0 -> 0.0 over epochs 1-15, then ~65 ep pure backbone (best mean macro F1)
-    clips_csv=str(DEFAULT_CLIPS_CSV),  # master CSV used to collate the npy arrays this run reads
-    split_column='split_v2',  # 'split_bst_baseline' or 'split_v2'
-    drop_unknown=True,                 # mirror baseline; ablations 1+2 set this True
-    ablation_id='une_merge_v1_nosides_split_v2_dropunk_h_sticky_anchor',                   # auto-derived from (taxonomy, split_column, drop_unknown) if None
+    lr=5e-4,
+    warm_up_step=100,
+    taxonomy='une_merge_v1_nosides',
+    seq_len=100,
+    pose_style='JnB_bone',
+    use_3d_pose=False,
+    train_partial=1.0,
+    use_aux_schedule=True,
+    aux_fade_end_epoch=15,
+    clips_csv=str(DEFAULT_CLIPS_CSV),
+    split_column='split_v2',
+    drop_unknown=True,
+    ablation_id='une_merge_v1_nosides_split_v2_dropunk_h_sticky_anchor',
 )
 
 
