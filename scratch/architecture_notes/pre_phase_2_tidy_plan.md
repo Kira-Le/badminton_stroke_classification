@@ -39,7 +39,7 @@ All 12 planned commits land on `pre-phase-2-tidy` (origin tip: `25e0308`):
 | Byte-identity gate (50-clip hit-zone) | ✅ PASS | 50/50 stems exact, max abs diff 0.0 on `_pos`/`_joints` |
 | `pytest tests/` with `BST_DATA_DIR` set | ✅ PASS | 43/43 (after `57655aa` fixed pre-existing env mismatches) |
 | 2-epoch smoke train comparison | ✅ PASS | `run_20260426_115321` (post-tidy) vs `run_20260426_120039` (main); curves within run-to-run noise; manifest `config:` and `data_provenance.npy_collated_dir` byte-identical |
-| `bst_infer` bit-exact (smoke_infer_bit_exact.py) | ⏳ PENDING | smoke script just unblocked by `25e0308`; user is rerunning |
+| `bst_infer` bit-exact (smoke_infer_bit_exact.py) | ✅ PASS | 4202/4202 predictions IDENTICAL between post-tidy and main (run on engelbart 2026-04-26 with `CUBLAS_WORKSPACE_CONFIG=:4096:8`) |
 | `prepare_2d` bit-exact (smoke_prepare_2d_bit_exact.py) | ⚪ OPTIONAL | mechanical lift; behaviourally identical by construction; only worth running for belt-and-braces coverage |
 
 ### Branch destination
