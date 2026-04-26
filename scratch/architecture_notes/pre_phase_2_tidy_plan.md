@@ -40,7 +40,7 @@ All 12 planned commits land on `pre-phase-2-tidy` (origin tip: `25e0308`):
 | `pytest tests/` with `BST_DATA_DIR` set | ✅ PASS | 43/43 (after `57655aa` fixed pre-existing env mismatches) |
 | 2-epoch smoke train comparison | ✅ PASS | `run_20260426_115321` (post-tidy) vs `run_20260426_120039` (main); curves within run-to-run noise; manifest `config:` and `data_provenance.npy_collated_dir` byte-identical |
 | `bst_infer` bit-exact (smoke_infer_bit_exact.py) | ✅ PASS | 4202/4202 predictions IDENTICAL between post-tidy and main (run on engelbart 2026-04-26 with `CUBLAS_WORKSPACE_CONFIG=:4096:8`) |
-| `prepare_2d` bit-exact (smoke_prepare_2d_bit_exact.py) | ⚪ OPTIONAL | mechanical lift; behaviourally identical by construction; only worth running for belt-and-braces coverage |
+| `prepare_2d` bit-exact (line-by-line diff review) | ✅ PASS | Per-line behavioural diff between pre-tidy and post-tidy `prepare_2d`/`prepare_3d`/`_prepare_dataset_from_raw_video` confirms bit-exact-by-construction: same iteration order, same resume marker, same kwargs forwarded to `detect_players_2d`/`3d`, same save order, same gc/empty_cache cadence. Pure structural deduplication, no behavioural delta possible. The `smoke_prepare_2d_bit_exact.py` GPU-runtime check is therefore redundant. |
 
 ### Branch destination
 
