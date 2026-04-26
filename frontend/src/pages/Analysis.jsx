@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import { RadioButtonGroup } from '../components'
+import { Button, RadioButtonGroup } from '../components'
+
+import style from './Analysis.module.css'
+
+import video from '../assets/file_example_MP4_1920_18MG.mp4'
 
 const API_BASE = 'http://127.0.0.1:8000'
 
@@ -52,16 +56,26 @@ export default function Analysis() {
     return (
         <>
           <h1>Analysis</h1>
-          {models.length === 0
+          <div className={style.layout}>
+            <div className={style.video_player}>
+              <video controls width="100%" className={style.videoPlayer} src={video}></video>
+            </div>
+            <div className={style.input_group}>
+              <Button>Identify court</Button>
+              <Button>Identify target player</Button>
+              {models.length === 0
               ? <p>Loading models...</p>
               : <RadioButtonGroup
-              label="Select a model: "
+              label="Choose classification model: "
               options={models}
               onChange={radioGroupHandler}
               name="model-selection"
               />
-          }
-          <div>Stroke classification is: {status}</div>
+              }
+              <Button>Classify stroke</Button>
+              <div>Stroke classification is: {status}</div>
+            </div>
+          </div>
         </>
 
     )

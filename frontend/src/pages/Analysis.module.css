@@ -1,0 +1,15 @@
+/* Source for building video player: https://dev.to/documatic/building-a-video-player-in-react-1mlf */
+
+.layout {
+    display: flex;
+    gap: 2rem;
+    align-items:flex-start;
+}
+
+.video_player {
+    border: 1px solid white;
+}
+
+.input_group {
+    min-width: 25%;
+}
