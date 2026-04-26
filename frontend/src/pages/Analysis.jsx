@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+
 import { RadioButtonGroup } from '../components'
 
 const API_BASE = 'http://127.0.0.1:8000'
@@ -6,6 +8,7 @@ const API_BASE = 'http://127.0.0.1:8000'
 export default function Analysis() {
     const [models, setModels] = useState([])
     const [status, setStatus] = useState('')
+    const navigate = useNavigate()
     
     // Run once on page load, to get available models
     useEffect(() => {
@@ -38,6 +41,7 @@ export default function Analysis() {
                 console.log(json.status)
                 if (json.status === "complete") {
                     clearInterval(interval) // stop polling
+                    navigate("/results")
                 }
               })
               .catch((error) => console.error('Error fetching data: ', error))

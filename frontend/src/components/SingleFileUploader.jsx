@@ -1,5 +1,6 @@
 // Adapted from: https://uploadcare.com/blog/how-to-upload-file-in-react/
 import { useState, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Upload } from 'lucide-react'
 import { Button } from '.'
 
@@ -10,6 +11,7 @@ const SingleFileUploader = () => {
     const [status, setStatus] = useState('initial')
     const [dragging, setDragging] = useState(false)
     const inputRef = useRef(null)
+    const navigate = useNavigate()
     
     const handleFileChange = (e) => {
         if (e.target.files) {
@@ -56,6 +58,7 @@ const SingleFileUploader = () => {
 
             console.log(data)
             setStatus('success')
+            setTimeout(() => navigate("/analysis"), 1000)
             } catch (error) {
                 console.error(error)
                 setStatus('fail')

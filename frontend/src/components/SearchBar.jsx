@@ -1,7 +1,8 @@
 // Source: Create a React search component in 8 minutes https://youtu.be/M9jJw_xn79U
 // https://tomdekan.com/articles/react-search-bar?ref=ty
 
-import {useState, useCallback, useEffect} from 'react'
+import { useState, useCallback, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Search, Mic } from 'lucide-react'
 
 import style from './SearchBar.module.css' // Generated with claude.ai based on tailwinds styling from Search Bar example referenced above
@@ -11,27 +12,22 @@ const sampleData = [
   {
     id: 1,
     title: 'Kento_MOMOTA_CHOU_Tien_Chen_Fuzhou_Open_2019_Finals',
-    url: 'https://www.youtube.com/watch?v=O669aZhH0LI',
   },
   {
     id: 2,
     title: 'CHEN_Long_CHOU_Tien_Chen_World_Tour_Finals_Group_Stage',
-    url: 'https://www.youtube.com/watch?v=-aOI9_JxoWc',
   },
   {
     id: 3,
     title: 'Kento_MOMOTA_CHOU_Tien_Chen_KOREA_OPEN_2019_Final',
-    url: 'https://www.youtube.com/watch?v=eugfCRwSBJo',
   },
   {
     id: 4,
     title: 'CHEN_Long_CHOU_Tien_Chen_Denmark_Open_2019_QuarterFinal',
-    url: 'https://www.youtube.com/watch?v=y6QbtrTV-K0',
   },
   {
     id: 5,
     title: 'Kento_MOMOTA_CHOU_Tien_Chen_Fuzhou_Open_2018_Finals',
-    url: 'https://www.youtube.com/watch?v=xhUi2KpmVkI',
   },
 ]
 // End of sampleData to be removed
@@ -39,6 +35,7 @@ const sampleData = [
 const SearchBar = () => {
     const [searchTerm, setSearchTerm] = useState('')
     const [searchResults, setSearchResults] = useState([])
+    const navigate = useNavigate()
 
     const debounce = (func, delay) => {
         let timeoutId
@@ -104,7 +101,7 @@ const SearchBar = () => {
             </form>{' '}
             {searchResults.length > 0 && (
                 <div className={style.results}>
-                    <h2 className={style.reesultsHeading}> Search Results: </h2>{' '}
+                    <h2 className={style.resultsHeading}> Search Results: </h2>{' '}
                     <ul className={style.resultsList}>
                         {' '}
                         {searchResults.map((result) => (
@@ -114,6 +111,7 @@ const SearchBar = () => {
                                 className={style.resultsLink}
                                 target="_blank"
                                 rel="noopener noreferrer"
+                                onClick={() => navigate("/analysis")}
                                 >
                                     {' '}
                                     {result.title}{' '}
