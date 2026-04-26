@@ -47,6 +47,9 @@ def apply(raw: RawClip, ctx: ClipContext, **_hyperparams) -> HeuristicOutput:
     ``_hyperparams`` is accepted and ignored so the CLI can pass the
     sticky_anchor hyperparam block uniformly to every registered variant.
     """
+    # Lazy import: prepare_train_on_shuttleset pulls in mmpose at module
+    # load. Deferring keeps the heuristic package importable in venvs
+    # without the mmpose stack.
     from preparing_data.prepare_train_on_shuttleset import (  # noqa: PLC0415
         check_pos_in_court,
         normalize_joints,

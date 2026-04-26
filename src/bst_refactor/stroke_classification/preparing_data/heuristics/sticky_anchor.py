@@ -39,9 +39,32 @@ section of ``scratch/architecture_notes/mmpose_heuristic/mmpose_heuristic_invest
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 
+from pipeline.court_utils import normalize_position, to_court_coordinate
+
 from .base import ClipContext, HeuristicOutput, RawClip
+
+
+@dataclass(frozen=True)
+class StickyAnchorParams:
+    """Hyperparameters for the sticky_anchor heuristic.
+
+    Single source of truth: ``apply_heuristic.py`` derives its argparse
+    ``--<field>`` block from these fields, and ``apply`` constructs an
+    instance from any keyword overrides at the registry boundary.
+    """
+    prior_weight: float = 0.75
+    ema_alpha: float = 0.1
+    sanity_ceiling: float = 0.6
+    generous_margin: float = 0.15
+    score_filter: float = 0.2
+    tiebreaker_tol: float = 0.05
+    sitting_threshold: float = -0.3
+    update_gate_eps: float = 0.01
+
 
 J = 17
 SLOT_TOP = 0
@@ -64,8 +87,6 @@ def _compute_halfcourt_centres(court_info: dict) -> np.ndarray:
     non-ShuttleSet canonical rectangle. For ShuttleSet the formula
     collapses to the constants above.
     """
-    from pipeline.court_utils import normalize_position  # noqa: PLC0415
-
     bL, bR = court_info["border_L"], court_info["border_R"]
     bU, bD = court_info["border_U"], court_info["border_D"]
 
@@ -87,8 +108,6 @@ def _project_bbox_bottom_centre(
 
     Uses bbox bottom-centre ``((x1+x2)/2, y2)`` as the foot proxy.
     """
-    from pipeline.court_utils import normalize_position, to_court_coordinate  # noqa: PLC0415
-
     x1, _, x2, y2 = bboxes.T
     bottom_centres = np.stack([(x1 + x2) / 2, y2], axis=0)  # (2, n)
     court = to_court_coordinate(
@@ -131,13 +150,7 @@ def _pick_one_frame(
     ema: np.ndarray,
     halfcourt_centre: np.ndarray,
     ctx: ClipContext,
-    *,
-    prior_weight: float,
-    sanity_ceiling: float,
-    generous_margin: float,
-    score_filter: float,
-    tiebreaker_tol: float,
-    sitting_threshold: float,
+    params: StickyAnchorParams,
 ) -> tuple[list[int], np.ndarray, np.ndarray, np.ndarray] | None:
     """Pick (Bottom, Top) detections for a single frame.
 
@@ -158,7 +171,7 @@ def _pick_one_frame(
 
     # Step A: score filter on real detections.
     scores_f = raw.scores[f, :n]
-    pass_score = scores_f > score_filter
+    pass_score = scores_f > params.score_filter
     if not pass_score.any():
         return None
 
@@ -181,7 +194,7 @@ def _pick_one_frame(
 
     # Step B: effective anchors + full distance matrix.
     effective_anchor = (
-        prior_weight * halfcourt_centre + (1 - prior_weight) * ema
+        params.prior_weight * halfcourt_centre + (1 - params.prior_weight) * ema
     )  # (2, 2); row = slot
     # Outer-difference via broadcasting: (k, 1, 2) against (1, 2, 2)
     # broadcasts to (k, 2, 2); L2 over the last axis collapses to (k, 2).
@@ -195,7 +208,7 @@ def _pick_one_frame(
     # vectorised per-candidate cost is trivial. Eager removes one more
     # place to get an off-by-one wrong when slicing into the tiebreaker.
     is_sitting = np.array(
-        [_is_sitting(kps_f[i], sitting_threshold) for i in range(k)],
+        [_is_sitting(kps_f[i], params.sitting_threshold) for i in range(k)],
         dtype=bool,
     )
     x1, y1, x2, y2 = bboxes_f.T
@@ -206,7 +219,7 @@ def _pick_one_frame(
     for s in SLOT_ORDER:
         other = OTHER_SLOT[s]
 
-        within_sanity = distances[:, s] <= sanity_ceiling
+        within_sanity = distances[:, s] <= params.sanity_ceiling
         # Closer-to-own-anchor rule (Voronoi partition): keep candidates
         # where the own slot's anchor is closer than/equidistant to the other slot's.
         # Equality passes both slots; Bottom-first order resolves any tie.
@@ -227,7 +240,7 @@ def _pick_one_frame(
 
         # Tiebreaker: any other eligible within tiebreaker_tol.
         tied = eligible & (
-            np.abs(distances[:, s] - winner_d) < tiebreaker_tol
+            np.abs(distances[:, s] - winner_d) < params.tiebreaker_tol
         )
         if tied.sum() > 1:
             standing_tied = tied & ~is_sitting
@@ -242,8 +255,8 @@ def _pick_one_frame(
     if picks[SLOT_TOP] >= 0 and picks[SLOT_BOTTOM] >= 0:
         top_p = court_base_pos[picks[SLOT_TOP]]
         bot_p = court_base_pos[picks[SLOT_BOTTOM]]
-        if not _in_generous_court(top_p, generous_margin) and not _in_generous_court(
-            bot_p, generous_margin
+        if not _in_generous_court(top_p, params.generous_margin) and not _in_generous_court(
+            bot_p, params.generous_margin
         ):
             return None
 
@@ -253,21 +266,16 @@ def _pick_one_frame(
     return picks, court_base_pos, kps_f, bboxes_f
 
 
-def apply(raw: RawClip, ctx: ClipContext, **hyperparams) -> HeuristicOutput:
-    """Apply the sticky_anchor heuristic to a raw clip."""
-    from preparing_data.prepare_train_on_shuttleset import (  # noqa: PLC0415
-        normalize_joints,
-    )
+def _run_clip(
+    raw: RawClip, ctx: ClipContext, normalize_joints, params: StickyAnchorParams,
+) -> tuple[HeuristicOutput, np.ndarray]:
+    """Drive the per-frame loop and return ``(output, ema_history)``.
 
-    prior_weight = hyperparams.get("prior_weight", 0.75)
-    ema_alpha = hyperparams.get("ema_alpha", 0.1)
-    sanity_ceiling = hyperparams.get("sanity_ceiling", 0.6)
-    generous_margin = hyperparams.get("generous_margin", 0.15)
-    score_filter = hyperparams.get("score_filter", 0.2)
-    tiebreaker_tol = hyperparams.get("tiebreaker_tol", 0.05)
-    sitting_threshold = hyperparams.get("sitting_threshold", -0.3)
-    update_gate_eps = hyperparams.get("update_gate_eps", 0.01)
-
+    ``normalize_joints`` is injected so the caller controls how keypoints
+    are normalised. ``ema_history`` has shape ``(F, 2, 2)`` and records the
+    post-update EMA at the end of every frame; the public ``apply`` wrapper
+    discards it, tests use it.
+    """
     court_info = ctx.all_court_info[ctx.vid]
     halfcourt_centre = _compute_halfcourt_centres(court_info)  # (2, 2)
 
@@ -275,23 +283,17 @@ def apply(raw: RawClip, ctx: ClipContext, **hyperparams) -> HeuristicOutput:
     failed = np.zeros(num_frames, dtype=bool)
     pos = np.zeros((num_frames, 2, 2), dtype=np.float64)
     joints = np.zeros((num_frames, 2, J, 2), dtype=np.float64)
+    ema_history = np.zeros((num_frames, 2, 2), dtype=np.float64)
 
     # Per-slot EMA, initialised to halfcourt_centre.
     ema = halfcourt_centre.copy()
 
     for f in range(num_frames):
-        result = _pick_one_frame(
-            raw, f, ema, halfcourt_centre, ctx,
-            prior_weight=prior_weight,
-            sanity_ceiling=sanity_ceiling,
-            generous_margin=generous_margin,
-            score_filter=score_filter,
-            tiebreaker_tol=tiebreaker_tol,
-            sitting_threshold=sitting_threshold,
-        )
+        result = _pick_one_frame(raw, f, ema, halfcourt_centre, ctx, params)
         if result is None:
             failed[f] = True
             ema[:] = halfcourt_centre
+            ema_history[f] = ema
             continue
 
         picks, court_base_pos, kps_f, bboxes_f = result
@@ -312,9 +314,28 @@ def apply(raw: RawClip, ctx: ClipContext, **hyperparams) -> HeuristicOutput:
                 v_height=None,
                 center_align=True,
             )[0]
-            if _in_generous_court(cbp, update_gate_eps):
-                ema[s] = ema_alpha * cbp + (1 - ema_alpha) * ema[s]
+            if _in_generous_court(cbp, params.update_gate_eps):
+                ema[s] = params.ema_alpha * cbp + (1 - params.ema_alpha) * ema[s]
 
         failed[f] = frame_has_zero
+        ema_history[f] = ema
 
-    return HeuristicOutput(pos=pos, joints=joints, failed=failed)
+    return HeuristicOutput(pos=pos, joints=joints, failed=failed), ema_history
+
+
+def apply(raw: RawClip, ctx: ClipContext, **hyperparams) -> HeuristicOutput:
+    """Apply the sticky_anchor heuristic to a raw clip.
+
+    Keeps the registry-contract ``apply(raw, ctx, **kw)`` signature; the
+    ``StickyAnchorParams`` instance is constructed at this boundary.
+    """
+    # Lazy import: prepare_train_on_shuttleset pulls in mmpose at module
+    # load. Deferring keeps tests/test_sticky_anchor.py runnable without
+    # the mmpose stack.
+    from preparing_data.prepare_train_on_shuttleset import (  # noqa: PLC0415
+        normalize_joints,
+    )
+
+    params = StickyAnchorParams(**hyperparams)
+    output, _ema_history = _run_clip(raw, ctx, normalize_joints, params)
+    return output

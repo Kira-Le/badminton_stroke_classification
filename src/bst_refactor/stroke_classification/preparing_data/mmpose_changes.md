@@ -58,9 +58,10 @@ Added `gc.collect()` + `torch.cuda.empty_cache()` after each clip in both the 2D
 - Added module-level docstring (lines 1-11)
 - Added docstring to `prepare_2d_dataset_npy_from_raw_video()`
 - Import path changes for `pipeline.config` integration
-- `sys.path` setup for running as `python -m preparing_data.prepare_train_on_shuttleset`
 - Expanded comment on the 3D inferencer per-clip reload bug workaround (lines 320-326)
 - Refactored `detect_players_2d()` from nested if-else to early-return with `continue` (functionally identical)
+
+The earlier `if __name__ == '__main__': sys.path.append(...)` scaffolding for `python -m preparing_data.prepare_train_on_shuttleset` was removed by the pre-phase-2 proper-packages refactor (step P). The new invocation expects `PYTHONPATH=src/bst_refactor:src/bst_refactor/stroke_classification` (the same pair `conftest.py` uses for tests) and is documented in the script's module docstring.
 
 ---
 
