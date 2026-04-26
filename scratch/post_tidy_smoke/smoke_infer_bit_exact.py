@@ -53,10 +53,16 @@ import torch
 # scratch/post_tidy_smoke/ -> repo root is two parents up.
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SC_ROOT = REPO_ROOT / "src" / "bst_refactor" / "stroke_classification"
+MOS_ROOT = SC_ROOT / "main_on_shuttleset"
+# Mirror the sys.path layout bst_train.py / bst_infer.py set up in their
+# __main__ blocks: main_on_shuttleset/ on path so ``from bst_common import ...``
+# resolves; stroke_classification/ for preparing_data + model imports;
+# bst_refactor/ for pipeline imports.
+sys.path.insert(0, str(MOS_ROOT))
 sys.path.insert(0, str(SC_ROOT))
 sys.path.insert(0, str(SC_ROOT.parent))
 
-from main_on_shuttleset.bst_infer import Task  # noqa: E402
+from bst_infer import Task  # noqa: E402
 from pipeline.config import TAXONOMIES  # noqa: E402
 
 
