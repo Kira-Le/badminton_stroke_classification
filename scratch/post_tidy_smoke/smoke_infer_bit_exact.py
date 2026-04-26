@@ -23,6 +23,12 @@ Usage on engelbart:
   export BST_DATA_DIR=~/badminton_stroke_classifier/src/bst_refactor/stroke_classification/preparing_data/ShuttleSet_data_une_merge_v1_nosides/npy_une_merge_v1_nosides_split_v2_dropunk_h_sticky_anchor
   export WEIGHT_PATH=<full path to a recent .pt checkpoint matching the active Hyp>
 
+  # CuBLAS deterministic mode -- without this CUDA picks different matmul
+  # algorithms across runs and the output isn't byte-exact even on the
+  # same code. The script sets torch.use_deterministic_algorithms(True);
+  # this env var unlocks the same guarantee at the CuBLAS layer.
+  export CUBLAS_WORKSPACE_CONFIG=:4096:8
+
   # Run on pre-phase-2-tidy
   git checkout pre-phase-2-tidy
   OUT_PATH=/tmp/preds_post_tidy.npy python scratch/post_tidy_smoke/smoke_infer_bit_exact.py
