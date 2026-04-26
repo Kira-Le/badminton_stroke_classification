@@ -31,7 +31,8 @@ All 12 planned commits + step P land on `pre-phase-2-tidy`:
 | — | `d19664d` | Revert of `cb963d2` — production Hyp values restored |
 | — | `412f6e5` | Add `scratch/post_tidy_smoke/` bit-exact verification scripts |
 | — | `25e0308` | Smoke-script sys.path fix (workaround; superseded by step P) |
-| P | (this commit) | Step P — Proper-packages refactor (see section below) |
+| P | `fd12cd8` | Step P — Proper-packages refactor (see section below) |
+| Q | (this commit) | Step Q — Lint-debt cleanup (see section below) |
 
 ### Remote gate (engelbart) status
 
@@ -426,40 +427,36 @@ That is why bare imports like `from bst_common import build_bst_network` resolve
 
 **Net result on noqa weight:** ~22 of 30 noqa tags removed automatically (every `# noqa: E402` that sat below a sys.path block, plus several `# noqa: PLC0415` that were forced because sys.path setup needed to run first). Remaining survivors are addressed by step Q.
 
-### Step Q (lint-debt cleanup — deferred follow-up after step P)
+### Step Q (lint-debt cleanup — DONE)
 
-**Surfaced 2026-04-26 from a noqa audit across the last week's commits.**
+**Surfaced 2026-04-26 from a noqa audit across the last week's commits. Executed same day on `pre-phase-2-tidy` after step P landed.**
 
-Tally of noqa additions across recent branches: 30 occurrences. The dominant chunk (~22 of 30) is collateral damage from the no-`__init__.py`/sys.path-hack pattern step P fixes: every `# noqa: E402` (`module-level-import-not-at-top-of-file`) sits below a `sys.path.append(...)` block, and several `# noqa: PLC0415` (`import-outside-top-level`) sit on imports that were forced inside functions because the sys.path setup needed to run first. **Step P removes all of those automatically.**
+Recap of the entry state: 30 noqa tags accumulated across recent branches. Step P removed ~22 of them automatically (every `# noqa: E402` that sat below a sys.path block, plus the PLC0415 imports that were forced inside functions because the sys.path setup needed to run first). Step Q audits the remaining survivors that step P did not fix.
 
-The remainder is real lint debt that step P does *not* fix. Step Q audits the survivors:
+**What landed:**
 
-1. **`pipeline.data_access` side-effect import** in `apply_heuristic.py`:
-   ```python
-   import pipeline.data_access  # noqa: E402,F401
-   ```
-   Imported only to trigger `.env` loading on first import — F401 fires because the imported name is unused. Replace with an explicit `pipeline.data_access.load_dotenv_for_env_overrides()` (or whatever the function is named once exposed) and call it directly. Removes the noqa and ends an opaque import-for-side-effect pattern.
+1. **`pipeline.data_access` side-effect import in `apply_heuristic.py`.** Renamed `_load_dotenv` → `load_repo_dotenv` (public), dropped the module-level auto-call from `data_access.py`, and added explicit `load_repo_dotenv()` calls in (a) `apply_heuristic.py` (right after the imports, just before the collision guard runs), and (b) `data_access.main()` so its CLI keeps reading `.env`. The opaque `import pipeline.data_access  # noqa: F401` is gone; the .env-load is now an explicit, documented call at each entry point that needs it.
 
-2. **`BLE001` (broad-exception) suppressions, ~2 occurrences:**
-   ```python
-   except Exception:  # noqa: BLE001
-   ```
-   Audit each site, narrow to specific exception types where possible, or keep `except Exception` with a comment justifying the broad catch. The lint rule is correct that bare-Exception catches are rarely the intent.
+2. **`BLE001` broad-exception narrowings in `raw_extract.py`.** Two sites:
+   - `inspect_first_frame` (line 132): `np.asarray(value)` could raise on inhomogeneous lists / unsupported dtypes. Narrowed `except Exception` to `except (ValueError, TypeError)`. Behaviour preserved (cosmetic fallback that prints `<unknown>` for the dtype/shape).
+   - `_stored_n_max` (line 173): `np.load(path).shape[1]` could fail at file-read or shape-access time. Narrowed to `except (OSError, ValueError, IndexError)`. Fallback returns `None` (treat the existing extract as untrusted).
 
-3. **`PLC0415` lazy-import audit in `sticky_anchor.py`:**
-   - `_compute_halfcourt_centres` line 88: `from pipeline.court_utils import normalize_position`
-   - `_project_bbox_bottom_centre` line 111: `from pipeline.court_utils import normalize_position, to_court_coordinate`
-   - `apply()` line 334: `from preparing_data.prepare_train_on_shuttleset import normalize_joints`
+3. **`PLC0415` lazy-import audit.**
+   - `sticky_anchor.py:88` and `:111` (`pipeline.court_utils`): lifted to module top. `pipeline.court_utils` does not touch mmpose, so deferring served no purpose.
+   - `sticky_anchor.py:334` (`preparing_data.prepare_train_on_shuttleset.normalize_joints`): kept deferred — `prepare_train_on_shuttleset` does `from mmpose.apis import MMPoseInferencer` at module top, which would force every heuristic-package consumer (including `tests/test_sticky_anchor.py`) to install mmpose. The noqa stays, now with a justifying one-line comment.
+   - `current.py:50` (same pattern, same module): kept deferred for the same reason; same justifying comment added. (Originally outside the plan-doc bullet list but flagged by the noqa audit; folded in for consistency.)
 
-   The third is a deliberate mmpose-isolation pattern (loading `prepare_train_on_shuttleset` triggers MMPose at import time, which would force every heuristic-package consumer to install MMPose even when they don't need it). Add a one-line comment explaining why the import is deferred. Investigate whether the first two have a similar justification or whether they can lift to module top safely; if they can, lift them and drop the noqas.
+4. **Working principle going forward:** `# noqa` is a tool of last resort. When ruff complains, default-ask is "is the lint rule correct?" before silencing.
 
-4. **General principle going forward:** treat `# noqa` as a tool of last resort. When ruff complains, default-ask is "is the lint rule correct?" before silencing. Most of the time it is.
+**Verification (laptop, `phase_2_refactor` venv):**
 
-**Blast radius:** small. Items 1 + 2 each touch one or two files. Item 3 touches `sticky_anchor.py` only.
+| Check | Result |
+|---|---|
+| `pytest tests/` | ✅ 42 passed, 1 skipped (matches step-P baseline) |
+| `ruff check` over the five touched files | ✅ All checks passed |
+| Live import of `apply_heuristic`, `sticky_anchor`, `current`, plus `from pipeline.data_access import load_repo_dotenv` | ✅ resolves cleanly under the documented PYTHONPATH |
 
-**Cost:** ~20-30 min total.
-
-**Status:** Deferred to follow step P. Ordered after P because step P first eliminates the bulk of the noqa weight, leaving items 1-3 as the ones genuinely worth auditing per-site.
+**Net noqa tally after step Q:** removed 5 noqa tags outright (1 F401, 2 BLE001, 2 PLC0415), kept 2 PLC0415 with justifying comments. The only pipeline-package noqas left are deliberate re-exports in `verify.py`, `build_dataset.py`, `clip_generator.py` (F401 by design — pre-existing pattern, not new lint debt).
 
 ---
 

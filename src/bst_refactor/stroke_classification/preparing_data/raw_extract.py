@@ -133,7 +133,7 @@ def inspect_one_clip(inferencer: MMPoseInferencer, video_path: Path) -> None:
             arr = np.asarray(value)
             shape = arr.shape if arr.dtype != object else f"object(len={len(value)})"
             dtype = arr.dtype
-        except Exception:  # noqa: BLE001
+        except (ValueError, TypeError):
             shape = "<unknown>"
             dtype = type(value).__name__
         print(f"  {key!r}: dtype={dtype} shape={shape}")
@@ -172,7 +172,7 @@ def _stored_n_max(save_branch: str) -> int | None:
         return None
     try:
         return int(np.load(path, mmap_mode="r").shape[1])
-    except Exception:  # noqa: BLE001
+    except (OSError, ValueError, IndexError):
         return None
 
 

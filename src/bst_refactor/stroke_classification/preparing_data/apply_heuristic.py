@@ -31,16 +31,16 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-# pipeline.data_access is imported for its side effect of auto-loading the
-# repo-root .env file, so BST_MMPOSE_NPY_DIR is visible to the collision
-# guard below without needing a prior shell export.
-import pipeline.data_access  # noqa: F401
-
 from pipeline.config import RESOLUTION_CSV_PATH, SET_INFO_DIR
 from pipeline.court_utils import get_court_info
+from pipeline.data_access import load_repo_dotenv
 
 from preparing_data.heuristics import REGISTRY, ClipContext, RawClip
 from preparing_data.heuristics.sticky_anchor import StickyAnchorParams
+
+# Pull BST_MMPOSE_NPY_DIR from the repo-root .env so the output-dir
+# collision guard works without a prior shell export.
+load_repo_dotenv()
 
 
 RAW_SUFFIXES = (

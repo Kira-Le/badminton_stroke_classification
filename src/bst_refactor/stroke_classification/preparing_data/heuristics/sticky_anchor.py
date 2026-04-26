@@ -43,6 +43,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from pipeline.court_utils import normalize_position, to_court_coordinate
+
 from .base import ClipContext, HeuristicOutput, RawClip
 
 
@@ -85,8 +87,6 @@ def _compute_halfcourt_centres(court_info: dict) -> np.ndarray:
     non-ShuttleSet canonical rectangle. For ShuttleSet the formula
     collapses to the constants above.
     """
-    from pipeline.court_utils import normalize_position  # noqa: PLC0415
-
     bL, bR = court_info["border_L"], court_info["border_R"]
     bU, bD = court_info["border_U"], court_info["border_D"]
 
@@ -108,8 +108,6 @@ def _project_bbox_bottom_centre(
 
     Uses bbox bottom-centre ``((x1+x2)/2, y2)`` as the foot proxy.
     """
-    from pipeline.court_utils import normalize_position, to_court_coordinate  # noqa: PLC0415
-
     x1, _, x2, y2 = bboxes.T
     bottom_centres = np.stack([(x1 + x2) / 2, y2], axis=0)  # (2, n)
     court = to_court_coordinate(
@@ -331,6 +329,9 @@ def apply(raw: RawClip, ctx: ClipContext, **hyperparams) -> HeuristicOutput:
     Keeps the registry-contract ``apply(raw, ctx, **kw)`` signature; the
     ``StickyAnchorParams`` instance is constructed at this boundary.
     """
+    # Lazy import: prepare_train_on_shuttleset pulls in mmpose at module
+    # load. Deferring keeps tests/test_sticky_anchor.py runnable without
+    # the mmpose stack.
     from preparing_data.prepare_train_on_shuttleset import (  # noqa: PLC0415
         normalize_joints,
     )
