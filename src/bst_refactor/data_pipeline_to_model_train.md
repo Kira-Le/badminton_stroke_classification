@@ -56,24 +56,26 @@ python -m pipeline.build_dataset \
 
 # ── Stage 2: Pose estimation (MMPose venv) ──────────────────────────
 source venv-mmpose/bin/activate
-cd stroke_classification
 
-# On engelbart, symlink the taxonomy output dir to scratch first (see Stage 2 Setup below)
+# On engelbart, symlink the taxonomy output dir to scratch first (see Stage 2 Setup below).
+# Run from the repo root with both package roots on PYTHONPATH (matches conftest.py for tests).
+export PYTHONPATH=src/bst_refactor:src/bst_refactor/stroke_classification
 
 python -m preparing_data.prepare_train_on_shuttleset \
     --skip-trajectory --skip-collate                       # pose only (no shuttle CSV needed)
 
 # ── Stage 3: Collation + training (BST venv) ────────────────────────
 source venv-bst/bin/activate
-cd stroke_classification
+export PYTHONPATH=src/bst_refactor:src/bst_refactor/stroke_classification
 
 python -m preparing_data.prepare_train_on_shuttleset \
     --skip-trajectory --skip-pose                          # collate (reads shuttle CSVs)
 
-cd main_on_shuttleset
-python bst_train.py                                        # train (3 serial trials)
-python bst_infer.py                                        # inference
+python -m main_on_shuttleset.bst_train                     # train (5 serial trials)
+python -m main_on_shuttleset.bst_infer                     # inference
 ```
+
+The same `PYTHONPATH=src/bst_refactor:src/bst_refactor/stroke_classification` setting is what `conftest.py` inserts for the test suite, so test and production invocation share one resolution layout. Pre-step-P invocation (`cd main_on_shuttleset && python bst_train.py`) no longer works after the proper-packages refactor.
 
 Each stage's output feeds the next. Stages are independently re-runnable — use `--skip-*` flags to avoid repeating completed work. **Important:** after class merge (step 4) has run, always pass `--skip-clips` on re-runs to avoid re-generating clips that were moved into merged folders.
 
@@ -153,9 +155,11 @@ If running locally or without scratch, no setup is needed -- the script creates 
 
 #### CLI usage
 
-Run from `stroke_classification/`:
+Run from the repo root with both package roots on PYTHONPATH:
 
 ```bash
+export PYTHONPATH=src/bst_refactor:src/bst_refactor/stroke_classification
+
 # Preview what would be done:
 python -m preparing_data.prepare_train_on_shuttleset --dry-run
 
@@ -380,20 +384,27 @@ BST_CG_AP = BST(use_ppf=True,  use_cg=True,  use_ap=True)   # Full model
 
 ---
 
-### Stage 5 -- Training (`stroke_classification/main_on_shuttleset/bst_train.py`)
+### Stage 5 -- Training (`stroke_classification/main_on_shuttleset/`)
+
+Stage 5 spans two files:
+
+- `bst_train.py` — top-level training loop (`Hyp`, `train_one_epoch`, `validate`, `train_network`, `Task`).
+- `bst_common.py` — shared scaffolding lifted out by step 5c so `bst_train.py` and `bst_infer.py` agree on a single source of truth (`MODELS`, `build_bst_network`, `Tee`, `compute_data_provenance`).
 
 #### Key components
 
-| Name | Role |
-|------|------|
-| `Hyp` (namedtuple) | Active config (see `bst_train.py:140-157`): `n_epochs=80`, `early_stop_n_epochs=40`, `batch_size=128`, `lr=5e-4`, `warm_up_step=100`, `taxonomy='une_merge_v1_nosides'`, `seq_len=100`, `pose_style='JnB_bone'`, `use_3d_pose=False`, `train_partial=1.0`, `use_aux_schedule=True`, `aux_fade_end_epoch=15`, `split_column='split_v2'`, `drop_unknown=True`, `ablation_id='une_merge_v1_nosides_split_v2_dropunk_h_sticky_anchor'`. Compressed warm-start-then-finetune schedule paired with the CG/AP cosine fade. Original BST-paper defaults (`n_epochs=1600`, `warm_up_step=400`, `early_stop_n_epochs=300`, `taxonomy='merged_25'`, `aux_fade_end_epoch=60`) are recorded verbatim in `scratch/architecture_notes/historical_bst.md` for reproduction. Current LR + aux schedule rationale lives in `scratch/architecture_notes/arch_1_directions.md`. |
-| `train_one_epoch()` | Standard PyTorch training loop: forward pass, cross-entropy loss (with label smoothing 0.1), backward, optimizer step, scheduler step. Applies `RandomTranslation_batch` to joints (not bones). |
-| `validate()` | Evaluates on val set. Accumulates per-class TP/FP/FN across batches, computes macro F1 and min-class F1. |
-| `test()` | Runs inference on test set, returns `(predictions, ground_truth)` tensors. |
-| `train_network()` | Full training loop with AdamW optimizer, cosine LR schedule with warmup, early stopping on macro F1, and best-checkpoint saving. Applies the CG/AP warm-start schedule at the top of each epoch via `model.set_schedule_factors(cg_factor, ap_factor)`. Logs per-epoch scalars (`Loss/Train`, `Loss/Val`, `F1/Val_macro`, `F1/Val_min`, `Schedule/aux_factor`) plus an end-of-run **HParams** entry: best + 2nd-best macro F1 and min F1 (with their epochs), best val loss (with epoch), and `stopped_epoch`. `stopped_epoch - best/macro_f1_epoch == early_stop_n_epochs` confirms a clean early-stop vs a crash. |
-| `Tee` (class) | Duplicates writes across multiple streams (terminal + file). Used by `__main__` to auto-tee test output to `test_logs/test_<timestamp>.log` so test metrics survive a dropped terminal. Training output stays terminal-only (TB has it). |
-| `MODELS` (dict) | Maps variant names (`'BST_0'`, `'BST'`, etc.) to pre-configured partials imported from `bst.py`. Used by `get_network_architecture()` to instantiate the model without local flag dicts. |
-| `Task` (class) | Orchestrates the full workflow: `prepare_dataloaders()` -> `get_network_architecture()` -> `seek_network_weights()` (loads existing or trains) -> `test()`. |
+| Name | Lives in | Role |
+|------|----------|------|
+| `Hyp` (namedtuple) | `bst_train.py` | Active config (see `bst_train.py:140-157`): `n_epochs=80`, `early_stop_n_epochs=40`, `batch_size=128`, `lr=5e-4`, `warm_up_step=100`, `taxonomy='une_merge_v1_nosides'`, `seq_len=100`, `pose_style='JnB_bone'`, `use_3d_pose=False`, `train_partial=1.0`, `use_aux_schedule=True`, `aux_fade_end_epoch=15`, `split_column='split_v2'`, `drop_unknown=True`, `ablation_id='une_merge_v1_nosides_split_v2_dropunk_h_sticky_anchor'`. Compressed warm-start-then-finetune schedule paired with the CG/AP cosine fade. Original BST-paper defaults (`n_epochs=1600`, `warm_up_step=400`, `early_stop_n_epochs=300`, `taxonomy='merged_25'`, `aux_fade_end_epoch=60`) are recorded verbatim in `scratch/architecture_notes/historical_bst.md` for reproduction. Current LR + aux schedule rationale lives in `scratch/architecture_notes/arch_1_directions.md`. |
+| `train_one_epoch()` | `bst_train.py` | Standard PyTorch training loop: forward pass, cross-entropy loss (with label smoothing 0.1), backward, optimizer step, scheduler step. Applies `RandomTranslation_batch` to joints (not bones). |
+| `validate()` | `bst_train.py` | Evaluates on val set. Accumulates per-class TP/FP/FN across batches, computes macro F1 and min-class F1. |
+| `test()` | `bst_train.py` (`Task.test`) | Runs inference on test set, returns `(predictions, ground_truth)` tensors. |
+| `train_network()` | `bst_train.py` | Full training loop with AdamW optimizer, cosine LR schedule with warmup, early stopping on macro F1, and best-checkpoint saving. Applies the CG/AP warm-start schedule at the top of each epoch via `model.set_schedule_factors(cg_factor, ap_factor)`. Logs per-epoch scalars (`Loss/Train`, `Loss/Val`, `F1/Val_macro`, `F1/Val_min`, `Schedule/aux_factor`) plus an end-of-run **HParams** entry: best + 2nd-best macro F1 and min F1 (with their epochs), best val loss (with epoch), and `stopped_epoch`. `stopped_epoch - best/macro_f1_epoch == early_stop_n_epochs` confirms a clean early-stop vs a crash. |
+| `Task` (class) | `bst_train.py` | Orchestrates the full workflow: `prepare_dataloaders()` -> `get_network_architecture()` -> `seek_network_weights()` (loads existing or trains) -> `test()`. |
+| `MODELS` (dict) | `bst_common.py` | Maps variant names (`'BST_0'`, `'BST'`, etc.) to pre-configured partials imported from `model/bst.py`. Single dispatch point shared by `bst_train.py` and `bst_infer.py`. |
+| `build_bst_network()` | `bst_common.py` | Builds the network from `MODELS[name]` and returns `(net, n_bones)`. `n_bones` is the trailing-bone-channel count derived from `pose_style` x `get_bone_pairs()` and is the single source of truth used downstream. |
+| `Tee` (class) | `bst_common.py` | Duplicates writes across multiple streams (terminal + file). Used by `bst_train.py`'s `__main__` to auto-tee test output to `test_logs/test_<timestamp>.log` so test metrics survive a dropped terminal. Training output stays terminal-only (TB has it). |
+| `compute_data_provenance()` | `bst_common.py` | Hashes `clips_master.csv` + collated-dir naming into the `extra:` block of the manifest so each run is rebindable to its exact data input. |
 
 #### Training flow
 
@@ -491,6 +502,7 @@ model/tempose.py                      # TCN, MLP, TransformerEncoder, etc.
 model/bst.py                          # BST model (imports tempose building blocks)
     |
     v
+main_on_shuttleset/bst_common.py      # MODELS dispatch, build_bst_network, Tee, provenance
 main_on_shuttleset/bst_train.py       # Training loop (taxonomy in Hyp namedtuple)
 main_on_shuttleset/bst_infer.py       # Inference from checkpoint
     |
