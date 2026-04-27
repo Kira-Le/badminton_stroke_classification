@@ -1,0 +1,5 @@
+.browse_box {
+    display: flex;
+    gap: 2rem;
+    align-items:flex-start;
+}

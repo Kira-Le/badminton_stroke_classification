@@ -5,6 +5,8 @@ import { useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, Mic } from 'lucide-react'
 
+import video from '../assets/file_example_MP4_1920_18MG.mp4'
+
 import style from './SearchBar.module.css' // Generated with claude.ai based on tailwinds styling from Search Bar example referenced above
 
 //TODO: Remove below sampleData when connected to API
@@ -12,22 +14,27 @@ const sampleData = [
   {
     id: 1,
     title: 'Kento_MOMOTA_CHOU_Tien_Chen_Fuzhou_Open_2019_Finals',
+    videoSrc: video,
   },
   {
     id: 2,
     title: 'CHEN_Long_CHOU_Tien_Chen_World_Tour_Finals_Group_Stage',
+    videoSrc: video,
   },
   {
     id: 3,
     title: 'Kento_MOMOTA_CHOU_Tien_Chen_KOREA_OPEN_2019_Final',
+    videoSrc: video,
   },
   {
     id: 4,
     title: 'CHEN_Long_CHOU_Tien_Chen_Denmark_Open_2019_QuarterFinal',
+    videoSrc: video,
   },
   {
     id: 5,
     title: 'Kento_MOMOTA_CHOU_Tien_Chen_Fuzhou_Open_2018_Finals',
+    videoSrc: video,
   },
 ]
 // End of sampleData to be removed
@@ -91,36 +98,35 @@ const SearchBar = () => {
                             )
                         }
                         >
-                            <Mic size={20} />{' '}
-                        </button>{' '}
+                            <Mic size={20} />
+                        </button>
                         <button type="submit" className={style.searchButton}>
-                            <Search size={20} />{' '}
-                        </button>{' '}
-                    </div>{' '}
-                </div>{' '}
-            </form>{' '}
+                            <Search size={20} />
+                        </button>
+                    </div>
+                </div>
+            </form>
             {searchResults.length > 0 && (
                 <div className={style.results}>
-                    <h2 className={style.resultsHeading}> Search Results: </h2>{' '}
+                    <h2 className={style.resultsHeading}>Search Results:</h2>
                     <ul className={style.resultsList}>
-                        {' '}
                         {searchResults.map((result) => (
-                            <li key={result.id} className={style.resultsItem}>
-                                <a
-                                href={result.url}
-                                className={style.resultsLink}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={() => navigate("/analysis")}
-                                >
-                                    {' '}
-                                    {result.title}{' '}
-                                </a>{' '}
+                            <li
+                            key={result.id}
+                            className={style.resultsItem}
+                            onClick={() => navigate("/analysis")}>
+                                <video
+                                src={result.videoSrc}
+                                className={style.thumbnail}
+                                muted
+                                preload="metadata"
+                                />
+                                <span>{result.title}</span>
                             </li>
-                        ))}{' '}
-                    </ul>{' '}
+                        ))}
+                    </ul>
                 </div>
-            )}{' '}
+            )}
     </div>
   )
 }
