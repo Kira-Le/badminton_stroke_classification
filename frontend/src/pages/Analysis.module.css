@@ -6,7 +6,8 @@
     align-items:flex-start;
 }
 
-.video_player {
+.videoPlayer {
+    max-width: 75%;
     border: 1px solid white;
 }
 
