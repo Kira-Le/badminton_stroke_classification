@@ -1,64 +1,44 @@
 import { useState, useEffect } from 'react'
-import { RadioButtonGroup } from '../components'
-
-const API_BASE = 'http://127.0.0.1:8000'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 export default function Analysis() {
-    const [models, setModels] = useState([])
-    const [status, setStatus] = useState('')
-    
-    // Run once on page load, to get available models
-    useEffect(() => {
-        fetch(`${API_BASE}/api/models`)
-              .then((response) => response.json())
-              .then((json) => setModels(json.models))
-              .catch((error) => console.error('Error fetching data: ', error))
-    }, [])
+    const { state } = useLocation()
+    const navigate = useNavigate()
+    const jobId = state?.jobId
 
-    // Radio Button Group set up 
-    const[selectedValue, setSelectedValue] = useState('')
+    const [status, setStatus] = useState('queued')
 
     useEffect(() => {
-        if (models.length > 0) {
-            setSelectedValue(models[0])
+        if (!jobId) {
+            navigate('/')
+            return
         }
-    }, [models])
 
-    function radioGroupHandler(event) {
-        setSelectedValue(event.target.value)
-    }
-
-    // Get status of processing task
-    useEffect(() => {
         const interval = setInterval(() => {
-            fetch(`${API_BASE}/api/status/123`)
-              .then((response) => response.json())
-              .then((json) => {
-                setStatus(json.status)
-                console.log(json.status)
-                if (json.status === "complete") {
-                    clearInterval(interval) // stop polling
-                }
-              })
-              .catch((error) => console.error('Error fetching data: ', error))
+            fetch(`/api/status/${jobId}`)
+                .then((r) => r.json())
+                .then((json) => {
+                    setStatus(json.status)
+                    if (json.status === 'complete') {
+                        clearInterval(interval)
+                        navigate('/results', { state: { jobId } })
+                    } else if (json.status === 'failed') {
+                        clearInterval(interval)
+                    }
+                })
+                .catch((err) => console.error('Error polling status:', err))
         }, 2000)
+
         return () => clearInterval(interval)
-    }, [])
+    }, [jobId, navigate])
+
+    if (!jobId) return null
 
     return (
         <>
           <h1>Analysis</h1>
-          {models.length === 0
-              ? <p>Loading models...</p>
-              : <RadioButtonGroup
-              label="Select a model: "
-              options={models}
-              onChange={radioGroupHandler}
-              name="model-selection"
-              />
-          }
-          <div>Stroke classification is: {status}</div>
+          <p>Processing your video...</p>
+          <div>Status: {status}</div>
         </>
-
     )
 }

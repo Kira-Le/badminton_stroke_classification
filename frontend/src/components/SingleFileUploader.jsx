@@ -5,12 +5,12 @@ import { Button } from '.'
 
 import style from './SingleFileUploader.module.css'
 
-const SingleFileUploader = () => {
+const SingleFileUploader = ({ model = 'default', onUploadSuccess }) => {
     const [file, setFile] = useState(null)
     const [status, setStatus] = useState('initial')
     const [dragging, setDragging] = useState(false)
     const inputRef = useRef(null)
-    
+
     const handleFileChange = (e) => {
         if (e.target.files) {
             setStatus('initial')
@@ -35,39 +35,36 @@ const SingleFileUploader = () => {
     const handleDragLeave = () => {
         setDragging(false)
     }
-        
+
     const handleUpload = async () => {
         if (file) {
             setStatus('uploading')
-            console.log('Uploading file...')
-            
+
             const formData = new FormData()
             formData.append('file', file)
 
             try {
-                const result = await fetch('http://127.0.0.1:8000/api/upload', {
+                const result = await fetch(`/api/upload?model=${encodeURIComponent(model)}`, {
                     method: 'POST',
                     body: formData,
                 })
 
-            if (!result.ok) throw new Error(`Upload failed: ${result.status}`);
-            
-            const data = await result.json()
+                if (!result.ok) throw new Error(`Upload failed: ${result.status}`)
 
-            console.log(data)
-            setStatus('success')
+                const data = await result.json()
+                setStatus('success')
+                if (onUploadSuccess) onUploadSuccess(data.job_id)
             } catch (error) {
                 console.error(error)
                 setStatus('fail')
             }
         }
-
     }
-    
+
     return (
     <>
       <div
-      className={`${style.input_group} ${dragging ? style.dragging : ''}`} 
+      className={`${style.input_group} ${dragging ? style.dragging : ''}`}
       onClick={() => inputRef.current.click()}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
@@ -80,6 +77,7 @@ const SingleFileUploader = () => {
         ref={inputRef}
         id="upload"
         type="file"
+        accept="video/*"
         onChange={handleFileChange}
         style={{ display: 'none'}}
         />
@@ -89,18 +87,16 @@ const SingleFileUploader = () => {
                 <ul>
                     <li>Name: {file.name}</li>
                     <li>Type: {file.type}</li>
-                    <li>Size: {file.size} bytes</li>
+                    <li>Size: {(file.size / (1024 * 1024)).toFixed(2)} MB</li>
                 </ul>
             </section>
         )}
       </div>
       <div className={style.confirm_details}>
         {file && (
-            <Button 
-            onClick={handleUpload}
-            >Upload file</Button>
-            )}
-            <Result status={status} />
+            <Button onClick={handleUpload}>Upload file</Button>
+        )}
+        <Result status={status} />
       </div>
     </>
   )
@@ -108,14 +104,14 @@ const SingleFileUploader = () => {
 
 const Result = ({ status }) => {
     if (status === 'success') {
-        return <p>✅ File uploaded successfully! Loading Analysis page...</p>
+        return <p>✅ File uploaded successfully! Starting analysis...</p>
     } else if (status === 'fail') {
         return <p>❌ File upload failed!</p>
     } else if (status === 'uploading') {
-        return <p>⏳ Uploading selected file...</p>;
+        return <p>⏳ Uploading selected file...</p>
     } else {
         return null
-  }
+    }
 }
 
 export default SingleFileUploader
