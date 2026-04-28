@@ -155,11 +155,12 @@ _DOTENV_PATH = _PROJECT_ROOT / '.env'
 _DEFAULT_CLIPS_CSV = _PROJECT_ROOT / 'notebooks' / 'clips_master.csv'
 
 
-def _load_dotenv(path: Path = _DOTENV_PATH) -> None:
+def load_repo_dotenv(path: Path = _DOTENV_PATH) -> None:
     """Load key=value pairs from a .env file into os.environ (no-op if missing).
 
     Only sets variables that are not already set in the environment, so
-    shell exports always take precedence over the .env file.
+    shell exports always take precedence over the .env file. Idempotent:
+    safe to call multiple times.
 
     :param path: Path to the .env file.
     """
@@ -176,9 +177,6 @@ def _load_dotenv(path: Path = _DOTENV_PATH) -> None:
             value = value.split('#', 1)[0].strip().strip('"').strip("'")
             if key and key not in os.environ:
                 os.environ[key] = value
-
-
-_load_dotenv()
 
 
 def _env_path(var: str, default: Path) -> Path:
@@ -597,6 +595,7 @@ def _build_cli() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> None:
     """CLI entrypoint. ``argv=None`` uses ``sys.argv[1:]``."""
+    load_repo_dotenv()
     args = _build_cli().parse_args(argv)
 
     # Build DataPaths -- only pass CLI values that were explicitly set so that

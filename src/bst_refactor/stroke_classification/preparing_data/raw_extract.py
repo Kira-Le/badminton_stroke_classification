@@ -21,15 +21,16 @@ so real detected coordinates at origin are not ambiguous with padding.
 The raw outputs feed downstream heuristic iteration (``apply_heuristic.py``
 and the ``sticky_anchor`` variant, both out of scope for this module).
 
-Run from ``stroke_classification/``:
-    python -m preparing_data.raw_extract --help
+Run from the repo root with both package roots on PYTHONPATH::
+
+    PYTHONPATH=src/bst_refactor:src/bst_refactor/stroke_classification \\
+        python -m preparing_data.raw_extract --help
 """
 
 from mmpose.apis import MMPoseInferencer
 
 import argparse
 import gc
-import os
 import sys
 from pathlib import Path
 from pprint import pprint
@@ -38,15 +39,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-if __name__ == "__main__":
-    # preparing_data imports
-    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-    # pipeline.config imports
-    sys.path.append(
-        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    )
-
-from pipeline.config import CLIPS_OUTPUT_DIR  # noqa: E402
+from pipeline.config import CLIPS_OUTPUT_DIR
 
 J = 17  # COCO keypoints returned by MMPoseInferencer("human") / RTMPose-L
 
@@ -140,7 +133,7 @@ def inspect_one_clip(inferencer: MMPoseInferencer, video_path: Path) -> None:
             arr = np.asarray(value)
             shape = arr.shape if arr.dtype != object else f"object(len={len(value)})"
             dtype = arr.dtype
-        except Exception:  # noqa: BLE001
+        except (ValueError, TypeError):
             shape = "<unknown>"
             dtype = type(value).__name__
         print(f"  {key!r}: dtype={dtype} shape={shape}")
@@ -179,7 +172,7 @@ def _stored_n_max(save_branch: str) -> int | None:
         return None
     try:
         return int(np.load(path, mmap_mode="r").shape[1])
-    except Exception:  # noqa: BLE001
+    except (OSError, ValueError, IndexError):
         return None
 
 
