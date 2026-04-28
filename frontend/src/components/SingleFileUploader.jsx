@@ -1,5 +1,5 @@
 // Adapted from: https://uploadcare.com/blog/how-to-upload-file-in-react/
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Upload } from 'lucide-react'
 import { Button } from '.'
 
@@ -8,8 +8,22 @@ import style from './SingleFileUploader.module.css'
 const SingleFileUploader = ({ model = 'default', onUploadSuccess }) => {
     const [file, setFile] = useState(null)
     const [status, setStatus] = useState('initial')
+    const [elapsed, setElapsed] = useState(0)
     const [dragging, setDragging] = useState(false)
     const inputRef = useRef(null)
+    const timerRef = useRef(null)
+
+    const startTimer = () => {
+        setElapsed(0)
+        timerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000)
+    }
+
+    const stopTimer = () => {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+    }
+
+    useEffect(() => () => stopTimer(), [])
 
     const handleFileChange = (e) => {
         if (e.target.files) {
@@ -39,6 +53,7 @@ const SingleFileUploader = ({ model = 'default', onUploadSuccess }) => {
     const handleUpload = async () => {
         if (file) {
             setStatus('uploading')
+            startTimer()
 
             const formData = new FormData()
             formData.append('file', file)
@@ -49,12 +64,14 @@ const SingleFileUploader = ({ model = 'default', onUploadSuccess }) => {
                     body: formData,
                 })
 
+                stopTimer()
                 if (!result.ok) throw new Error(`Upload failed: ${result.status}`)
 
                 const data = await result.json()
                 setStatus('success')
                 if (onUploadSuccess) onUploadSuccess(data.job_id)
             } catch (error) {
+                stopTimer()
                 console.error(error)
                 setStatus('fail')
             }
@@ -96,19 +113,19 @@ const SingleFileUploader = ({ model = 'default', onUploadSuccess }) => {
         {file && (
             <Button onClick={handleUpload}>Upload file</Button>
         )}
-        <Result status={status} />
+        <Result status={status} elapsed={elapsed} />
       </div>
     </>
   )
 }
 
-const Result = ({ status }) => {
+const Result = ({ status, elapsed }) => {
     if (status === 'success') {
         return <p>✅ File uploaded successfully! Starting analysis...</p>
     } else if (status === 'fail') {
         return <p>❌ File upload failed!</p>
     } else if (status === 'uploading') {
-        return <p>⏳ Uploading selected file...</p>
+        return <p>⏳ Uploading selected file... {elapsed}s</p>
     } else {
         return null
     }
