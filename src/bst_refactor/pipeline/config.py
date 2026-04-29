@@ -197,6 +197,20 @@ TAXONOMY_UNE_MERGE_V1 = Taxonomy(
     unknown_first=True,
 )
 
+# Same merge_map and stroke set as une_merge_v1, but with the Top_/Bottom_
+# side prefixes collapsed: every type lands in standalone_types so the
+# collator emits an unprefixed label (the side branch in collate_npy is
+# skipped whenever ``merged in standalone_set``). Tests whether a 14-class
+# space with double the per-class N beats the split 28-class space, on the
+# theory that Top_X and Bottom_X are spatial mirrors of the same shot.
+TAXONOMY_UNE_MERGE_V1_NOSIDES = Taxonomy(
+    name='une_merge_v1_nosides',
+    merge_map=UNE_MERGE_V1_MAP,
+    base_types=(),
+    standalone_types=tuple(STROKE_TYPES_14_UNE_MERGE_V1) + ('unknown',),
+    unknown_first=False,
+)
+
 TAXONOMY_RAW_35 = Taxonomy(
     name='raw_35',
     merge_map=None,
@@ -208,9 +222,10 @@ TAXONOMY_RAW_35 = Taxonomy(
 DEFAULT_TAXONOMY = 'une_merge_v1'
 
 TAXONOMIES: dict[str, Taxonomy] = {
-    'merged_25':    TAXONOMY_MERGED_25,
-    'une_merge_v1': TAXONOMY_UNE_MERGE_V1,
-    'raw_35':       TAXONOMY_RAW_35,
+    'merged_25':            TAXONOMY_MERGED_25,
+    'une_merge_v1':         TAXONOMY_UNE_MERGE_V1,
+    'une_merge_v1_nosides': TAXONOMY_UNE_MERGE_V1_NOSIDES,
+    'raw_35':               TAXONOMY_RAW_35,
 }
 
 
@@ -306,5 +321,47 @@ SPLITS: dict[str, list[int]] = {
     name: [v for v in ids if v not in EXCLUDED_VIDEOS]
     for name, ids in _SPLITS_RAW.items()
 }
+
+
+# ---------------------------------------------------------------------------
+# Collated-dir naming
+# ---------------------------------------------------------------------------
+# Both prepare_train_on_shuttleset.py (writer) and bst_train.py (reader)
+# need to construct the same collated dir basename for the same config.
+# Single source of truth so they stay in lockstep.
+
+def derive_ablation_id(
+    taxonomy_name: str,
+    split_column: str,
+    drop_unknown: bool,
+    ablation_id: str | None = None,
+) -> str:
+    """Default ablation_id if not overridden, encoding the (taxonomy, split, drop) tuple."""
+    if ablation_id:
+        return ablation_id
+    drop_tag = 'dropunk' if drop_unknown else 'keepunk'
+    return f'{taxonomy_name}_{split_column}_{drop_tag}'
+
+
+def derive_npy_collated_dir_basename(
+    taxonomy_name: str,
+    split_column: str,
+    drop_unknown: bool,
+    use_3d_pose: bool,
+    seq_len: int,
+    ablation_id: str | None = None,
+) -> str:
+    """Format the collated dir basename: ``npy_[3d_][seq{N}_]{ablation_id}``.
+
+    The ``3d_`` prefix appears only when ``use_3d_pose=True``; the ``seq{N}_``
+    prefix appears only when ``seq_len != 100``. ``ablation_id`` overrides
+    the default ``{taxonomy}_{split}_{drop}`` tuple if provided.
+    """
+    eff_ablation = derive_ablation_id(
+        taxonomy_name, split_column, drop_unknown, ablation_id,
+    )
+    three_d_tag = '3d_' if use_3d_pose else ''
+    seq_tag = '' if seq_len == 100 else f'seq{seq_len}_'
+    return f'npy_{three_d_tag}{seq_tag}{eff_ablation}'
 
 

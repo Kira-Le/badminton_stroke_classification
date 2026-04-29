@@ -1,5 +1,8 @@
-# Consolidated BST training script for ShuttleSet
-# Replaces: bst_main.py, bst_main_summary_writer.py, bst_backbone_main.py
+# BST training script for ShuttleSet.
+#
+# Run from the repo root with both package roots on PYTHONPATH:
+#   PYTHONPATH=src/bst_refactor:src/bst_refactor/stroke_classification \
+#       python -m main_on_shuttleset.bst_train
 #
 # PyTorch training loop overview (differs significantly from TF/Keras):
 #   TF:      model.compile(optimizer, loss) -> model.fit(data)  (one line trains everything)
@@ -9,14 +12,11 @@
 import torch
 from torch import Tensor, nn, optim  # nn = layers/models, optim = optimizers (like tf.keras.optimizers)
 import torch.nn.functional as F      # F = stateless functions (one_hot, softmax, etc.)
-from torch.utils.data import DataLoader  # like tf.data.Dataset — batches, shuffles, prefetches
 from torch.utils.tensorboard import SummaryWriter  # TensorBoard logging (same viewer as TF)
 from torcheval.metrics.functional import multiclass_f1_score
 
 from transformers import get_cosine_schedule_with_warmup  # from HuggingFace, not a custom module
 
-import hashlib
-import pandas as pd
 from pathlib import Path
 from copy import deepcopy
 from collections import namedtuple
@@ -24,21 +24,20 @@ from contextlib import redirect_stdout
 import math
 import time
 from datetime import datetime, timedelta
-
 import sys
-import os
-if __name__ == '__main__':
-    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 from preparing_data.shuttleset_dataset import prepare_npy_collated_loaders, \
-                                              RandomTranslation_batch, Dataset_npy, \
-                                              pad_class_labels, get_bone_pairs, \
-                                              POSE_BONE_MULTIPLIER
-from model.bst import BST_0, BST_PPF, BST_CG, BST_AP, BST_CG_AP
+                                              RandomTranslation_batch, \
+                                              pad_class_labels
 from result_utils import show_f1_results, plot_confusion_matrix
-from pipeline.config import TAXONOMIES, Taxonomy
+from pipeline.config import (
+    TAXONOMIES,
+    Taxonomy,
+    derive_ablation_id,
+    derive_npy_collated_dir_basename,
+)
 from run_tracker import track_run, track_serial
+from main_on_shuttleset.bst_common import Tee, build_bst_network, compute_data_provenance
 
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -47,14 +46,11 @@ DEFAULT_CLIPS_CSV = REPO_ROOT / 'notebooks' / 'clips_master.csv'
 
 # ==========================================================================
 # Hyperparameters — edit these to change experiment configuration.
-# namedtuple is just an immutable struct: hyp.lr, hyp.batch_size, etc.
+# Active LR + aux schedule rationale: scratch/architecture_notes/arch_1_directions.md.
+# Dated retune history: scratch/architecture_notes/historical_bst.md section 3.
 # ==========================================================================
-# Data-source knobs (clips_csv, split_column, drop_unknown, ablation_id) feed
-# scratch/architecture_notes/completed_general_refactors/dir_flatten_refactor.md
-# Phase 1: collation reads split + label from
-# the master CSV instead of the on-disk folder layout. ablation_id tags the
-# collated dir so multiple ablations don't collide; it defaults to a tuple of
-# (taxonomy, split_column, drop_unknown) when None.
+# ablation_id tags the collated dir so multiple ablations don't collide;
+# it defaults to a tuple of (taxonomy, split_column, drop_unknown) when None.
 Hyp = namedtuple('Hyp', [
     'n_epochs', 'batch_size', 'lr', 'warm_up_step',
     'taxonomy', 'seq_len', 'early_stop_n_epochs',
@@ -62,98 +58,23 @@ Hyp = namedtuple('Hyp', [
     'use_aux_schedule', 'aux_fade_end_epoch',
     'clips_csv', 'split_column', 'drop_unknown', 'ablation_id',
 ])
-# --------------------------------------------------------------------------
-# LR-SCHEDULE RETUNE (2026-04-17)
-# --------------------------------------------------------------------------
-# The original BST recipe used n_epochs=1600, warm_up_step=400, patience=300,
-# with a cosine scheduler at num_cycles=0.25 (see line below). In practice
-# on ShuttleSet + merged_25, the TB log from run Apr17_13-04-35 showed:
-#     - best F1_macro 0.8311 at epoch 41
-#     - best F1_min   0.6250 at epoch 53
-#     - best Val_loss 1.0032 at epoch 27
-#     - training stopped at epoch 341 (patience fired)
-# Convergence is well before epoch 60. At n_epochs=1600, num_cycles=0.25,
-# the LR is still ~99.98% of peak at epoch 41, so cosine decay never
-# actually bites during the useful window — the model just drifts under
-# near-peak LR for hundreds of epochs and overfits.
-# Retuned values (active block below) match the schedule to observed
-# convergence: ~4-epoch warmup, short cosine that reaches 0 at the end,
-# and patience tightened to 40 epochs to stay meaningful at the new
-# length. n_epochs has since been shortened again (120 -> 80) to pair
-# with the AUX-SCHEDULE block; see that block for rationale. The old
-# values are preserved (commented) for easy revert.
-# --------------------------------------------------------------------------
-# hyp = Hyp(
-#     n_epochs=1600,            # max epochs (will early-stop before this)
-#     early_stop_n_epochs=300,  # stop if no F1 improvement for this many epochs
-#     batch_size=128,
-#     lr=5e-4,                  # initial learning rate (cosine-annealed during training)
-#     warm_up_step=400,         # LR warmup steps before cosine decay begins
-#     taxonomy='merged_25',      # key in TAXONOMIES: 'une_merge_v1', 'merged_25', 'raw_35', …
-#     seq_len=100,              # frames per sample (must match data preprocessing)
-#     pose_style='JnB_bone',   # 'J_only'=joints, 'JnB_bone'=joints+bones, 'Jn2B'=joints+2xbones
-#     use_3d_pose=False,        # True for xyz keypoints, False for xy only
-#     train_partial=1.0,        # fraction of training set to use (1.0 = all)
-#     clips_csv=str(DEFAULT_CLIPS_CSV),
-#     split_column='split_bst_baseline',
-#     drop_unknown=False,
-#     ablation_id=None,
-# )
-# --------------------------------------------------------------------------
-# AUX-SCHEDULE (CG/AP warm-start-to-fade)
-# --------------------------------------------------------------------------
-# Hypothesis: Clean Gate and Aim Player are heuristics. They accelerate
-# early convergence while the LR is hot, but they also constrain the
-# representation the transformer backbone can learn. Annealing them out
-# during training should let the backbone find a richer representation.
-#
-# Implementation: a scalar aux_factor in [0, 1] scales CG's dirt subtraction
-# and blends AP's alpha multipliers toward pass-through (1.0). The schedule
-# is cosine from epoch 1 (factor=1.0) to aux_fade_end_epoch (factor=0.0),
-# then pinned at 0 for the rest of training (pure-backbone phase).
-#
-# Knobs (both below in the hyp block):
-#   use_aux_schedule  -- False pins factor at 1.0 all run, reproducing the
-#                        unscheduled BST_CG_AP baseline exactly.
-#   aux_fade_end_epoch -- epoch at which the factor first reaches 0. Set
-#                         well below n_epochs to guarantee a long pure-
-#                         backbone tail. At 15 with n_epochs=80: warm-start
-#                         is ~20% of training, then 65 epochs of pure-
-#                         backbone at cooling LR — framed as warm-start
-#                         then finetune. A prior 60/120 schedule put peaks
-#                         inside the fade window (factor still 0.6-0.74 at
-#                         pick time for 2 of 3 seeds), which diluted the
-#                         signal into noise; the only seed that picked deep
-#                         in the fade (factor ~0.1) showed the hoped-for
-#                         min-F1 lift.
-#
-# CG and AP currently share one factor (set_schedule_factors passes the
-# same value to both). If a later ablation wants independent fade timing,
-# split into cg_fade_end_epoch and ap_fade_end_epoch and pass two values
-# through aux_schedule_factor into set_schedule_factors.
-#
-# Test-time behaviour: the best checkpoint captures cg_factor and ap_factor
-# as buffers in state_dict. task.test() runs forward with those restored
-# values, so the final test metric reflects whichever factor was active at
-# the best-F1 epoch. Nothing forces them to 0 or 1 at test time.
-# --------------------------------------------------------------------------
 hyp = Hyp(
-    n_epochs=80,              # compressed warm-start-then-finetune schedule
-    early_stop_n_epochs=40,   # patience ~half the run
+    n_epochs=80,
+    early_stop_n_epochs=40,
     batch_size=128,
-    lr=5e-4,                  # initial learning rate (cosine-annealed during training)
-    warm_up_step=100,         # was 400 — ~4 epochs of warmup instead of ~17
-    taxonomy='une_merge_v1',   # V3 ablation: 29-class scheme, unknown dropped.
-    seq_len=100,              # frames per sample (must match data preprocessing)
-    pose_style='JnB_bone',   # 'J_only'=joints, 'JnB_bone'=joints+bones, 'Jn2B'=joints+2xbones
-    use_3d_pose=False,        # True for xyz keypoints, False for xy only
-    train_partial=1.0,        # fraction of training set to use (1.0 = all)
-    use_aux_schedule=True,    # Aggressive CG/AP annealing — matches preferred config from run_20260418_151139.
-    aux_fade_end_epoch=15,    # cosine fade 1.0 -> 0.0 over epochs 1-15, then ~65 ep pure backbone (best mean macro F1)
-    clips_csv=str(DEFAULT_CLIPS_CSV),  # master CSV used to collate the npy arrays this run reads
-    split_column='split_v2',  # 'split_bst_baseline' or 'split_v2'
-    drop_unknown=True,                 # mirror baseline; ablations 1+2 set this True
-    ablation_id=None,                   # auto-derived from (taxonomy, split_column, drop_unknown) if None
+    lr=5e-4,
+    warm_up_step=100,
+    taxonomy='une_merge_v1_nosides',
+    seq_len=100,
+    pose_style='JnB_bone',
+    use_3d_pose=False,
+    train_partial=1.0,
+    use_aux_schedule=True,
+    aux_fade_end_epoch=15,
+    clips_csv=str(DEFAULT_CLIPS_CSV),
+    split_column='split_v2',
+    drop_unknown=True,
+    ablation_id='une_merge_v1_nosides_split_v2_dropunk_h_sticky_anchor',
 )
 
 
@@ -381,22 +302,13 @@ def train_network(
     # model.parameters() returns all learnable weights (TF equivalent: model.trainable_variables)
     optimizer = optim.AdamW(model.parameters(), lr=hyp.lr)
     # Cosine schedule: LR ramps up during warmup, then decays following a cosine curve.
-    # See the 2026-04-17 retune block above hyp for the num_cycles 0.25 -> 0.5 reasoning.
     # HF formula: lr_factor = 0.5 * (1 + cos(pi * 2 * num_cycles * progress))
-    #   num_cycles=0.25 -> LR ends at 50% of peak (partial dropoff)
-    #   num_cycles=0.5  -> LR ends at 0 (full standard cosine descent)
-    #   num_cycles=1.0  -> LR ends back at peak (don't use — full wave)
-    # scheduler = get_cosine_schedule_with_warmup(
-    #     optimizer=optimizer,
-    #     num_warmup_steps=hyp.warm_up_step,
-    #     num_training_steps=(hyp.n_epochs * len(train_loader)),
-    #     num_cycles=0.25  # fraction of cosine cycle (0.25 = quarter-cosine decay)
-    # )
+    #   num_cycles=0.5 -> LR ends at 0 (full standard cosine descent)
     scheduler = get_cosine_schedule_with_warmup(
         optimizer=optimizer,
         num_warmup_steps=hyp.warm_up_step,
         num_training_steps=(hyp.n_epochs * len(train_loader)),  # total batches across all epochs
-        num_cycles=0.5  # was 0.25 — full cosine descent to 0 at end of schedule
+        num_cycles=0.5
     )
 
     # Track top-2 of each metric (for HParams summary + verifying early-stop vs crash)
@@ -521,27 +433,6 @@ def train_network(
 # Task: orchestrates data loading, model creation, training, and evaluation
 # ==========================================================================
 
-# BST variant name -> pre-configured constructor (partials defined in bst.py)
-MODELS = {
-    'BST_0':     BST_0,
-    'BST':       BST_PPF,
-    'BST_CG':    BST_CG,
-    'BST_AP':    BST_AP,
-    'BST_CG_AP': BST_CG_AP,
-}
-
-
-class Tee:
-    """Duplicate writes across multiple streams (e.g. terminal + log file)."""
-    def __init__(self, *streams):
-        self.streams = streams
-    def write(self, data):
-        for s in self.streams:
-            s.write(data)
-    def flush(self):
-        for s in self.streams:
-            s.flush()
-
 
 class Task:
     def __init__(self, n_joints=17, taxonomy: Taxonomy = None,
@@ -578,20 +469,16 @@ class Task:
     def get_network_architecture(self, model_name='BST_CG_AP', in_channels=2):
         """Create model with the right input dimensions and optional modules.
         in_channels: 2 for 2D (xy) keypoints, 3 for 3D (xyz)."""
-        ModelClass = MODELS[model_name]  # pre-configured partial from bst.py
-        n_bones = len(get_bone_pairs())  # 19 bone vectors for COCO 17-joint skeleton
-        extra = POSE_BONE_MULTIPLIER[self.pose_style]
-
-        self.net = ModelClass(
-            in_dim=(self.n_joints + n_bones * extra) * in_channels,
+        self.net, self.n_bones = build_bst_network(
+            model_name,
+            n_joints=self.n_joints,
+            pose_style=self.pose_style,
+            in_channels=in_channels,
             n_class=self.taxonomy.n_classes,
             seq_len=hyp.seq_len,
-            depth_tem=2,       # 2 layers in temporal transformer
-            depth_inter=1,     # 1 layer in interactional transformer
-        ).to(self.device)  # move entire model to GPU/CPU
-
+            device=self.device,
+        )
         self.model_name = model_name
-        self.n_bones = n_bones
 
     def seek_network_weights(self, model_info='', serial_no=1, tb_dir: Path | None = None):
         """Load existing weights if found, otherwise train from scratch.
@@ -630,7 +517,7 @@ class Task:
                 val_loader=self.val_loader,
                 device=self.device,
                 save_path=weight_path,
-                n_bones=len(get_bone_pairs()) if self.pose_style != 'J_only' else 0,
+                n_bones=self.n_bones,
                 n_classes=self.taxonomy.n_classes,
                 class_ls=self.taxonomy.class_list(),
                 tb_dir=tb_dir,
@@ -703,84 +590,43 @@ class Task:
         print(f'Top{k} Accuracy: {acc:.3f}')
         return {f'top{k}_accuracy': float(acc)}
 
-    def compare_pred_gt_on_specific_type(self, dir_path: Path):
-        infer_ds = Dataset_npy(
-            root_dir=dir_path,
-            set_name='test_specific',
-            pose_style=self.pose_style,
-            seq_len=hyp.seq_len,
-            taxonomy=self.taxonomy,
-        )
-        infer_loader = DataLoader(
-            dataset=infer_ds,
-            batch_size=hyp.batch_size,
-        )
-
-        pred, gt = test(self.net, infer_loader, self.device)
-        pred = pred.cpu().numpy()
-        gt = gt.cpu().numpy()
-
-        not_match = pred != gt
-        class_ls = self.taxonomy.class_list()
-        with pd.option_context('display.max_rows', None):
-            df = pd.DataFrame(
-                data={
-                    'Ball Round': [Path(e).stem for e in infer_ds.data_branches],
-                    'Pred': [class_ls[e] if b else '-' for e, b in zip(pred, not_match)],
-                    'GT': [class_ls[e] if b else '-' for e, b in zip(gt, not_match)]
-                }
-            )
-            print(df)
-
 
 # ==========================================================================
 # Main: train and test on ShuttleSet
 # ==========================================================================
 
 if __name__ == '__main__':
-    additional_model_info = ''
     taxonomy = TAXONOMIES[hyp.taxonomy]
 
-    # ablation_id tags the collated dir (and ends up in the manifest) so
-    # parallel ablations don't collide. Mirrors the default in
-    # preparing_data/prepare_train_on_shuttleset.py — same convention so the
-    # train script reads exactly the dir collation just wrote.
-    effective_ablation_id = hyp.ablation_id or (
-        f'{taxonomy.name}_{hyp.split_column}'
-        f'_{"dropunk" if hyp.drop_unknown else "keepunk"}'
+    # Collated dir naming via shared helper (mirrored on the prepare_train
+    # writer side); see ``pipeline.config.derive_npy_collated_dir_basename``.
+    if hyp.seq_len not in (30, 100):
+        raise NotImplementedError(f'Unsupported hyp.seq_len={hyp.seq_len!r}; expected 30 or 100.')
+    effective_ablation_id = derive_ablation_id(
+        taxonomy.name, hyp.split_column, hyp.drop_unknown, hyp.ablation_id,
+    )
+    npy_collated_dir = derive_npy_collated_dir_basename(
+        taxonomy_name=taxonomy.name,
+        split_column=hyp.split_column,
+        drop_unknown=hyp.drop_unknown,
+        use_3d_pose=hyp.use_3d_pose,
+        seq_len=hyp.seq_len,
+        ablation_id=hyp.ablation_id,
     )
 
+    # Weights filename suffix. Independent of the collated-dir name; encodes
+    # config knobs that change per run (seq_len-derived window tag, 3d flag,
+    # train_partial). Empty string is a valid value (seq_len=30, 2D, full data).
     str_3d = '_3d' if hyp.use_3d_pose else ''
-    three_d_tag = '3d_' if hyp.use_3d_pose else ''
-    # Collated dir naming (mirrors prepare_train_on_shuttleset.py main()):
-    #   npy_[3d_][seq{N}_]{ablation_id}    (prefix tags only when non-default)
-    match hyp.seq_len:
-        case 30:
-            npy_collated_dir = (
-                f'npy_{three_d_tag}seq30_{effective_ablation_id}'
-            )
-            model_info = '3d' if hyp.use_3d_pose else ''
-        case 100:
-            npy_collated_dir = (
-                f'npy_{three_d_tag}{effective_ablation_id}'
-            )
-            model_info = f'between_2_hits_with_max_limits_seq_100{str_3d}'
-        case _:
-            raise NotImplementedError
-
+    model_info_parts: list[str] = []
+    if hyp.seq_len == 100:
+        model_info_parts.append(f'between_2_hits_with_max_limits_seq_100{str_3d}')
+    elif hyp.use_3d_pose:
+        model_info_parts.append('3d')
     assert 0 < hyp.train_partial <= 1, 'hyp.train_partial should be in (0, 1].'
     if hyp.train_partial != 1:
-        tmp_str = f'train_partial_0p{str(hyp.train_partial)[2:]}'
-        if model_info != '':
-            model_info += '_' + tmp_str
-        else:
-            model_info += tmp_str
-
-    if additional_model_info != '':
-        if model_info != '':
-            model_info += f'_{additional_model_info}'
-        else:
-            model_info = additional_model_info
+        model_info_parts.append(f'train_partial_0p{str(hyp.train_partial)[2:]}')
+    model_info = '_'.join(model_info_parts)
 
     # ----------------------------------------------------------------------
     # Per-run experiment folder (tracked via run_tracker).
@@ -808,31 +654,24 @@ if __name__ == '__main__':
     # captures it. One log file per script invocation, all serials inside.
     # Uses the fresh invocation timestamp (not run_id) so resumed re-tests
     # don't overwrite the original run's log file.
-    log_dir = Path('test_logs')
+    #
+    # Anchor test_logs/ and experiments/ to this file's directory so the
+    # write paths don't depend on cwd. Lets `python -m main_on_shuttleset.bst_train`
+    # land outputs next to the script regardless of where it was invoked from.
+    script_dir = Path(__file__).resolve().parent
+    log_dir = script_dir / 'test_logs'
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / f'test_{timestamp}.log'
+    experiments_dir = script_dir / 'experiments'
 
-    # Provenance: hash the master CSV so the manifest pins which CSV
-    # produced this run's collated arrays. Fail fast if it's missing — the
-    # same CSV must have been used to generate the collated dir below.
-    clips_csv_path = Path(hyp.clips_csv)
-    if not clips_csv_path.exists():
-        raise FileNotFoundError(
-            f'hyp.clips_csv does not exist: {clips_csv_path}\n'
-            f'  (Run preparing_data.prepare_train_on_shuttleset to generate '
-            f'the collated arrays first.)'
-        )
-    clips_csv_sha = hashlib.sha256(clips_csv_path.read_bytes()).hexdigest()
-    extra = {
-        'data_provenance': {
-            'clips_csv_path': str(clips_csv_path),
-            'clips_csv_sha256': clips_csv_sha,
-            'effective_ablation_id': effective_ablation_id,
-            'npy_collated_dir': npy_collated_dir,
-        },
-    }
+    extra = compute_data_provenance(
+        clips_csv_path=Path(hyp.clips_csv),
+        effective_ablation_id=effective_ablation_id,
+        npy_collated_dir=npy_collated_dir,
+    )
     run_dir, run_id = track_run(
         config=hyp, run_id=run_id, log_path=log_path, extra=extra,
+        experiments_dir=experiments_dir,
     )
     weight_dir = run_dir / 'weights'
 

@@ -10,13 +10,14 @@ Refuses to run if ``--output-dir`` collides with ``--raw-dir`` or with the
 ``BST_MMPOSE_NPY_DIR`` environment variable -- the committed filtered
 extract is never overwritten by this tool.
 
-Run from ``stroke_classification/``::
+Run from the repo root with both package roots on PYTHONPATH::
 
-    python -m preparing_data.apply_heuristic \\
-        --raw-dir /scratch/.../dataset_npy_..._flat_raw_phase1 \\
-        --output-dir /scratch/.../dataset_npy_..._flat_h_sticky_anchor \\
-        --heuristic sticky_anchor \\
-        --clips-csv notebooks/clips_master.csv
+    PYTHONPATH=src/bst_refactor:src/bst_refactor/stroke_classification \\
+        python -m preparing_data.apply_heuristic \\
+            --raw-dir /scratch/.../dataset_npy_..._flat_raw_phase1 \\
+            --output-dir /scratch/.../dataset_npy_..._flat_h_sticky_anchor \\
+            --heuristic sticky_anchor \\
+            --clips-csv notebooks/clips_master.csv
 """
 from __future__ import annotations
 
@@ -30,23 +31,16 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-if __name__ == "__main__":
-    # preparing_data imports
-    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-    # pipeline imports
-    sys.path.append(
-        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    )
+from pipeline.config import RESOLUTION_CSV_PATH, SET_INFO_DIR
+from pipeline.court_utils import get_court_info
+from pipeline.data_access import load_repo_dotenv
 
-# pipeline.data_access is imported for its side effect of auto-loading the
-# repo-root .env file, so BST_MMPOSE_NPY_DIR is visible to the collision
-# guard below without needing a prior shell export.
-import pipeline.data_access  # noqa: E402,F401
+from preparing_data.heuristics import REGISTRY, ClipContext, RawClip
+from preparing_data.heuristics.sticky_anchor import StickyAnchorParams
 
-from pipeline.config import RESOLUTION_CSV_PATH, SET_INFO_DIR  # noqa: E402
-from pipeline.court_utils import get_court_info  # noqa: E402
-
-from preparing_data.heuristics import REGISTRY, ClipContext, RawClip  # noqa: E402
+# Pull BST_MMPOSE_NPY_DIR from the repo-root .env so the output-dir
+# collision guard works without a prior shell export.
+load_repo_dotenv()
 
 
 RAW_SUFFIXES = (
@@ -263,28 +257,27 @@ def run(
 
 
 def _add_hyperparam_args(parser: argparse.ArgumentParser) -> None:
-    """Hyperparam CLI block. ``current`` ignores these; ``sticky_anchor`` uses them."""
-    parser.add_argument("--prior-weight", type=float, default=0.75)
-    parser.add_argument("--ema-alpha", type=float, default=0.1)
-    parser.add_argument("--sanity-ceiling", type=float, default=0.6)
-    parser.add_argument("--generous-margin", type=float, default=0.15)
-    parser.add_argument("--score-filter", type=float, default=0.2)
-    parser.add_argument("--tiebreaker-tol", type=float, default=0.05)
-    parser.add_argument("--sitting-threshold", type=float, default=-0.3)
-    parser.add_argument("--update-gate-eps", type=float, default=0.01)
+    """Hyperparam CLI block, derived from StickyAnchorParams field names + defaults.
+
+    ``current`` ignores these; ``sticky_anchor`` consumes them. Single source
+    of truth lives on the dataclass so adding a field here means editing it
+    in one place.
+    """
+    from dataclasses import fields  # local import keeps the module-level imports tidy
+
+    # All fields on StickyAnchorParams are float; the dataclass annotations
+    # are stringified by ``from __future__ import annotations`` so we
+    # hard-code the argparse type rather than evaluating field.type strings.
+    for field in fields(StickyAnchorParams):
+        flag = "--" + field.name.replace("_", "-")
+        parser.add_argument(flag, type=float, default=field.default)
 
 
 def _hyperparam_dict_from_args(args: argparse.Namespace) -> dict:
-    return {
-        "prior_weight": args.prior_weight,
-        "ema_alpha": args.ema_alpha,
-        "sanity_ceiling": args.sanity_ceiling,
-        "generous_margin": args.generous_margin,
-        "score_filter": args.score_filter,
-        "tiebreaker_tol": args.tiebreaker_tol,
-        "sitting_threshold": args.sitting_threshold,
-        "update_gate_eps": args.update_gate_eps,
-    }
+    """Marshal argparse values into the kwargs accepted at the registry boundary."""
+    from dataclasses import fields
+
+    return {f.name: getattr(args, f.name) for f in fields(StickyAnchorParams)}
 
 
 def main() -> int:

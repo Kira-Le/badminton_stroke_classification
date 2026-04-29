@@ -186,12 +186,17 @@ def render_one_clip(
                 bboxes_f, n, H, src_w, src_h, court,
             )
 
-            if not failed[f]:
-                top_idx = match_pick_to_raw(pos[f, SLOT_TOP], projected)
-                bot_idx = match_pick_to_raw(pos[f, SLOT_BOTTOM], projected)
-            else:
-                top_idx = None
-                bot_idx = None
+            # Test per-slot, not frame-level `failed`: a partial success (one
+            # slot picked, one zeroed) should still show the valid pick in
+            # its colour rather than falling back to grey for both.
+            top_idx = (
+                match_pick_to_raw(pos[f, SLOT_TOP], projected)
+                if pos[f, SLOT_TOP].any() else None
+            )
+            bot_idx = (
+                match_pick_to_raw(pos[f, SLOT_BOTTOM], projected)
+                if pos[f, SLOT_BOTTOM].any() else None
+            )
 
             for i in range(n):
                 if i == top_idx:
