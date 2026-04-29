@@ -76,7 +76,7 @@ export default function useSpatialCrop(videoRef) {
         })
         resizeObserver.observe(video)
         return () => resizeObserver.disconnect()
-    }, [videoRef, redrawBoxes])
+    }, [videoRef])
 
 
     function getCanvasPoint(e) {
