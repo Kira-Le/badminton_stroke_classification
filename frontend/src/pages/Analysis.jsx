@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { Button, RadioButtonGroup } from '../components'
+
+import { useSpatialCrop, useTemporalCrop} from '../hooks'
 
 import style from './Analysis.module.css'
 
@@ -14,6 +16,10 @@ export default function Analysis() {
     const[selectedValue, setSelectedValue] = useState('')
     const [status, setStatus] = useState('')
     const navigate = useNavigate()
+    const videoRef = useRef(null)
+
+    const { canvasRef, courtBox, playerBox, activeMode, setActiveMode, clearAll, canvasHandlers } = useSpatialCrop(videoRef)
+    const { duration, startTime, endTime, handleStartChange, handleEndChange, formatTime } = useTemporalCrop(videoRef)
     
     // Run once on page load, to get available models and set initial selection to the first model
     useEffect(() => {
@@ -48,14 +54,90 @@ export default function Analysis() {
         return () => clearInterval(interval)
     }, [navigate])
 
+    function handleClassify() {
+        const cropParams = {
+            model: selectedValue,
+            temporalCrop: { startTime, endTime },
+            spatialCrop: { courtBox, playerBox },
+        }
+        console.log('Sending crop params:', cropParams)
+        //TODO: Send cropParams to backend with job request
+    }
+
     return (
         <>
           <h1>Analysis</h1>
           <div className={style.layout}>
-            <video controls className={style.videoPlayer} src={video} />
+
+            <div className={style.videoSection}>
+                <div className={style.videoWrapper}>
+                    <video
+                    ref={videoRef}
+                    controls
+                    className={style.videoPlayer}
+                    src={video}
+                    />
+                    <canvas
+                    ref={canvasRef}
+                    className={style.canvas}
+                    style={{ pointerEvents: activeMode ? 'all': 'none' }}
+                    {...canvasHandlers}
+                    />
+                </div>
+
+                <div className={style.temporalCrop}>
+                    <div className={style.timeLabels}>
+                        <span>Start: {formatTime(startTime)}</span>
+                        <span>End: {formatTime(endTime)}</span>
+                    </div>
+                    <div className={style.sliders}>
+                        <input
+                        type="range"
+                        min={0}
+                        max={duration}
+                        step={0.1}
+                        value={startTime}
+                        onChange={handleStartChange}
+                        className={style.slider}
+                        />
+                        <input
+                        type="range"
+                        min={0}
+                        max={duration}
+                        step={0.1}
+                        value={endTime}
+                        onChange={handleEndChange}
+                        className={style.slider}
+                        />
+                    </div>
+                </div>
+            </div>
+
             <div className={style.input_group}>
-              <Button>Identify court</Button>
-              <Button>Identify target player</Button>
+              <Button
+              onClick={() => setActiveMode('court')}
+              className={activeMode === 'court' ? style.activeButton : ''}
+              >
+                {courtBox ? 'Redraw court' : 'Identify court'}
+              </Button>
+              <Button
+              onClick={() => setActiveMode('player')}
+              className={activeMode === 'player' ? style.activeButton : ''}
+              >
+                {playerBox ? 'Redraw player' : 'Identify target'}
+              </Button>
+              
+              {activeMode && (
+                <p className={style.drawingHint}>
+                    {activeMode === 'court'
+                      ? 'Draw a box around the court area'
+                      : 'Draw a box around the target player'}
+                </p>
+              )}
+
+              {courtBox && <p className={style.cropInfo}>Court selected: {courtBox.width}x{courtBox.height}px</p>}
+              {playerBox && <p className={style.cropInfo}>Player selected: {playerBox.width}x{playerBox.height}px</p>}
+
               {models.length === 0
               ? <p>Loading models...</p>
               : <RadioButtonGroup
@@ -65,7 +147,9 @@ export default function Analysis() {
               name="model-selection"
               />
               }
-              <Button>Classify stroke</Button>
+              <Button onClick={handleClassify}>Classify stroke</Button>
+              <Button onClick={clearAll}>Clear all crops</Button>
+              
               {status && <div>Stroke classification is: {status}</div>}
             </div>
           </div>
