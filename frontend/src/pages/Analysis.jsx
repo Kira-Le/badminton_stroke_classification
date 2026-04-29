@@ -18,7 +18,7 @@ export default function Analysis() {
     const navigate = useNavigate()
     const videoRef = useRef(null)
 
-    const { canvasRef, courtBox, playerBox, activeMode, setActiveMode, clearAll, canvasHandlers } = useSpatialCrop(videoRef)
+    const { canvasRef, courtBox, playerBox, activeMode, startCourtMode, startPlayerMode, clearAll, canvasHandlers } = useSpatialCrop(videoRef)
     const { duration, startTime, endTime, handleStartChange, handleEndChange, formatTime } = useTemporalCrop(videoRef)
     
     // Run once on page load, to get available models and set initial selection to the first model
@@ -115,14 +115,14 @@ export default function Analysis() {
 
             <div className={style.input_group}>
               <Button
-              onClick={() => setActiveMode('court')}
+              onClick={startCourtMode}
               variant={activeMode === 'court' ? 'active' : undefined}
               >
                 {courtBox ? 'Redraw court' : 'Identify court'}
               </Button>
               
               <Button
-              onClick={() => setActiveMode('player')}
+              onClick={startPlayerMode}
               variant={activeMode === 'player' ? 'active' : undefined}
               >
                 {playerBox ? 'Redraw player' : 'Identify target'}

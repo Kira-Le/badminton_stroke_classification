@@ -8,6 +8,16 @@ export default function useSpatialCrop(videoRef) {
     const [activeMode, setActiveMode] = useState(null) // 'court' | 'player' | null
     const isDragging = useRef(false)
     const startPoint = useRef({ x: 0, y: 0 })
+    
+    function startCourtMode() {
+        setCourtBox(null) 
+        setActiveMode('court')
+    }
+
+    function startPlayerMode() {
+        setPlayerBox(null)
+        setActiveMode('player') 
+    }
 
     // Keep canvas size in sync with rendered video size
     useEffect(() => {
@@ -135,7 +145,8 @@ export default function useSpatialCrop(videoRef) {
         courtBox,
         playerBox,
         activeMode,
-        setActiveMode,
+        startCourtMode,
+        startPlayerMode,
         clearAll,
         canvasHandlers: {
             onMouseDown: handleMouseDown,
