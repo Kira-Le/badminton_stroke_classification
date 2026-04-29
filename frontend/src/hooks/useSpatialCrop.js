@@ -1,4 +1,3 @@
-import { X } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 
 export default function useSpatialCrop(videoRef) {
@@ -18,21 +17,6 @@ export default function useSpatialCrop(videoRef) {
         setPlayerBox(null)
         setActiveMode('player') 
     }
-
-    // Keep canvas size in sync with rendered video size
-    useEffect(() => {
-        const video = videoRef.current
-        const canvas = canvasRef.current
-        if (!video || !canvas) return
-
-        const resizeObserver = new ResizeObserver(() => {
-            canvas.width = video.clientWidth
-            canvas.height = video.clientHeight
-            redrawBoxes(canvas)
-        })
-        resizeObserver.observe(video)
-        return () => resizeObserver.disconnect()
-    }, [videoRef])
 
     // Convert canvas pixel coords to video native resolution coords
     function toNativeCoords(canvas, video, x, y, width, height) {
@@ -57,7 +41,15 @@ export default function useSpatialCrop(videoRef) {
         }
     }
 
-    function redrawBoxes(canvas) {
+    function drawRect(ctx, x, y, width, height, stroke, fill) {
+        ctx.strokeStyle = stroke
+        ctx.lineWidth = 2
+        ctx.strokeRect(x, y, width, height)
+        ctx.fillStyle = fill
+        ctx.fillRect(x, y, width, height)
+    }
+
+     function redrawBoxes(canvas) {
         const ctx = canvas.getContext('2d')
         const video = videoRef.current
         ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -71,13 +63,21 @@ export default function useSpatialCrop(videoRef) {
         }
     }
 
-    function drawRect(ctx, x, y, width, height, stroke, fill) {
-        ctx.strokeStyle = stroke
-        ctx.lineWidth = 2
-        ctx.strokeRect(x, y, width, height)
-        ctx.fillStyle = fill
-        ctx.fillRect(x, y, width, height)
-    }
+    // Keep canvas size in sync with rendered video size
+    useEffect(() => {
+        const video = videoRef.current
+        const canvas = canvasRef.current
+        if (!video || !canvas) return
+
+        const resizeObserver = new ResizeObserver(() => {
+            canvas.width = video.clientWidth
+            canvas.height = video.clientHeight
+            redrawBoxes(canvas)
+        })
+        resizeObserver.observe(video)
+        return () => resizeObserver.disconnect()
+    }, [videoRef, redrawBoxes])
+
 
     function getCanvasPoint(e) {
         const canvas = canvasRef.current
