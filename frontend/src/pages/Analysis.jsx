@@ -116,13 +116,14 @@ export default function Analysis() {
             <div className={style.input_group}>
               <Button
               onClick={() => setActiveMode('court')}
-              className={activeMode === 'court' ? style.activeButton : ''}
+              variant={activeMode === 'court' ? 'active' : undefined}
               >
                 {courtBox ? 'Redraw court' : 'Identify court'}
               </Button>
+              
               <Button
               onClick={() => setActiveMode('player')}
-              className={activeMode === 'player' ? style.activeButton : ''}
+              variant={activeMode === 'player' ? 'active' : undefined}
               >
                 {playerBox ? 'Redraw player' : 'Identify target'}
               </Button>

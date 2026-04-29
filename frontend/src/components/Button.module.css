@@ -15,4 +15,15 @@
 
 .button:disabled {
     cursor: not-allowed;
+    opacity: 0.5;
 }
+
+.button:hover {
+    background-color: #2B6FD4;
+}
+
+.active {
+    outline: 2px solid white;
+    opacity: 0.8;
+}
+
