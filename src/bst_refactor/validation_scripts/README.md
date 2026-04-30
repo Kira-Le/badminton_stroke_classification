@@ -1,10 +1,44 @@
 # Validation Scripts
 
-Post-extraction analysis tools for the pose/shuttle dataset. Run these **after** MMPose extraction and collation to assess data quality before training.
+Analysis tools for the pose/shuttle dataset. Some run on the raw mmpose extract (pre-heuristic), others on the post-heuristic / post-collation per-clip arrays. Use them before training to assess data quality and surface failure floors.
 
-Both CLI scripts are CSV-driven: splits and labels come from `notebooks/clips_master.csv` (per `--split-column` and `--taxonomy`), not from the on-disk folder tree. Per-clip `.npy` files resolve flat at `{dataset_npy_dir}/{clip_stem}_*.npy`. This matches the Phase 2 flat-dir layout and the taxonomy definitions in `pipeline/config.py`.
+The post-collation CLI scripts (`validate_zeroed_frames.py`, `fail_rate_per_class.py`) are CSV-driven: splits and labels come from `notebooks/clips_master.csv` (per `--split-column` and `--taxonomy`), not from the on-disk folder tree. Per-clip `.npy` files resolve flat at `{dataset_npy_dir}/{clip_stem}_*.npy`. This matches the Phase 2 flat-dir layout and the taxonomy definitions in `pipeline/config.py`.
 
 ## Scripts
+
+### `raw_ndet_stats.py`
+
+Summarises the per-frame mmpose detection-count distribution across a raw extract dir (the `*_raw_ndet.npy` files written by `preparing_data/raw_extract.py`). Establishes the irreducible per-frame failure floor for any heuristic that requires two players: frames where mmpose returns `ndet < 2` will be zeroed by the heuristic regardless of variant.
+
+Run this **after** raw extraction but **before** `apply_heuristic.py` to confirm the raw extract is sane before sinking time into the postprocessing pass.
+
+**Usage** (full canonical raw dir):
+
+```bash
+python -m validation_scripts.raw_ndet_stats \
+    --raw-dir /scratch/comp320a/ShuttleSet_keypoints_raw
+```
+
+**Usage** (restricted to a stem subset, e.g. for comparing the Phase-1 backfill against the freshly extracted bulk):
+
+```bash
+python -m validation_scripts.raw_ndet_stats \
+    --raw-dir /scratch/comp320a/ShuttleSet_keypoints_raw \
+    --stems-file scratch/architecture_notes/busted_hit_zone_clips_phase1.txt
+```
+
+**Arguments:**
+
+| Argument | Required | Default | Description |
+|---|---|---|---|
+| `--raw-dir` | Yes | - | Flat dir holding `*_raw_ndet.npy` files. |
+| `--stems-file` | No | - | One-stem-per-line filter restricting the scan. |
+| `--output` | No | `raw_ndet_stats_outputs/<auto>.md` | Markdown report path. |
+| `--no-output` | No | off | Print stdout only; skip the markdown report. |
+
+**Output**: a markdown report at `raw_ndet_stats_outputs/raw_ndet_stats_{raw_dir_name}[_stems_subset]_{timestamp}.md`, plus the same content on stdout. Reports the clip count, total frames, ndet==0 floor, per-clip zero-rate quantiles, and the full ndet histogram. The most useful single number is the `ndet=1` percentage — that's the realistic per-frame failure floor for the downstream pipeline.
+
+`baseline_2026-04-29.md` in the outputs dir is the post Phase-2 consolidation reference snapshot to compare future re-extracts against.
 
 ### `validate_zeroed_frames.py`
 
@@ -119,6 +153,31 @@ Exactly one of `--dataset-npy-dir` or `--data-root` must be given. Auto-discover
 | `--save-txt` | No | off | Tee stdout to `zeroed_frames_analysis_outputs/fail_rate_per_class_{tax_short}_{split_short}_{ts}.txt`. |
 
 *One of `--data-root` / `--dataset-npy-dir` is required.
+
+### Pre-flight verification scripts
+
+Three small scripts that confirm a sanity-train run is pointed at the right artefacts before launch. Each exits 0 on all-OK, 1 on any mismatch, so they double as `set -e` guards in launch wrappers.
+
+- **`verify_env_paths.py`** — loads `.env` via `pipeline.data_access.load_repo_dotenv`, prints the four `BST_*` vars, and confirms each resolves to an existing path. Spot-checks `BST_MMPOSE_NPY_DIR` for 32,203 `_failed.npy` and `_pos.npy` files (the post-Phase-2 expected count).
+- **`verify_collated_counts.py`** — pure-stdlib check that the three active collated dirs (combo A / B / C) contain the per-split clip counts expected from `clips_master.csv` filtered for `--drop-unknown`. Hardcoded combo expectations; no external CSV read needed at run time.
+- **`verify_bst_train_target.py`** — imports the live `hyp` namedtuple from `main_on_shuttleset.bst_train` without running its `__main__` block, derives the basename via the same `derive_ablation_id` + `derive_npy_collated_dir_basename` helpers the script uses, and confirms the resolved collated dir exists with its train/val/test sub-dirs and `.npy` files. The standard pre-launch check after a `hyp` edit.
+
+All three run from the repo root:
+
+```bash
+PYTHONPATH=src/bst_refactor:src/bst_refactor/stroke_classification \
+    python src/bst_refactor/validation_scripts/<script>.py
+```
+
+### Phase-2 shuttle-missing diagnosis scripts
+
+Three scripts authored 2026-04-30 to verify the off-screen-high hypothesis for the 6.34% post-inpaint shuttle-missing rate, and to test whether the bottleneck classes correlate with shuttle availability.
+
+- **`shuttle_gap_y_distribution.py`** — for every contiguous run of `visibility=0` frames in a per-clip shuttle NPY, records the y-coordinate of the last valid detection before the gap and the first valid detection after, then aggregates across the canonical 32k-clip set. Drops unknowns by default via `--clips-csv`. Saves a histogram PNG + markdown report to `zeroed_frames_analysis_outputs/`.
+- **`shuttle_gap_length_distribution.py`** — gap-length histogram + classification by length-class (1-2 / 3-5 / 6-10 / 11-30 / 31-60 / 61+ frames) interpreted as motion-blur / inpaint sweet spot / off-screen-arc / sustained / inpaint-window-exceeded. Same drop-unknown default.
+- **`perclass_shuttle_miss_vs_f1.py`** — joins per-class median F1 from a run's `manifest.yaml` against the per-stroke shuttle-miss-rate table parsed from a `validate_zeroed_frames.py` analysis txt. Pearson + Spearman correlation, scatter PNG, sorted markdown table. Defaults to F1 (the metric currently in the manifest schema); `--metric precision` and `--metric recall` are placeholders gated on the schema extension. Use `--no-collapse-sides` when the manifest's labels already match the analysis table directly (nosides taxonomy).
+
+Run on engelbart or bourbaki for the gap scripts (data is on `/scratch`, host-local). The correlation script can run anywhere since manifest + analysis txt both live on `/home`.
 
 ### `hit_frame_lookup.py`
 

@@ -44,3 +44,12 @@ main_on_shuttleset/.aim/
 
 # run_20260425_185421: collapsed-classes ablation on sticky_anchor data (taxonomy une_merge_v1_nosides), 80ep. S1 best (macro 0.746, min 0.424, acc 0.765, top-2 0.940).
 !main_on_shuttleset/experiments/run_20260425_185421/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides.pt
+
+# run_20260429_202144: Phase 2 sanity train, combo C (merged_25 + split_bst_baseline + dropunk) on unified sticky_anchor clean dir, 80ep. S2 best (macro 0.831, min 0.577, acc 0.849, top-2 0.968).
+!main_on_shuttleset/experiments/run_20260429_202144/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25_2.pt
+
+# run_20260430_110101: Phase 2 sanity train, combo B (une_merge_v1 + split_v2 + dropunk), 80ep. S4 best (top macro 0.743, top acc 0.770, top top-2 0.944, min 0.245). Mean min drops 7pp vs V4 baseline; Top_wrist_smash gets worse with cleaner pose data.
+!main_on_shuttleset/experiments/run_20260430_110101/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_4.pt
+
+# run_20260430_170325: Phase 2 sanity train, combo A (une_merge_v1_nosides + split_v2 + dropunk), 80ep. S4 best (top macro 0.747, acc 0.770, top-2 0.940, min 0.403). Collapse-rescue confirmed on Phase-2 data: +0.058 min vs combo B; essentially tied with Phase-1 collapsed-classes baseline.
+!main_on_shuttleset/experiments/run_20260430_170325/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_4.pt

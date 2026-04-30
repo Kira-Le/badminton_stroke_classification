@@ -57,6 +57,7 @@ Hyp = namedtuple('Hyp', [
     'pose_style', 'use_3d_pose', 'train_partial',
     'use_aux_schedule', 'aux_fade_end_epoch',
     'clips_csv', 'split_column', 'drop_unknown', 'ablation_id',
+    'label_smoothing',
 ])
 hyp = Hyp(
     n_epochs=80,
@@ -74,7 +75,8 @@ hyp = Hyp(
     clips_csv=str(DEFAULT_CLIPS_CSV),
     split_column='split_v2',
     drop_unknown=True,
-    ablation_id='une_merge_v1_nosides_split_v2_dropunk_h_sticky_anchor',
+    ablation_id=None,
+    label_smoothing=0.0,  # LS sweep: BST paper default 0.1; testing 0.0 first
 )
 
 
@@ -296,8 +298,12 @@ def train_network(
     writer = SummaryWriter(log_dir=str(tb_dir)) if tb_dir is not None else SummaryWriter()
     random_shift_fn = RandomTranslation_batch()  # data augmentation: small xy shifts
 
-    # label_smoothing=0.1: softens targets from [0,1] to [0.004, 0.904] to reduce overconfidence
-    loss_fn = nn.CrossEntropyLoss(label_smoothing=0.1)
+    # label_smoothing softens targets from [0,1] to reduce overconfidence.
+    # BST paper / TemPose default is 0.1; we sweep this knob to test
+    # whether it's bottlenecking the small-support classes that lose
+    # ground when the cleaner Phase-2 pose data lifts the head of the
+    # F1 distribution. See scratch/architecture_notes/hparams_sweep_speculations.md.
+    loss_fn = nn.CrossEntropyLoss(label_smoothing=hyp.label_smoothing)
     # AdamW = Adam with decoupled weight decay (standard for transformers)
     # model.parameters() returns all learnable weights (TF equivalent: model.trainable_variables)
     optimizer = optim.AdamW(model.parameters(), lr=hyp.lr)
