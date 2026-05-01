@@ -159,27 +159,25 @@ log_path: src/bst_refactor/stroke_classification/main_on_shuttleset/test_logs/te
 best_serials:
 - 2
 notes: |
-  Phase 2 CDB-F1 first cell (combo A nosides + LS=0.0 +
-  adaptive_focal{tau=1, gamma=1, momentum=0.9, warm_up=5,
-  f1_floor=0}). Best S2 (top min 0.486, top macro 0.753,
-  top acc 0.769, top top-2 0.940). Mean macro 0.7432, min 0.4621,
-  acc 0.7617, top-2 0.9351.
+  First CDB-F1 run on combo A nosides + LS=0.0 + adaptive_focal
+  {tau=1, gamma=1, momentum=0.9, warm_up=5, f1_floor=0}. Best S2
+  (top min 0.486, top macro 0.753, top acc 0.769, top top-2 0.940).
+  Mean macro 0.7432, min 0.4621, acc 0.7617, top-2 0.9351.
 
-  Vs class-weighted cell run_20260501_110525 mean
-  (0.7478/0.4221/0.7695/0.9360):
-  macro -0.5 pp, min +4.0 pp, acc -0.8 pp, top-2 -0.1 pp.
-  Vs LS=0.1 baseline run_20260430_170325 mean
-  (0.7419/0.3751/0.7673/0.9378):
-  macro +0.1 pp, min +8.7 pp, acc -0.6 pp, top-2 -0.3 pp.
+  Vs class-weighted run_20260501_110525 mean
+  (0.7478/0.4221/0.7695/0.9360): macro -0.5, min +4.0, acc -0.8,
+  top-2 -0.1. Vs LS=0.1 baseline run_20260430_170325 mean
+  (0.7419/0.3751/0.7673/0.9378): macro +0.1, min +8.7, acc -0.6,
+  top-2 -0.3.
 
-  Wrist_smash range tightens 0.413-0.486 vs class-weighted
-  0.378-0.518 (bimodal-seed problem solved). Project ceiling
-  not broken: S2 0.486 < class-weighted S2 0.518. Per-class
-  movements vs class-weighted: ws +4.0, push +6.7 (adaptive
-  picked up push as a bottleneck class the static config missed);
-  smash -5.5 (pair-confusion residual the design doc anticipated);
-  rush -2.7, drive -1.4, passive_drop -1.4, drop -1.1, lob -1.0,
-  services -0.9 to -1.4. Full reflection in arch_1_directions.md.
+  Wrist_smash range tightens to 0.413-0.486 (vs class-weighted
+  0.378-0.518), so the bimodal-seed problem is solved. Project
+  ceiling not broken: S2 0.486 < class-weighted S2 0.518.
+  Per-class shifts vs class-weighted: ws +4.0, push +6.7 (adaptive
+  picked it up as a second bottleneck the static config didn't
+  weight), smash -5.5 (pair-confusion with ws), rush -2.7,
+  drive -1.4, passive_drop -1.4, drop -1.1, lob -1.0, services
+  -0.9 to -1.4. Full discussion in arch_1_directions.md.
 extra:
   data_provenance:
     clips_csv_path: /home/ahalperi/badminton_stroke_classifier/notebooks/clips_master.csv

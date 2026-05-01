@@ -1,13 +1,12 @@
 Best model of run_20260430_213933/ - #2
   #2: bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_2.pt
 
-Phase 2 LS sweep cell 1 (combo A: une_merge_v1_nosides + split_v2 +
-dropunk, label_smoothing=0.0) on the unified sticky_anchor mmpose
-clean dir. Direct apples-to-apples vs LS=0.1 baseline
-run_20260430_170325 (same combo, all other hparams identical); the
-intent is a clean read on whether dropping the BST-paper-inherited
-label_smoothing=0.1 to 0.0 lifts the wrist_smash floor on the
-collapsed-classes taxonomy.
+Phase 2 LS=0.0 run on combo A (une_merge_v1_nosides + split_v2 +
+dropunk) over the unified sticky_anchor mmpose clean dir. Direct
+comparison against LS=0.1 baseline run_20260430_170325 (same combo,
+all other hparams identical); checks whether dropping
+label_smoothing from the BST-paper-inherited 0.1 to 0.0 lifts the
+wrist_smash floor on the collapsed-classes taxonomy.
 
 Hparams:
   taxonomy=une_merge_v1_nosides, split_column=split_v2,

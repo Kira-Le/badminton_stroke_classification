@@ -156,9 +156,9 @@ best_serials:
 notes: |
   Phase 2 class-weighting smoke test (combo A: une_merge_v1_nosides
   + split_v2 + dropunk, label_smoothing=0.15,
-  class_weights={wrist_smash: 2.0, smash: 2.0}). Apples-to-apples vs
-  LS=0.15 cell run_20260501_073430 (same hparams + pair-balanced
-  class_weights added) and vs LS=0.1 baseline run_20260430_170325.
+  class_weights={wrist_smash: 2.0, smash: 2.0}). Direct comparisons
+  against LS=0.15 run_20260501_073430 (same hparams + pair-balanced
+  class_weights added) and LS=0.1 baseline run_20260430_170325.
   Best S2 by wrist_smash (top min 0.518, macro 0.751, acc 0.766,
   top-2 0.936). Mean macro 0.748, min 0.422, acc 0.770, top-2 0.936.
 
@@ -177,8 +177,8 @@ notes: |
   flat: macro +0.001, min +0.005, acc +0.001, top-2 -0.002. Smash
   mean 0.653 vs 0.648 at LS=0.15 alone. So the pair-balanced
   reweighting didn't move the central tendency, but it did widen
-  the wrist_smash range from 0.066 (LS=0.15) to 0.143 in this
-  cell — and the wide end is a new high. Read as: bimodal seed
+  the wrist_smash range from 0.066 (LS=0.15) to 0.143 in this run
+  run, and the wide end is a new high. Read as: bimodal seed
   distribution; one seed (S2) found a wrist_smash basin that no
   prior nosides serial accessed. Adaptive class weighting
   candidate strengthened, not weakened, by this evidence. Full

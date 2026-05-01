@@ -51,18 +51,18 @@ run (0.424, 0.396, 0.395, 0.350, 0.419 per
 run_20260425_185421/best_model_id.txt), just shifted ~3 pp lower.
 
 Per-class F1 profile (Serial 4, sorted by support roughly):
-  - net_shot 0.91, return_net 0.83, lob 0.78, smash 0.66 — common
+  - net_shot 0.91, return_net 0.83, lob 0.78, smash 0.66: common
     classes, healthy or marginally improved vs combo B's averaged
     Top/Bottom.
-  - clear 0.96, short_service 0.99, long_service 0.99 — pose-
+  - clear 0.96, short_service 0.99, long_service 0.99: pose-
     distinctive classes, ceiling-saturated.
   - rush 0.77, cross_court_net_shot 0.70, drop 0.66, push 0.61,
-    drive 0.59, passive_drop 0.61 — mid-tier, similar to combo B.
-  - **wrist_smash 0.40** — bottleneck, recovered from combo B's
+    drive 0.59, passive_drop 0.61: mid-tier, similar to combo B.
+  - **wrist_smash 0.40**: bottleneck, recovered from combo B's
     Top_wrist_smash 0.245 / Bottom_wrist_smash 0.427 average.
 
-Diagnostic implication for the wider sweep arc: the three Phase-2
-sanity-train runs together confirm that:
+Diagnostic note across the three Phase-2 sanity-train runs: together
+they confirm that:
   - Cleaner pose data lifts head-of-distribution metrics slightly
     (combo C macro / acc held; combo A / combo B same).
   - Cleaner pose data hurts the small-support tail

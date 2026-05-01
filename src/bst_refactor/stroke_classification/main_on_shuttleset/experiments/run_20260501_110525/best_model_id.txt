@@ -23,8 +23,8 @@ Hparams:
   ablation_id=None
   (resolves to une_merge_v1_nosides_split_v2_dropunk).
 
-Headline: new project-wide ceiling on wrist_smash F1.
-  S2 wrist_smash 0.518 — highest per-serial wrist_smash across
+Result: new project-wide ceiling on wrist_smash F1.
+  S2 wrist_smash 0.518: highest per-serial wrist_smash across
   all 25 nosides serials run to date. Prior best was 0.46 (LS=0.1
   S5); first time any nosides serial clears 0.50.
 
@@ -33,7 +33,7 @@ Headline: new project-wide ceiling on wrist_smash F1.
   - accuracy 0.777 (prior best LS=0.15 S3 = 0.773, +0.4 pp)
   - drive 0.66 (prior best LS=0.0 S4 = 0.64, +2 pp)
   S4 not flagged as the run best (S2's wrist_smash result is
-  the metric this cell was probing) but its weights are also
+  the metric this run was probing) but its weights are also
   worth holding if disk allows.
 
   Other bottom-5 classes (smash, drop, passive_drop, push,
@@ -67,18 +67,18 @@ within seed variance). Smash mean held (+0.5 pp), so the
 pair-balanced design didn't induce asymmetric collapse.
 
 The ceiling read: wrist_smash range widened from LS=0.15's
-0.066 (0.382-0.448) to 0.143 (0.378-0.518) in this cell. The
+0.066 (0.382-0.448) to 0.143 (0.378-0.518) in this run. The
 upper end of that band is the new project-wide high; three
 seeds (S1, S3, S5) sit in the LS=0.1-baseline range around
 0.37-0.40, one (S2) found a wrist_smash basin worth 0.52 that
 no prior nosides serial accessed. Bimodal seed distribution,
 not a flat ceiling.
 
-S2 cost analysis: wrist_smash 0.518 (10.0 pp above the
-within-run mean of 0.422). Cost concentrated on smash (S2 0.630
-vs run mean 0.653, -2.3 pp) and drive (S2 0.585 vs run mean
-0.620, -3.5 pp). S2 macro 0.751 still 2nd best of the run —
-capacity wasn't lost, just redistributed toward wrist_smash.
+S2 cost check: wrist_smash 0.518 (10.0 pp above the within-run
+mean of 0.422). Cost concentrated on smash (S2 0.630 vs run mean
+0.653, -2.3 pp) and drive (S2 0.585 vs run mean 0.620, -3.5 pp).
+S2 macro 0.751 still 2nd best of the run, so capacity wasn't
+lost, just redistributed toward wrist_smash.
 Cross_court_net_shot S2 0.701 is also notable (+3.4 pp vs run
 mean of 0.667; near the project ceiling of 0.71).
 
@@ -89,9 +89,9 @@ Per-class movement S3 (LS=0.15 best) -> S2 (class-weighted best):
   Most other classes within 1 pp.
 
 Smoke test reads as: static loss reweighting on this pair didn't
-move the central tendency past LS=0.15, but it DID introduce a
-new wrist_smash ceiling on one seed. Loss-side axis is not
-exhausted — there's clearly an accessible wrist_smash basin
+move the central tendency past LS=0.15, but it did introduce a
+new wrist_smash ceiling on one seed. Loss-side axis isn't
+exhausted: there's clearly an accessible wrist_smash basin
 worth ~0.52 that some hparam combination unlocks. The challenge
 shifts from "lift the ceiling" to "get more seeds to find the
 better basin". Adaptive class weighting (CDB-F1) is now a

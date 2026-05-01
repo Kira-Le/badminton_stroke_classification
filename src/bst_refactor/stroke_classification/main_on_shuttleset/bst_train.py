@@ -105,8 +105,8 @@ hyp = Hyp(
     #   }
     # Full design + paper-verified equations: scratch/architecture_notes/class_f1_focal_design.md.
     adaptive_focal={
-        'tau': 1.0,
-        'gamma': 0.0,  # gamma=0 cell: drop the per-sample focal layer; tests the doubly-suppression / noise-amplification hypotheses
+        'tau': 0.5,  # tau=0.5 cell: gentler per-class spread, narrows the alpha range so saturated classes don't sit at the bottom and bottleneck classes don't sit at 1.9x; tests whether the per-class shape itself was too aggressive in cell 1
+        'gamma': 1.0,
         'momentum': 0.9,
         'warm_up_epochs': 5,
         'f1_floor': 0.0,

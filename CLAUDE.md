@@ -17,3 +17,11 @@ What that pattern carries:
 - one sentence on what comes next and why
 
 Do not enumerate every file touched, every test added, every flag flipped. The diff shows the what; the message carries the why and the result.
+
+## Run notes (manifest.yaml notes / best_model_id.txt / .gitignore one-liners)
+
+Same voice as commit messages. Plain language, direct sentences, light casualness welcome (the smash pun, "didn't expect that", "stops hogging recall"). No academic-paper register — drop "cell 1", "doubly-suppression hypothesis", "load-bearing", "regresses", "erodes", "Read of the cell:", "Headline:", "Apples-to-apples", structured "Up: / Down: / ~Flat:" movement lists, "broadly recover", "doing real work". No narrative-jargon scaffolding either: don't call a thread of related runs an "arc", a "journey", a "story", a "chapter". Just call them experiments, runs, questions, or describe them directly. Refer to past runs by what they were ("the first CDB-F1 run", "the class-weighted run") plus the run_id in parens, not invented labels.
+
+Use `%` for per-class shifts in prose; structured comparison blocks can stay numerical (`0.7432 / 0.4621 / ...`). AU spelling. Em-dashes avoided per global style; if essential, write them unspaced.
+
+Notes are notes — best_model_id.txt should keep its hparams block, per-serial table, and comparison blocks (those are data, not prose). It's the surrounding paragraphs that need to sound like the commit message, not a research abstract.

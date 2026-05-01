@@ -1,14 +1,13 @@
 Best model of run_20260501_073430/ - #3
   #3: bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_3.pt
 
-Phase 2 LS sweep cell 2 (combo A: une_merge_v1_nosides + split_v2 +
-dropunk, label_smoothing=0.15) on the unified sticky_anchor mmpose
-clean dir. Direct apples-to-apples vs LS=0.1 baseline
-run_20260430_170325 and LS=0.0 cell 1 run_20260430_213933 (same
-combo, all other hparams identical); the intent is a clean read on
-whether moving the BST-paper-inherited label_smoothing=0.1 up to
-0.15 lifts the wrist_smash floor on the collapsed-classes taxonomy
-after LS=0.0 failed to.
+Phase 2 LS=0.15 run on combo A (une_merge_v1_nosides + split_v2 +
+dropunk) over the unified sticky_anchor mmpose clean dir. Direct
+comparisons against LS=0.1 baseline run_20260430_170325 and LS=0.0
+run run_20260430_213933 (same combo, all other hparams identical);
+checks whether moving label_smoothing up from 0.1 to 0.15 lifts the
+wrist_smash floor on the collapsed-classes taxonomy after LS=0.0
+failed to.
 
 Hparams:
   taxonomy=une_merge_v1_nosides, split_column=split_v2,
@@ -33,7 +32,7 @@ Vs LS=0.1 baseline run_20260430_170325 mean
 (0.742 / 0.375 / 0.767 / 0.938):
   macro +0.005, min +0.042, acc +0.002, top-2 ~0.
 
-Vs LS=0.0 cell 1 run_20260430_213933 mean
+Vs LS=0.0 run_20260430_213933 mean
 (0.743 / 0.359 / 0.768 / 0.939):
   macro +0.004, min +0.058, acc +0.001, top-2 ~0.
 
@@ -52,7 +51,7 @@ Per-class movement S4 (LS=0.1 best) -> S3 (LS=0.15 best):
         net_shot / return_net / smash within 0.5 pp of baseline.
 
 Mid-tier (drive, drop, passive_drop) lifts alongside the rare class;
-head metrics soften within noise. First cell where the wrist_smash
+head metrics soften within noise. First run where the wrist_smash
 floor moves in the right direction. Next candidate: LS=0.2 to map
 whether the lift continues or tops out before exiting the LS axis.
 

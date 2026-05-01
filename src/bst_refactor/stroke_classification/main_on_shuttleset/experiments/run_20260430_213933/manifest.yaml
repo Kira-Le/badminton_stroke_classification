@@ -151,14 +151,13 @@ log_path: src/bst_refactor/stroke_classification/main_on_shuttleset/test_logs/te
 best_serials:
 - 2
 notes: |
-  Phase 2 LS sweep cell 1 (combo A: une_merge_v1_nosides + split_v2
-  + dropunk, label_smoothing=0.0). Apples-to-apples vs LS=0.1
-  baseline run_20260430_170325 (same combo, all other hparams
-  identical). Best S2 by wrist_smash (top min 0.404, macro 0.740,
-  acc 0.766, top-2 0.941). S4 is top macro / acc / top-2 but
-  bottom of run on wrist_smash (0.336), so not the flag for an
-  LS-sweep cell. Mean macro 0.743, min 0.359, acc 0.768,
-  top-2 0.939.
+  Phase 2 LS=0.0 run on combo A (une_merge_v1_nosides + split_v2
+  + dropunk). Direct comparison against LS=0.1 baseline
+  run_20260430_170325 (same combo, all other hparams identical).
+  Best S2 by wrist_smash (top min 0.404, macro 0.740, acc 0.766,
+  top-2 0.941). S4 is top macro / acc / top-2 but bottom of run
+  on wrist_smash (0.336), so not the flag for an LS sweep. Mean
+  macro 0.743, min 0.359, acc 0.768, top-2 0.939.
 
   Hypothesis (LS=0.0 lifts wrist_smash) not supported. Vs LS=0.1
   baseline mean (0.742 / 0.375 / 0.767 / 0.938): macro +0.001,

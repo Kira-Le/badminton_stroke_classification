@@ -151,16 +151,16 @@ log_path: src/bst_refactor/stroke_classification/main_on_shuttleset/test_logs/te
 best_serials:
 - 3
 notes: |
-  Phase 2 LS sweep cell 2 (combo A: une_merge_v1_nosides + split_v2
-  + dropunk, label_smoothing=0.15). Apples-to-apples vs LS=0.1
-  baseline run_20260430_170325 and LS=0.0 cell 1 run_20260430_213933.
-  Best S3 (top macro 0.753, top min 0.448, top acc 0.773, top-2 0.940).
+  Phase 2 LS=0.15 run on combo A (une_merge_v1_nosides + split_v2
+  + dropunk). Direct comparisons against LS=0.1 baseline
+  run_20260430_170325 and LS=0.0 run run_20260430_213933. Best S3
+  (top macro 0.753, top min 0.448, top acc 0.773, top-2 0.940).
   Mean macro 0.747, min 0.417, acc 0.769, top-2 0.938.
 
   Vs LS=0.1 mean (0.742 / 0.375 / 0.767 / 0.938): macro +0.005,
   min +0.042, acc +0.002, top-2 ~0. Wrist_smash range tightens
   0.159 -> 0.066; all five serials at or above the LS=0.1 mean,
-  the 0.30 floor is gone. First cell where the wrist_smash floor
+  the 0.30 floor is gone. First run where the wrist_smash floor
   moves in the right direction. Full writeup in arch_1_directions.md.
 extra:
   data_provenance:
