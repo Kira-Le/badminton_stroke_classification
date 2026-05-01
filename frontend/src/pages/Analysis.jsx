@@ -2,14 +2,12 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { Button, RadioButtonGroup } from '../components'
-
 import { useSpatialCrop, useTemporalCrop} from '../hooks'
+import { API_BASE } from '../config'
 
 import style from './Analysis.module.css'
 
 import video from '../assets/file_example_MP4_1920_18MG.mp4' // For testing stages only
-
-const API_BASE = 'http://127.0.0.1:8000' // For testing stages only
 
 export default function Analysis() {
     const [models, setModels] = useState([])
@@ -23,7 +21,7 @@ export default function Analysis() {
     
     // Run once on page load, to get available models and set initial selection to the first model
     useEffect(() => {
-        fetch(`${API_BASE}/api/models`) // TODO: Replace API_BASE with production URL
+        fetch(`${API_BASE}/api/models`)
               .then((response) => response.json())
               .then((json) => {
                 setModels(json.models)
@@ -38,9 +36,9 @@ export default function Analysis() {
     }
 
     // Get status of processing task
-    useEffect(() => {
+   /* useEffect(() => {
         const interval = setInterval(() => {
-            fetch(`${API_BASE}/api/status/123`) // TODO: Replace API_BASE with production url and 123 with real job ID
+            fetch(`${API_BASE}/api/status/123`)
               .then((response) => response.json())
               .then((json) => {
                 setStatus(json.status)
@@ -52,7 +50,7 @@ export default function Analysis() {
               .catch((error) => console.error('Error fetching data: ', error))
         }, 2000)
         return () => clearInterval(interval)
-    }, [navigate])
+    }, [navigate])*/
 
     function handleClassify() {
         const cropParams = {

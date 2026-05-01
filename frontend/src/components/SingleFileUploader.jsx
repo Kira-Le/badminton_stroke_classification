@@ -3,6 +3,7 @@ import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Upload } from 'lucide-react'
 import { Button } from '.'
+import { API_BASE } from '../config'
 
 import style from './SingleFileUploader.module.css'
 
@@ -47,7 +48,7 @@ const SingleFileUploader = () => {
             formData.append('file', file)
 
             try {
-                const result = await fetch('http://127.0.0.1:8000/api/upload', {
+                const result = await fetch(`${API_BASE}/api/upload`, {
                     method: 'POST',
                     body: formData,
                 })

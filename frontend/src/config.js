@@ -1,0 +1,1 @@
+export const API_BASE = 'http://localhost:24082' // TODO: Replace API_BASE with production URL

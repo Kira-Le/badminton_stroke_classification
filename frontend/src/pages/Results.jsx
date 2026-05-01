@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 
+import { API_BASE } from '../config'
+
 export default function Results() {
     const [results, setResults] = useState(null)
     
     // Run once on page load, to get available results
     useEffect(() => {
-        fetch("http://127.0.0.1:8000/api/results/123")
+        fetch(`${API_BASE}/api/results/123`)
               .then((response) => response.json())
               .then((json) => setResults(json))
               .catch((error) => console.error('Error fetching data: ', error))
