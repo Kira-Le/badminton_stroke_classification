@@ -7,6 +7,14 @@ import { API_BASE } from '../config'
 
 import style from './SingleFileUploader.module.css'
 
+const ACCEPTED_TYPES = [
+    'video/mp4', 
+    'video/x-msvideo', // .avi
+    'video/x-matroska', // .mkv
+    'video/quicktime', // .mov
+    'video/webm',
+]
+
 const SingleFileUploader = () => {
     const [file, setFile] = useState(null)
     const [status, setStatus] = useState('initial')
@@ -16,8 +24,14 @@ const SingleFileUploader = () => {
     
     const handleFileChange = (e) => {
         if (e.target.files) {
+            const selectedFile = e.target.files[0]
+            if (!ACCEPTED_TYPES.includes(selectedFile.type)) {
+                setStatus('invalid')
+                setFile(null)
+                return
+            }
             setStatus('initial')
-            setFile(e.target.files[0])
+            setFile(selectedFile)
         }
     }
 
@@ -25,8 +39,13 @@ const SingleFileUploader = () => {
         e.preventDefault()
         setDragging(false)
         if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+            const droppedFile = e.dataTransfer.files[0]
+            if (!ACCEPTED_TYPES.includes(droppedFile.type)) {
+                setStatus('invalid')
+                return
+            }
             setStatus('initial')
-            setFile(e.dataTransfer.files[0])
+            setFile(droppedFile)
         }
     }
 
@@ -84,6 +103,7 @@ const SingleFileUploader = () => {
         ref={inputRef}
         id="upload"
         type="file"
+        accept=".mp4,.avi,.mkv,.mov,.webm"
         onChange={handleFileChange}
         style={{ display: 'none'}}
         />
@@ -113,6 +133,8 @@ const SingleFileUploader = () => {
 const Result = ({ status }) => {
     if (status === 'success') {
         return <p>✅ File uploaded successfully! Loading Analysis page...</p>
+    } else if (status === 'invalid') {
+        return <p>❌ Invalid file type. Please upload a video file (mp4, avi, mov, webm). </p>
     } else if (status === 'fail') {
         return <p>❌ File upload failed!</p>
     } else if (status === 'uploading') {
