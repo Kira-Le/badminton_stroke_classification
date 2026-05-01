@@ -59,3 +59,6 @@ main_on_shuttleset/.aim/
 
 # run_20260501_073430: Phase 2 LS sweep cell 2, combo A nosides + LS=0.15, 80ep. S3 best (top macro 0.753, top min 0.448, top acc 0.773). Vs LS=0.1 baseline run_20260430_170325, head metrics flat (+0.005 macro mean), mean wrist_smash +4.2 pp, range tightens 0.159 -> 0.066.
 !main_on_shuttleset/experiments/run_20260501_073430/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_3.pt
+
+# run_20260501_110525: Phase 2 class-weighting smoke test, combo A nosides + LS=0.15 + class_weights={wrist_smash:2.0, smash:2.0}, 80ep. S2 best (top min 0.518) — NEW PROJECT-WIDE CEILING on wrist_smash F1 (prior best 0.46 LS=0.1 S5; first nosides serial to clear 0.50). S4 of same run also sets new ceilings: macro 0.756, acc 0.777, drive 0.66. Mean shift vs LS=0.15 alone is flat (+0.001/+0.005/+0.001/-0.002); the lift is bimodal across seeds, not central-tendency.
+!main_on_shuttleset/experiments/run_20260501_110525/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_2.pt

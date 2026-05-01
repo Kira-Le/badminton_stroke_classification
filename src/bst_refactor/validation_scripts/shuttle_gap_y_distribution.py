@@ -88,7 +88,6 @@ def _boundary_ys(
     """
     start, end = gap
     last_y = float(shuttle_arr[start - 1, 1]) if start > 0 else float("nan")
-    last_t = end - 1
     n_frames = shuttle_arr.shape[0]
     first_y = (
         float(shuttle_arr[end, 1]) if end < n_frames else float("nan")

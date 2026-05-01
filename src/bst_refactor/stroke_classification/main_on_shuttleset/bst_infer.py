@@ -68,20 +68,40 @@ class Task:
 
     def get_network_architecture(
         self,
-        model_name='BST_CG_AP',
-        seq_len=100,
-        in_channels=2,
-        taxonomy: Taxonomy = None,
+        *,
+        model_name: str = 'BST_CG_AP',
+        seq_len: int = 100,
+        in_channels: int = 2,
+        taxonomy: Taxonomy | None = None,
+        n_active_classes: int,
+        active_class_list: list[str],
     ):
+        """Build the inference model at the supplied head dim.
+
+        ``n_active_classes`` and ``active_class_list`` describe the
+        architectural era of the weights being loaded; both must be
+        supplied. For a post-fix run, read both from the run's
+        ``manifest.yaml`` under ``extra.arch``. For pre-fix weights with
+        no manifest arch block, pass
+        ``n_active_classes=taxonomy.n_classes`` and
+        ``active_class_list=taxonomy.class_list()`` explicitly to opt
+        into the legacy full-taxonomy head.
+
+        Mismatch between the weight file's head dim and
+        ``n_active_classes`` raises a clear shape error inside
+        ``load_state_dict``.
+        """
         if taxonomy is None:
             taxonomy = TAXONOMIES[DEFAULT_TAXONOMY]
         self.taxonomy = taxonomy
+        self.n_active_classes = n_active_classes
+        self.active_class_list = active_class_list
         self.net, _n_bones = build_bst_network(
             model_name,
             n_joints=self.n_joints,
             pose_style=self.pose_style,
             in_channels=in_channels,
-            n_class=taxonomy.n_classes,
+            n_class=self.n_active_classes,
             seq_len=seq_len,
             device=self.device,
         )
@@ -94,9 +114,39 @@ class Task:
 
 
 if __name__ == '__main__':
-    # Inference example
+    # Inference example.
+    #
+    # Architecture is no longer a function of any flag; it has to come from
+    # the run that produced the weights. Two paths:
+    #   1. Post-fix weights: load ``extra.arch`` from the run's manifest.yaml
+    #      and pass ``n_active_classes`` / ``active_class_list`` straight in.
+    #   2. Pre-fix weights (no arch block in the manifest): fall back to the
+    #      full taxonomy explicitly. The weight file shape is then
+    #      ``taxonomy.n_classes`` and the decoder uses ``taxonomy.class_list()``.
+
+    import yaml
 
     taxonomy = TAXONOMIES[DEFAULT_TAXONOMY]
+
+    # Update to the run id you want to infer from.
+    run_id = 'run_YYYYMMDD_HHMMSS'
+    run_dir = Path('experiments') / run_id
+
+    manifest_path = run_dir / 'manifest.yaml'
+    if manifest_path.exists():
+        with open(manifest_path) as f:
+            manifest = yaml.safe_load(f) or {}
+        arch = manifest.get('extra', {}).get('arch')
+    else:
+        arch = None
+
+    if arch is None:
+        # Pre-fix run with no arch block; opt into legacy full-taxonomy head.
+        n_active_classes = taxonomy.n_classes
+        active_class_list = taxonomy.class_list()
+    else:
+        n_active_classes = arch['n_active_classes']
+        active_class_list = arch['active_class_list']
 
     task = Task(n_joints=17)
     task.prepare_loader(
@@ -112,12 +162,16 @@ if __name__ == '__main__':
         seq_len=100,
         in_channels=2,
         taxonomy=taxonomy,
+        n_active_classes=n_active_classes,
+        active_class_list=active_class_list,
     )
     task.load_weight(Path('weight')
                      /"bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_2.pt")
 
     pred = task.infer()
 
-    classes = taxonomy.class_list()
+    # Decode against the active class list so labels line up with the
+    # head the model was built with.
+    classes = task.active_class_list
     pred_cls = [classes[e] for e in pred]
     print(pred_cls)
