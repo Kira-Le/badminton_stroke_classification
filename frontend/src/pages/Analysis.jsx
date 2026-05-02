@@ -24,8 +24,9 @@ export default function Analysis() {
         fetch(`${API_BASE}/api/models`)
               .then((response) => response.json())
               .then((json) => {
-                setModels(json.models)
-                setSelectedValue(json.models[0])
+                const modelNames = json.models.map((model) => model.name)
+                setModels(modelNames)
+                setSelectedValue(modelNames[0])
               })
               .catch((error) => console.error('Error fetching data: ', error))
     }, [])
