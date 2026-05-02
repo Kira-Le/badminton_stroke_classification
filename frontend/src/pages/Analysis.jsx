@@ -37,31 +37,34 @@ export default function Analysis() {
     }
 
     // Get status of processing task
-   /* useEffect(() => {
-        const interval = setInterval(() => {
-            fetch(`${API_BASE}/api/status/123`)
-              .then((response) => response.json())
-              .then((json) => {
-                setStatus(json.status)
-                if (json.status === "complete") {
-                    clearInterval(interval) // stop polling
-                    navigate("/results")
-                }
-              })
-              .catch((error) => console.error('Error fetching data: ', error))
+    useEffect(() => {
+      if (!status) return
+
+      const interval = setInterval(() => {
+        fetch(`${API_BASE}/api/status/123`) // TODO: Replace with real job ID
+          .then((response) => response.json())
+          .then((json) => {
+            setStatus(json.status)
+            if (json.status === "complete") {
+              clearInterval(interval) // stop polling
+              navigate("/results")
+            }
+          })
+          .catch((error) => console.error('Error fetching data: ', error))
         }, 2000)
         return () => clearInterval(interval)
-    }, [navigate])*/
+      }, [status, navigate])
 
     function handleClassify() {
-        const cropParams = {
-            model: selectedValue,
-            temporalCrop: { startTime, endTime },
-            spatialCrop: { courtBox, playerBox },
-        }
-        console.log('Sending crop params:', cropParams)
-        //TODO: Send cropParams to backend with job request
-    }
+      const cropParams = {
+        model: selectedValue,
+        temporalCrop: { startTime, endTime },
+        spatialCrop: { courtBox, playerBox },
+      }
+      setStatus('processing')
+      console.log('Sending crop params:', cropParams) // TODO: Remove when done testing
+      //TODO: Send cropParams to backend with job request
+      }
 
     return (
         <>
