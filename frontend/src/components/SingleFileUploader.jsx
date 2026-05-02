@@ -75,10 +75,13 @@ const SingleFileUploader = () => {
             if (!result.ok) throw new Error(`Upload failed: ${result.status}`);
             
             const data = await result.json()
-
-            console.log(data)
             setStatus('success')
-            setTimeout(() => navigate("/analysis"), 1000)
+            setTimeout(() => navigate("/analysis", {
+                state: {
+                    jobId: data.job_id,
+                    videoUrl: URL.createObjectURL(file)
+                }
+            }), 1000)
             } catch (error) {
                 console.error(error)
                 setStatus('fail')

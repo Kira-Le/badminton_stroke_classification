@@ -1,17 +1,20 @@
 import { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 
 import { API_BASE } from '../config'
 
 export default function Results() {
     const [results, setResults] = useState(null)
+    const location = useLocation()
+    const { jobId } = location.state || {}
     
     // Run once on page load, to get available results
     useEffect(() => {
-        fetch(`${API_BASE}/api/results/123`)
+        fetch(`${API_BASE}/api/results/${jobId}`)
               .then((response) => response.json())
               .then((json) => setResults(json))
               .catch((error) => console.error('Error fetching data: ', error))
-    }, [])
+    }, [jobId])
 
     if (!results) return <div>Loading...</div>
     

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 
 import { Button, RadioButtonGroup } from '../components'
 import { useSpatialCrop, useTemporalCrop} from '../hooks'
@@ -7,14 +7,14 @@ import { API_BASE } from '../config'
 
 import style from './Analysis.module.css'
 
-import video from '../assets/file_example_MP4_1920_18MG.mp4' // For testing stages only
-
 export default function Analysis() {
     const [models, setModels] = useState([])
     const[selectedValue, setSelectedValue] = useState('')
     const [status, setStatus] = useState('')
     const navigate = useNavigate()
     const videoRef = useRef(null)
+    const location = useLocation()
+    const { jobId, videoUrl } = location.state || {}
 
     const { canvasRef, courtBox, playerBox, activeMode, startCourtMode, startPlayerMode, clearAll, canvasHandlers } = useSpatialCrop(videoRef)
     const { duration, startTime, endTime, handleStartChange, handleEndChange, formatTime } = useTemporalCrop(videoRef)
@@ -41,19 +41,19 @@ export default function Analysis() {
       if (!status) return
 
       const interval = setInterval(() => {
-        fetch(`${API_BASE}/api/status/123`) // TODO: Replace with real job ID
+        fetch(`${API_BASE}/api/status/${jobId}`)
           .then((response) => response.json())
           .then((json) => {
             setStatus(json.status)
             if (json.status === "complete") {
               clearInterval(interval) // stop polling
-              navigate("/results")
+              navigate("/results", {state: { jobId } })
             }
           })
           .catch((error) => console.error('Error fetching data: ', error))
         }, 2000)
         return () => clearInterval(interval)
-      }, [status, navigate])
+      }, [jobId, status, navigate])
 
     function handleClassify() {
       const cropParams = {
@@ -77,7 +77,7 @@ export default function Analysis() {
                     ref={videoRef}
                     controls
                     className={style.videoPlayer}
-                    src={video}
+                    src={videoUrl}
                     />
                     <canvas
                     ref={canvasRef}
