@@ -11,6 +11,12 @@ Loss shape, in plain English:
     weights renormalised to mean 1.0 each epoch so the average loss scale
     stays comparable to uniform CE.
 
+Optional pair-cap extension targets known confusion pairs the scalar-per-class
+CDB signal can't see: cap ``alpha[numer] / alpha[denom]`` from below at a
+configured ratio so a high-F1 partner doesn't get downweighted past the point
+where its training signal collapses. The bump is absorbed across the other
+``n_classes - 2`` classes so mean alpha stays 1.0.
+
 Train-loop responsibilities (see ``bst_train.train_one_epoch`` /
 ``train_network``):
     1. accumulate per-class TP / FP / FN during each epoch's forward pass,
@@ -57,6 +63,14 @@ class AdaptiveFocalLoss(nn.Module):
     :param f1_floor: lower clip on F1 readings before mapping to alpha. F1 is
         naturally bounded so the default 0.0 is fine; raise to ~0.05 only if
         a class flatlines and saturates alpha.
+    :param pair_caps: optional list of pair-cap rules, each a dict with keys
+        ``'numer'``, ``'denom'`` (class names) and ``'ratio'`` (float in
+        ``(0, 1]``). After the standard renormalisation, each rule enforces
+        ``alpha[numer] >= ratio * alpha[denom]`` by bumping
+        ``alpha[numer]`` up if needed and subtracting the bump uniformly across
+        the other ``n_classes - 2`` classes. Default ``None`` disables the
+        feature. Targets known confusion pairs (e.g. smash <-> wrist_smash)
+        the scalar-per-class CDB signal can't model.
     :param device: device for the running buffers; defaults to CPU and gets
         moved by ``.to()`` like any other module.
     """
@@ -70,6 +84,7 @@ class AdaptiveFocalLoss(nn.Module):
         momentum: float = 0.9,
         warm_up_epochs: int = 5,
         f1_floor: float = 0.0,
+        pair_caps: list[dict] | None = None,
         device: torch.device | str | None = None,
     ):
         super().__init__()
@@ -87,6 +102,11 @@ class AdaptiveFocalLoss(nn.Module):
         self.momentum = float(momentum)
         self.warm_up_epochs = int(warm_up_epochs)
         self.f1_floor = float(f1_floor)
+        # Resolve pair-cap names to indices once at construction so update_alpha
+        # stays index-only. Stored as (numer_idx, denom_idx, ratio) triples.
+        self.pair_caps: list[tuple[int, int, float]] = self._resolve_pair_caps(
+            pair_caps, class_names, n_classes
+        )
 
         # Init f1_running to 1.0 (model-is-perfect prior); update_alpha mixes
         # in real readings via EMA each epoch. While epoch < warm_up_epochs
@@ -100,6 +120,57 @@ class AdaptiveFocalLoss(nn.Module):
 
         if device is not None:
             self.to(device)
+
+    @staticmethod
+    def _resolve_pair_caps(
+        pair_caps: list[dict] | None,
+        class_names: list[str],
+        n_classes: int,
+    ) -> list[tuple[int, int, float]]:
+        """Validate pair-cap rules and resolve class names to indices.
+
+        Each rule must be a dict with keys ``'numer'``, ``'denom'`` (class
+        names that exist in ``class_names``) and ``'ratio'`` (float in
+        ``(0, 1]``). Returns a list of ``(numer_idx, denom_idx, ratio)``
+        triples; an empty list when ``pair_caps`` is None or empty.
+
+        Raises ``ValueError`` on any malformed rule (unknown name, ratio out
+        of range, numer == denom).
+        """
+        if not pair_caps:
+            return []
+        if n_classes < 3:
+            # Pair-cap subtracts the bump across n_classes - 2 other classes;
+            # n=2 would have nowhere to redistribute and the maths collapses.
+            raise ValueError(
+                f'pair_caps requires n_classes >= 3; got {n_classes}'
+            )
+
+        name_to_idx = {name: i for i, name in enumerate(class_names)}
+        resolved: list[tuple[int, int, float]] = []
+        for cap in pair_caps:
+            numer = cap['numer']
+            denom = cap['denom']
+            ratio = float(cap['ratio'])
+            if numer not in name_to_idx:
+                raise ValueError(
+                    f"pair_cap numer '{numer}' not in class_names {class_names}"
+                )
+            if denom not in name_to_idx:
+                raise ValueError(
+                    f"pair_cap denom '{denom}' not in class_names {class_names}"
+                )
+            if numer == denom:
+                raise ValueError(
+                    f"pair_cap numer and denom must differ; both are '{numer}'"
+                )
+            if not 0.0 < ratio <= 1.0:
+                raise ValueError(
+                    f'pair_cap ratio must be in (0, 1]; got {ratio} for '
+                    f"'{numer}' / '{denom}'"
+                )
+            resolved.append((name_to_idx[numer], name_to_idx[denom], ratio))
+        return resolved
 
     @torch.no_grad()
     def update_alpha(self, per_class_f1: torch.Tensor) -> None:
@@ -128,6 +199,30 @@ class AdaptiveFocalLoss(nn.Module):
         # Renormalise to mean 1.0; preserves overall CE loss scale and keeps
         # AdamW's effective per-parameter LR comparable to uniform-CE runs.
         self.alpha.copy_(raw_alpha * (self.n_classes / raw_alpha.sum()))
+
+        # Pair caps: enforce alpha[numer] >= ratio * alpha[denom] for each
+        # registered pair. Bump cost is absorbed across the (n - 2) classes
+        # outside the pair, so mean alpha stays exactly 1.0 by construction.
+        # Sequential application: later caps see updated alphas; ordering
+        # matters only when caps share a class.
+        n_other = self.n_classes - 2
+        for numer_idx, denom_idx, ratio in self.pair_caps:
+            target = ratio * self.alpha[denom_idx]
+            bump = target - self.alpha[numer_idx]
+            if bump <= 0:
+                continue
+            self.alpha[numer_idx] = target
+            other_mask = torch.ones(
+                self.n_classes, dtype=torch.bool, device=self.alpha.device
+            )
+            other_mask[numer_idx] = False
+            other_mask[denom_idx] = False
+            self.alpha[other_mask] -= bump / n_other
+        # Guard against the rare case where a large bump or stacked caps push
+        # an "other" class negative; bump is typically ~0.4 spread over ~12
+        # classes (~0.03 each) so this clamp is defensive, not load-carrying.
+        if self.pair_caps:
+            self.alpha.clamp_(min=1e-8)
         self.epoch += 1
 
     def forward(self, logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:

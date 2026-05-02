@@ -102,10 +102,22 @@ hyp = Hyp(
     #   adaptive_focal={
     #       'tau': 1.0, 'gamma': 1.0, 'momentum': 0.9,
     #       'warm_up_epochs': 5, 'f1_floor': 0.0,
+    #       # Optional pair-cap rules for known confusion pairs the scalar CDB
+    #       # signal can't model. Each rule enforces alpha[numer] >= ratio *
+    #       # alpha[denom] after the standard renormalisation, with the bump
+    #       # absorbed across the other (n - 2) classes so mean alpha stays 1.0.
+    #       'pair_caps': [
+    #           {'numer': 'smash', 'denom': 'wrist_smash', 'ratio': 0.7},
+    #       ],
     #   }
     # Full design + paper-verified equations: scratch/architecture_notes/class_f1_focal_design.md.
     adaptive_focal={
-        'tau': 0.5,  # tau=0.5 cell: gentler per-class spread, narrows the alpha range so saturated classes don't sit at the bottom and bottleneck classes don't sit at 1.9x; tests whether the per-class shape itself was too aggressive in cell 1
+        # First-run sweet spot from run_20260501_164658: tau=1, gamma=1.
+        # All four CDB knob variants (gamma=0, tau=0.5, pair-cap, gamma=2)
+        # traded wrist_smash back for smash without macro moving, so this
+        # combo holds the floor-lift sweet spot (+8.7 pp wrist_smash on the
+        # LS=0.1 baseline). Active default for the capacity-bump runs.
+        'tau': 1.0,
         'gamma': 1.0,
         'momentum': 0.9,
         'warm_up_epochs': 5,
@@ -401,14 +413,25 @@ def train_network(
             momentum=af_cfg.get('momentum', 0.9),
             warm_up_epochs=af_cfg.get('warm_up_epochs', 5),
             f1_floor=af_cfg.get('f1_floor', 0.0),
+            pair_caps=af_cfg.get('pair_caps'),
             device=device,
+        )
+        # Print resolved pair_caps as triples (rather than the dict spec) so the
+        # log shows the index lookup succeeded against the active class list.
+        pair_cap_str = (
+            ', '.join(
+                f'{class_ls[n]}/{class_ls[d]}>={r:.2f}'
+                for n, d, r in loss_fn.pair_caps
+            )
+            if loss_fn.pair_caps else 'none'
         )
         print(
             f"[loss] adaptive focal (CDB-F1): "
             f"tau={loss_fn.tau}, gamma={loss_fn.gamma}, "
             f"momentum={loss_fn.momentum}, "
             f"warm_up_epochs={loss_fn.warm_up_epochs}, "
-            f"f1_floor={loss_fn.f1_floor}"
+            f"f1_floor={loss_fn.f1_floor}, "
+            f"pair_caps=[{pair_cap_str}]"
         )
     elif hyp.class_weights:
         weights = torch.ones(n_classes, device=device)
@@ -504,6 +527,12 @@ def train_network(
         writer.add_scalar('Loss/Val', val_loss, epoch)
         writer.add_scalar('F1/Val_macro', f1_score_avg, epoch)
         writer.add_scalar('F1/Val_min', f1_score_min, epoch)
+        # Train F1 macro/min summaries mirror the val pair above, so the
+        # train-vs-val gap reads off two scalars per epoch instead of needing
+        # to re-aggregate the per-class arrays. .mean()/.min() over the
+        # length-n_classes tensor of active-class F1s, .item() unwraps to float.
+        writer.add_scalar('F1_train/macro', train_per_class_f1.mean().item(), epoch)
+        writer.add_scalar('F1_train/min', train_per_class_f1.min().item(), epoch)
         writer.add_scalar('Schedule/aux_factor', aux_factor, epoch)
         for i, c in enumerate(class_ls):
             writer.add_scalar(f'F1_train/{c}', train_per_class_f1[i].item(), epoch)
