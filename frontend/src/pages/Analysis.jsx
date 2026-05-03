@@ -47,13 +47,13 @@ export default function Analysis() {
             setStatus(json.status)
             if (json.status === "complete") {
               clearInterval(interval) // stop polling
-              navigate("/results", {state: { jobId } })
+              navigate("/results", {state: { jobId, videoUrl } })
             }
           })
           .catch((error) => console.error('Error fetching data: ', error))
         }, 2000)
         return () => clearInterval(interval)
-      }, [jobId, status, navigate])
+      }, [jobId, status, navigate, videoUrl])
 
     function handleClassify() {
       const cropParams = {
