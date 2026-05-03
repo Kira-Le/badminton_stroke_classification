@@ -161,6 +161,17 @@ class BST(nn.Module):
         self.tcn_pose = TCN(in_dim, [d_model, d_model], tcn_kernel_size, drop_p)
         self.tcn_shuttle = TCN(2, [d_model // 2, d_model], tcn_kernel_size, drop_p)
 
+        # --- Variant 2a shuttle_missing fusion (post-TCN, per frame) ---
+        # mask_proj projects the 1-bit mask to a small d_mask=4 redundancy so
+        # the seed lottery is less likely to lose the signal; shuttle_fuse
+        # combines mask features with TCN output back to d_model. The TCN
+        # itself never sees the mask; cross-frame integration of mask info
+        # happens in transformer attention downstream, not here.
+        # Full rationale: scratch/architecture_notes/frame_zeroing.md.
+        d_mask = 4
+        self.mask_proj = nn.Linear(1, d_mask)
+        self.shuttle_fuse = nn.Linear(d_model + d_mask, d_model)
+
         # --- Always created: Temporal Transformer (processes each stream independently) ---
         # "Class token" (CLS): a learnable vector prepended to the sequence that the
         # transformer uses as a summary. After attention, position 0 (the CLS token)
@@ -262,6 +273,7 @@ class BST(nn.Module):
         self,
         JnB: Tensor,       # (b, t, n, input_dim) — skeleton joint/bone features per player
         shuttle: Tensor,    # (b, t, 2) — shuttle xy coordinates per frame
+        shuttle_missing: Tensor,  # (b, t) bool — TrackNet visibility=0 flag, padded True
         pos: Tensor = None, # (b, t, n, 2) — player court xy positions (required if use_ppf)
         video_len: Tensor = None  # (b,) — real frame count per sample (rest is zero-padding)
     ):
@@ -296,6 +308,17 @@ class BST(nn.Module):
         # shuttle: (b, 2, t)
         shuttle = self.tcn_shuttle(shuttle)
         shuttle = shuttle.unsqueeze(1).transpose(-2, -1)
+        # shuttle: (b, 1, t, d_model)
+
+        # Variant 2a fusion: project the 1-bit shuttle_missing mask into
+        # d_mask features and concat alongside the TCN output, then fuse
+        # back to d_model. Linear weights apply per timestep, leaving any
+        # cross-frame integration to the transformer encoder downstream.
+        mask_features = self.mask_proj(
+            shuttle_missing.float().unsqueeze(-1)
+        ).unsqueeze(1)
+        # mask_features: (b, 1, t, d_mask)
+        shuttle = self.shuttle_fuse(torch.cat([shuttle, mask_features], dim=-1))
         # shuttle: (b, 1, t, d_model)
 
         x = torch.cat((JnB, shuttle), dim=1)
@@ -440,9 +463,12 @@ if __name__ == '__main__':
     n_features = (17 + 19 * 1) * n
     pose = torch.randn((b, t, n, n_features), dtype=torch.float)
     shuttle = torch.randn((b, t, 2), dtype=torch.float)
+    # Sprinkle some missing-shuttle frames so the mask path actually exercises.
+    shuttle_missing = torch.zeros((b, t), dtype=torch.bool)
+    shuttle_missing[:, ::20] = True
     pos = torch.randn((b, t, n, 2), dtype=torch.float)
     videos_len = torch.tensor([t], dtype=torch.long).repeat(b)
-    input_data = [pose, shuttle, pos, videos_len]
+    input_data = [pose, shuttle, shuttle_missing, pos, videos_len]
 
     # Test all variants produce valid output shapes
     variants = {

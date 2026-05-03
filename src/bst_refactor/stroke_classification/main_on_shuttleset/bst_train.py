@@ -184,11 +184,12 @@ def train_one_epoch(
     fp = torch.zeros(n_classes, dtype=torch.long, device=device)
     fn = torch.zeros(n_classes, dtype=torch.long, device=device)
 
-    for (human_pose, pos, shuttle), video_len, labels in loader:
+    for (human_pose, pos, shuttle, shuttle_missing), video_len, labels in loader:
         # .to(device) = move tensors to GPU/CPU. TF does this automatically;
         # PyTorch requires explicit placement for every tensor.
         human_pose: Tensor = human_pose.to(device)
         shuttle: Tensor = shuttle.to(device)
+        shuttle_missing: Tensor = shuttle_missing.to(device)
         pos: Tensor = pos.to(device)
         video_len: Tensor = video_len.to(device)
         labels: Tensor = labels.to(device)
@@ -206,7 +207,7 @@ def train_one_epoch(
 
         # Flatten last two dims (joints/bones, xy) into one feature dim for the model
         human_pose = human_pose.view(*human_pose.shape[:-2], -1)
-        logits = model(human_pose, shuttle, pos, video_len)
+        logits = model(human_pose, shuttle, shuttle_missing, pos, video_len)
         loss: Tensor = loss_fn(logits, labels)
 
         # PyTorch manual gradient step (TF does this inside model.fit()):
@@ -248,15 +249,16 @@ def validate(
     cum_fp = torch.zeros(n_classes)
     cum_fn = torch.zeros(n_classes)
 
-    for (human_pose, pos, shuttle), video_len, labels in loader:
+    for (human_pose, pos, shuttle, shuttle_missing), video_len, labels in loader:
         human_pose: Tensor = human_pose.to(device)
         shuttle: Tensor = shuttle.to(device)
+        shuttle_missing: Tensor = shuttle_missing.to(device)
         pos: Tensor = pos.to(device)
         video_len: Tensor = video_len.to(device)
         labels: Tensor = labels.to(device)
 
         human_pose = human_pose.view(*human_pose.shape[:-2], -1)
-        logits = model(human_pose, shuttle, pos, video_len)
+        logits = model(human_pose, shuttle, shuttle_missing, pos, video_len)
         loss: Tensor = loss_fn(logits, labels)
         total_loss += loss.item()
 
@@ -308,14 +310,15 @@ def test(
     model.eval()
     pred_ls = []
     labels_ls = []
-    for (human_pose, pos, shuttle), video_len, labels in loader:
+    for (human_pose, pos, shuttle, shuttle_missing), video_len, labels in loader:
         human_pose: Tensor = human_pose.to(device)
         shuttle: Tensor = shuttle.to(device)
+        shuttle_missing: Tensor = shuttle_missing.to(device)
         pos: Tensor = pos.to(device)
         video_len: Tensor = video_len.to(device)
 
         human_pose = human_pose.view(*human_pose.shape[:-2], -1)
-        logits = model(human_pose, shuttle, pos, video_len)
+        logits = model(human_pose, shuttle, shuttle_missing, pos, video_len)
 
         pred = torch.argmax(logits, dim=1).cpu()
 
@@ -335,14 +338,15 @@ def test_topk(
     model.eval()
     pred_ls = []
     labels_ls = []
-    for (human_pose, pos, shuttle), video_len, labels in loader:
+    for (human_pose, pos, shuttle, shuttle_missing), video_len, labels in loader:
         human_pose: Tensor = human_pose.to(device)
         shuttle: Tensor = shuttle.to(device)
+        shuttle_missing: Tensor = shuttle_missing.to(device)
         pos: Tensor = pos.to(device)
         video_len: Tensor = video_len.to(device)
 
         human_pose = human_pose.view(*human_pose.shape[:-2], -1)
-        logits = model(human_pose, shuttle, pos, video_len)
+        logits = model(human_pose, shuttle, shuttle_missing, pos, video_len)
 
         _, pred = torch.topk(logits, k=k, dim=1)
 

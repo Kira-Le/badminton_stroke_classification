@@ -44,7 +44,8 @@ def make_seq_len_same(
     target_len: int,
     joints: np.ndarray,
     pos: np.ndarray,
-    shuttle: np.ndarray
+    shuttle: np.ndarray,
+    shuttle_missing: np.ndarray,
 ):
     video_len = len(pos)
 
@@ -55,6 +56,7 @@ def make_seq_len_same(
         joints = joints[::stride][:target_len]
         pos = pos[::stride][:target_len]
         shuttle = shuttle[::stride][:target_len]
+        shuttle_missing = shuttle_missing[::stride][:target_len]
 
         new_video_len = len(pos)
 
@@ -63,6 +65,11 @@ def make_seq_len_same(
             joints = np.pad(joints, ((0, pad_len), *([(0, 0)]*3)))
             pos = np.pad(pos, ((0, pad_len), *([(0, 0)]*2)))
             shuttle = np.pad(shuttle, ((0, pad_len), (0, 0)))
+            # Pad-frames carry True so the model treats them as 'no shuttle',
+            # mirroring the all-zeros it gets from the padded shuttle xy.
+            shuttle_missing = np.pad(
+                shuttle_missing, (0, pad_len), constant_values=True
+            )
 
     else:
         # Since they have been normalized, we don't interpolate them.
@@ -72,8 +79,11 @@ def make_seq_len_same(
         joints = np.pad(joints, ((0, pad_len), *([(0, 0)]*3)))
         pos = np.pad(pos, ((0, pad_len), *([(0, 0)]*2)))
         shuttle = np.pad(shuttle, ((0, pad_len), (0, 0)))
+        shuttle_missing = np.pad(
+            shuttle_missing, (0, pad_len), constant_values=True
+        )
 
-    return joints, pos, shuttle, new_video_len
+    return joints, pos, shuttle, shuttle_missing, new_video_len
 
 
 def create_bones(joints: np.ndarray, pairs) -> np.ndarray:
@@ -161,6 +171,9 @@ class Dataset_npy_collated(Dataset):
         self.human_pose = np.load(str(branch/f'{pose_style}.npy'))
         self.pos = np.load(str(branch/'pos.npy'))
         self.shuttle = np.load(str(branch/'shuttle.npy'))
+        # (n, t) bool: True where TrackNet failed to detect the shuttle, plus
+        # padded tail frames. See scratch/architecture_notes/frame_zeroing.md.
+        self.shuttle_missing = np.load(str(branch/'shuttle_missing.npy'))
         self.videos_len = np.load(str(branch/'videos_len.npy'))
         self.labels: np.ndarray = np.load(str(branch/'labels.npy'))
 
@@ -191,6 +204,7 @@ class Dataset_npy_collated(Dataset):
             self.human_pose = self.human_pose[valid]
             self.pos = self.pos[valid]
             self.shuttle = self.shuttle[valid]
+            self.shuttle_missing = self.shuttle_missing[valid]
             self.videos_len = self.videos_len[valid]
             self.labels = self.labels[valid]
 
@@ -209,6 +223,7 @@ class Dataset_npy_collated(Dataset):
         new_human_pose = []
         new_pos = []
         new_shuttle = []
+        new_shuttle_missing = []
         new_videos_len = []
         new_labels = []
 
@@ -221,12 +236,14 @@ class Dataset_npy_collated(Dataset):
             new_human_pose.append(self.human_pose[choose_i])
             new_pos.append(self.pos[choose_i])
             new_shuttle.append(self.shuttle[choose_i])
+            new_shuttle_missing.append(self.shuttle_missing[choose_i])
             new_videos_len.append(self.videos_len[choose_i])
             new_labels.append(self.labels[choose_i])
 
         self.human_pose = np.concatenate(new_human_pose)
         self.pos = np.concatenate(new_pos)
         self.shuttle = np.concatenate(new_shuttle)
+        self.shuttle_missing = np.concatenate(new_shuttle_missing)
         self.videos_len = np.concatenate(new_videos_len)
         self.labels = np.concatenate(new_labels)
 
@@ -234,7 +251,8 @@ class Dataset_npy_collated(Dataset):
         return len(self.labels)
     
     def __getitem__(self, i):
-        return (self.human_pose[i], self.pos[i], self.shuttle[i]), \
+        return (self.human_pose[i], self.pos[i], self.shuttle[i],
+                self.shuttle_missing[i]), \
                 self.videos_len[i], self.labels[i]
 
 

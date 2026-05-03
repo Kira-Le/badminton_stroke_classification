@@ -28,14 +28,15 @@ def infer(
     model.eval()  # disable dropout, set batchnorm to eval mode
     pred_ls = []
 
-    for (human_pose, pos, shuttle), video_len, labels in loader:
+    for (human_pose, pos, shuttle, shuttle_missing), video_len, labels in loader:
         human_pose: Tensor = human_pose.to(device)
         shuttle: Tensor = shuttle.to(device)
+        shuttle_missing: Tensor = shuttle_missing.to(device)
         pos: Tensor = pos.to(device)
         video_len: Tensor = video_len.to(device)
 
         human_pose = human_pose.view(*human_pose.shape[:-2], -1)
-        logits = model(human_pose, shuttle, pos, video_len)
+        logits = model(human_pose, shuttle, shuttle_missing, pos, video_len)
 
         # argmax gives predicted class index; .cpu() moves result back from GPU
         pred = torch.argmax(logits, dim=1).cpu()
