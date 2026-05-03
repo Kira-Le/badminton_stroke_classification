@@ -77,3 +77,6 @@ main_on_shuttleset/.aim/
 
 # run_20260502_075808: Gamma=2 follow-up, combo A nosides + adaptive_focal{tau=1, gamma=2, momentum=0.9, warm_up=5, f1_floor=0}, 80ep, bourbaki. Single-knob change vs the first CDB-F1 run (run_20260501_164658): gamma 1 -> 2 (focal literature default). S3 best by ws (0.4873, run-high, on a par with the first CDB-F1 S2's 0.4863). Macro 0.7330 / acc 0.7494 bottom-half of run. Vs the first CDB-F1 run mean: macro -0.7, min -4.1, acc -0.6, top-2 -0.1. Gamma=2 didn't lift the floor; aggressive per-example modulator over-discounts moderate-confidence ws examples. Last untouched CDB knob, now tested.
 !main_on_shuttleset/experiments/run_20260502_075808/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_3.pt
+
+# run_20260503_104300: Capacity bump Run 1, mlp_head hidden 400 -> 1200 via head_dim * mlp_d_scale swap on bst.py:199, encoder untouched. y1t1 hparams otherwise (combo A nosides + LS=0.0 + adaptive_focal{tau=1, gamma=1}), 80ep, bourbaki. S1 best by ws (0.4449). Mean macro 0.7414 / min 0.4138 / acc 0.7604 / top-2 0.9320. Vs y1t1 mean (run_20260501_164658): macro -0.2, min -4.8, acc -0.1, top-2 -0.3. Head metrics flat, ws cost 4.8 pp.
+!main_on_shuttleset/experiments/run_20260503_104300/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides.pt
