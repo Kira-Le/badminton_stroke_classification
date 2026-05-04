@@ -1,4 +1,4 @@
-Best model of run_20260418_174238/ — #3
+Best model of run_20260418_174238/ - #3
   #3: bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25_3.pt
 
 Run A: paired control with CG/AP on throughout (no annealing), 80-epoch schedule:
@@ -10,7 +10,7 @@ First run under the run_tracker-era bst_train.py.
 Purpose: test whether CG/AP contribute anything under the retuned LR, or whether
 run_20260418_151139's slight macro F1 lift was the fade itself vs. just the shorter
 schedule. Macro F1 mean 0.826 vs 0.829 for the annealed run (18_15): within noise.
-Supports the hypothesis that CG/AP are not load-bearing under the retuned LR.
+Supports the hypothesis that CG/AP aren't actually doing much under the retuned LR.
 
 Metric split:
   - Serial 3: best macro F1 (0.828, tied with S2 but with stronger min F1 0.603).

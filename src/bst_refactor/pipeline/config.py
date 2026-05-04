@@ -141,12 +141,17 @@ class Taxonomy:
 
     @property
     def n_classes(self) -> int:
-        """Total number of classes when side='Both'."""
+        """Total number of classes when side='Both' (full taxonomy, including unknown)."""
         return len(self.base_types) * 2 + len(self.standalone_types)
 
     @property
     def standalone_set(self) -> frozenset[str]:
         return frozenset(self.standalone_types)
+
+    @property
+    def has_unknown(self) -> bool:
+        """True if 'unknown' is one of the standalone types in this taxonomy."""
+        return 'unknown' in self.standalone_types
 
     def class_list(self, side: str = 'Both') -> list[str]:
         """Build the full class label list with Top_/Bottom_ prefixes (English).
@@ -179,6 +184,61 @@ class Taxonomy:
         if side == 'Both' and self.unknown_first:
             return standalone + prefixed
         return prefixed + standalone
+
+    def active_class_list(
+        self,
+        present_indices: set[int],
+        side: str = 'Both',
+    ) -> list[str]:
+        """Subset of ``class_list(side)`` at the given full-taxonomy indices, ordered.
+
+        The model's output head is sized to ``len(active_class_list)``;
+        ground-truth labels (after remapping) live in
+        ``[0, len(active_class_list))``. The full ``class_list()`` still owns
+        label decoding from on-disk values, since the collator wrote
+        ``labels.npy`` against the full-taxonomy index space.
+
+        :param present_indices: full-taxonomy indices that should appear in
+            the active head. Typically derived empirically from
+            ``labels.npy`` via ``np.unique(labels)``.
+        :param side: passed through to ``class_list``.
+        :return: ordered list of active class names, in their original
+            ``class_list`` relative order.
+        :raises ValueError: when ``present_indices`` contains values outside
+            ``[0, n_classes(side))``.
+        """
+        full = self.class_list(side=side)
+        bad = present_indices - set(range(len(full)))
+        if bad:
+            raise ValueError(
+                f'present_indices {sorted(bad)} out of range for taxonomy '
+                f'{self.name!r} with n_classes={len(full)}'
+            )
+        return [full[i] for i in sorted(present_indices)]
+
+    def full_to_active_remap(
+        self,
+        present_indices: set[int],
+        side: str = 'Both',
+    ) -> list[int]:
+        """Per-index map from full-taxonomy idx to active idx (or -1 if absent).
+
+        Same input contract as ``active_class_list``: ``present_indices`` is
+        typically derived from ``labels.npy``. Indices not in the present
+        set get -1 sentinels; indices in the present set get their position
+        in the sorted active list.
+
+        :param present_indices: full-taxonomy indices that map into the
+            active head.
+        :param side: passed through to ``class_list``.
+        :return: list of length ``len(class_list(side))`` where
+            ``remap[i]`` is the active-list position of
+            ``class_list(side)[i]`` if ``i in present_indices``, else -1.
+        """
+        full = self.class_list(side=side)
+        sorted_present = sorted(present_indices)
+        active_idx_of = {full_idx: i for i, full_idx in enumerate(sorted_present)}
+        return [active_idx_of.get(full_idx, -1) for full_idx in range(len(full))]
 
 
 TAXONOMY_MERGED_25 = Taxonomy(
