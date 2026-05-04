@@ -88,7 +88,7 @@ hyp = Hyp(
     clips_csv=str(DEFAULT_CLIPS_CSV),
     split_column='split_v2',
     drop_unknown=True,
-    ablation_id=None,
+    ablation_id='wipe_drop',
     label_smoothing=0.0,  # CDB-F1 cell forces LS=0; LS softens targets so confident-correct samples have p_t < 1.0, contaminating focal's per-sample hardness signal
     # Manual per-class CE weights for the wrist_smash <-> smash confusion-pair smoke test.
     # Pair-balanced (both at 2.0) so the gradient has no directional bias toward one class:
@@ -372,7 +372,24 @@ def train_network(
     # TB folders pair with the run they came from. Default SummaryWriter() writes
     # to ./runs/<host_time>/, which is what older runs used.
     writer = SummaryWriter(log_dir=str(tb_dir)) if tb_dir is not None else SummaryWriter()
-    random_shift_fn = RandomTranslation_batch()  # data augmentation: small xy shifts
+    # ====================================================================
+    # !!! TEMPORARY ABLATION: BROKEN JITTER DISABLED (prob=0.0) !!!
+    # ====================================================================
+    # Inherited `RandomTranslation_batch` shifts JOINTS in their bbox-centre-
+    # relative coord frame, which deforms the body around its own centre
+    # rather than simulating "player at a different court position" (joints
+    # are court-position-invariant by construction; pos carries the location
+    # signal, and pos isn't being shifted). Single A/B vs the current best
+    # baseline `run_20260503_172922` (shuttle-unzeroing wipe_drop) under
+    # otherwise identical hparams to clarify whether the broken aug was
+    # net-negative or noise.
+    #
+    # !!! RESTORE before the corrected pos+shuttle jitter set lands !!!
+    # Full rationale + corrected formulation:
+    #   scratch/architecture_notes/augmentation_framework.md
+    #   scratch/architecture_notes/arch_1_directions.md (Active priorities #0)
+    # ====================================================================
+    random_shift_fn = RandomTranslation_batch(prob=0.0)  # ABLATION: jitter off
 
     # label_smoothing softens targets from [0,1] to reduce overconfidence.
     # BST paper / TemPose default is 0.1; we sweep this knob to test
