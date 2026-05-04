@@ -122,3 +122,50 @@
   padding: 2rem;
   opacity: 0.6;
 }
+
+.timeline {
+    margin-top: 2rem;
+}
+
+.timelineBar {
+  position: relative;
+  height: 2px;
+  background: rgba(255,255,255,0.2);
+  margin: 2.5rem 0 1rem;
+}
+
+.timelineMarker {
+  position: absolute;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.timelineDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #4285f4;
+  margin-top: -5px;
+}
+
+.timelineLabel {
+  font-size: 11px;
+  text-transform: capitalize;
+  margin-top: 6px;
+  white-space: nowrap;
+}
+
+.timelineTime {
+  font-size: 10px;
+  opacity: 0.5;
+  margin-top: 2px;
+}
+
+.timelineEnds {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  opacity: 0.4;
+}

@@ -74,6 +74,26 @@ export default function Results() {
                         ))}
                     </tbody>  
                 </table>
+                <h2>Rally Timeline</h2>
+                <div className={style.timeline}>
+                    <div className={style.timelineBar}>
+                        {results.strokes.map((stroke, index) => (
+                            <div
+                            key={index}
+                            className={style.timelineMarker}
+                            style={{ left: `${(stroke.timestamp_sec / results.rally_summary.rally_length_seconds)*100}%` }}
+                            >
+                                <div className={style.timelineDot} />
+                                <span className={style.timelineLabel}>{stroke.stroke_type}</span>
+                                <span className={style.timelineTime}>{stroke.timestamp_sec}s</span>
+                            </div>
+                        ))}
+                    </div>
+                    <div className={style.timelineEnds}>
+                        <span>0s</span>
+                        <span>{results.rally_summary.rally_length_seconds}s</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
