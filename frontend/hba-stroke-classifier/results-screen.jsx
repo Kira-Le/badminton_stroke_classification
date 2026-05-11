@@ -276,9 +276,6 @@ function ExplainabilityTab() {
     { cls: s.predA, prob: s.cA, model:'A', correct: s.predA === s.gt },
     { cls: 'Clear',  prob: s.cA * 0.31, model:'A', correct: false },
     { cls: 'Drop',   prob: s.cA * 0.18, model:'A', correct: false },
-    { cls: s.predB, prob: s.cB, model:'B', correct: s.predB === s.gt },
-    { cls: 'Smash',  prob: s.cB * 0.28, model:'B', correct: false },
-    { cls: 'Lift',   prob: s.cB * 0.15, model:'B', correct: false },
   ];
 
   return (
@@ -302,8 +299,8 @@ function ExplainabilityTab() {
         ))}
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:18 }}>
-        {['A','B'].map(model => (
+      <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:18 }}>
+        {['A'].map(model => (
           <Card key={model} style={{ padding:18 }}>
             <div style={{ display:'flex', justifyContent:'space-between', marginBottom:12 }}>
               <div style={{ fontSize:13, fontWeight:600, color:t.text }}>Model {model} — Stroke #{s.id}</div>
