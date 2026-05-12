@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useTheme, Btn, Badge, SectionHeader } from './shared';
 import matchesData from './data/matches.json';
+const API_BASE = 'http://localhost:24082' // TODO: Replace with link to config file
 
 const frameModules = import.meta.glob('./data/frames/*.jpg', { eager: true, import: 'default' });
 const frameUrl = (id) => frameModules[`./data/frames/${id}.jpg`];
@@ -191,15 +192,24 @@ const UPLOAD_STAGES = [
   { id: 'ready',   label: 'Preparing for markup',   ms: 600  },
 ];
 
-function UploadingPanel({ filename, onDone }) {
+function UploadingPanel({ filename, uploadPromise, onDone, onError }) {
   const { t } = useTheme();
   const [stage, setStage] = useState(0);
   const [progress, setProgress] = useState(0);
+  const [animDone, setAnimDone] = useState(false); 
+  const [uploadResult, setUploadResult] = useState(null);
+
+  // Run the real upload in parallel with the animation
+  useEffect(() => {
+    uploadPromise
+      .then(result => setUploadResult(result))
+      .catch(err => onError(err))
+  }, [uploadPromise])
 
   useEffect(() => {
     if (stage >= UPLOAD_STAGES.length) {
-      const id = setTimeout(onDone, 200);
-      return () => clearTimeout(id);
+      setAnimDone(true);
+      return;
     }
     setProgress(0);
     const start = Date.now();
@@ -213,7 +223,14 @@ function UploadingPanel({ filename, onDone }) {
       }
     }, 50);
     return () => clearInterval(tick);
-  }, [stage, onDone]);
+  }, [stage]);
+
+  // Only advance when both animation and upload are done
+  useEffect(() => {
+    if (animDone && uploadResult) {
+      onDone(uploadResult)
+    }
+  }, [animDone, uploadResult])
 
   return (
     <div style={{
@@ -274,19 +291,48 @@ function UploadTab({ onUpload }) {
   const { t } = useTheme();
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(null);
+  const [error, setError] = useState(null);
 
-  const startMockUpload = () => {
+  const startUpload = (file) => {
     setDragOver(false);
-    const random = ALL[Math.floor(Math.random() * ALL.length)];
-    const filename = `match_${Date.now()}.mp4`;
-    setUploading({ filename, video: { ...random, id: 'upload_' + Date.now(), uploadedAs: random.match } });
+    setError(null);
+    const formData = new FormData();
+    formData.append('file', file);
+    const uploadPromise = fetch(`${API_BASE}/api/upload`, {
+      method: 'POST',
+      body: formData,
+    })
+      .then(res => {
+        if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+        return res.json();
+      });
+    setUploading({ filename: file.name, uploadPromise });
+  };
+
+  const handleDrop = (e) => { 
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file) startUpload(file);
+  }
+
+  const handleClick = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.mp4, .avi, .mkv, .mov, .webm';
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (file) startUpload(file);
+    };
+    input.click();
   };
 
   if (uploading) {
     return (
       <UploadingPanel
         filename={uploading.filename}
-        onDone={() => onUpload(uploading.video)}
+        uploadPromise={uploading.uploadPromise}
+        onDone={(result) => onUpload({ jobId: result.job_id, uploaded: true })}
+        onError={(err) => {setUploading(null); setError(err.message); }}
       />
     );
   }
@@ -296,8 +342,8 @@ function UploadTab({ onUpload }) {
       <div
         onDragOver={e => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
-        onDrop={e => { e.preventDefault(); startMockUpload(); }}
-        onClick={startMockUpload}
+        onDrop={handleDrop}
+        onClick={handleClick}
         style={{
           border: `2px dashed ${dragOver ? t.blue : t.border}`,
           borderRadius: 12, padding: '52px 32px', textAlign: 'center',
@@ -309,17 +355,15 @@ function UploadTab({ onUpload }) {
         <div style={{ fontSize: 15, fontWeight: 600, color: t.text, marginBottom: 6 }}>
           Drop video here, or click to browse
         </div>
-        <div style={{ fontSize: 12, color: t.muted }}>MP4, MOV, AVI · up to 10 GB</div>
+        <div style={{ fontSize: 12, color: t.muted }}>MP4, MOV, AVI, MKV, WEBM · up to 10 GB</div>
       </div>
 
-      <div style={{ display: 'flex', gap: 12, padding: '14px 16px', background: t.surface2, borderRadius: 8, border: `1px solid ${t.border}` }}>
-        <div style={{ fontSize: 20 }}>ℹ</div>
-        <div style={{ fontSize: 12, color: t.muted, lineHeight: 1.6 }}>
-          Demo mode — uploaded videos are stand-ins for matches in the library.
-          The classifier will run against an annotated match so validation metrics stay meaningful.
+      {error && (
+        <div style={{ padding: '12px 16px', background: t.errorDim, border: `1px solid ${t.error}`, borderRadius: 8, fontSize: 13, color: t.error }}>
+          ❌ {error}
         </div>
-      </div>
-    </div>
+        )}
+        </div>
   );
 }
 
