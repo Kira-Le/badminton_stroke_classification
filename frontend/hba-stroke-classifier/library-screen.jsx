@@ -202,7 +202,7 @@ function UploadingPanel({ filename, uploadPromise, onDone, onError }) {
   useEffect(() => {
     uploadPromise
       .then(result => setUploadResult(result))
-      .catch(err => onError(err))
+      .catch(err => onError(err));
   }, [uploadPromise])
 
   useEffect(() => {
@@ -226,9 +226,7 @@ function UploadingPanel({ filename, uploadPromise, onDone, onError }) {
 
   // Only advance when both animation and upload are done
   useEffect(() => {
-    if (animDone && uploadResult) {
-      onDone(uploadResult)
-    }
+    if (animDone && uploadResult) { onDone(uploadResult) };
   }, [animDone, uploadResult])
 
   return (
@@ -295,6 +293,7 @@ function UploadTab({ onUpload }) {
   const startUpload = (file) => {
     setDragOver(false);
     setError(null);
+    const videoUrl = URL.createObjectURL(file); // TODO: Reconfigure to have backend return a video URL or re-fetch video from backend rather than using this temp local URL
     const formData = new FormData();
     formData.append('file', file);
     const uploadPromise = fetch('/api/upload', {
@@ -304,7 +303,8 @@ function UploadTab({ onUpload }) {
       .then(res => {
         if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
         return res.json();
-      });
+      })
+      .then(data => ({ ... data, videoUrl }));
     setUploading({ filename: file.name, uploadPromise });
   };
 
@@ -317,7 +317,7 @@ function UploadTab({ onUpload }) {
   const handleClick = () => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.mp4, .avi, .mkv, .mov, .webm';
+    input.accept = '.mp4,.avi,.mkv,.mov,.webm';
     input.onchange = (e) => {
       const file = e.target.files[0];
       if (file) startUpload(file);
@@ -330,7 +330,15 @@ function UploadTab({ onUpload }) {
       <UploadingPanel
         filename={uploading.filename}
         uploadPromise={uploading.uploadPromise}
-        onDone={(result) => onUpload({ jobId: result.job_id, uploaded: true })}
+        onDone={(result) => {
+          const random = ALL[Math.floor(Math.random() * ALL.length)] // Select random library video
+          onUpload({ 
+            ...random, // TODO: Replace with uploaded video when model ready to classify amateur video
+            jobId: result.job_id,
+            videoUrl: result.videoUrl,
+            uploaded: true,
+           })
+          }}
         onError={(err) => {setUploading(null); setError(err.message); }}
       />
     );
@@ -362,7 +370,7 @@ function UploadTab({ onUpload }) {
           ❌ {error}
         </div>
         )}
-        </div>
+    </div>
   );
 }
 

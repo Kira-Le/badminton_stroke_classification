@@ -35,13 +35,13 @@ function CourtBoundaryStep({ video, onComplete }) {
   const [confirmed, setConfirmed] = useState(false);
 
   useEffect(() => {
-    const src = frameUrl(video?.youtubeId);
+    const src = frameUrl(video?.youtubeId) || video?.videoUrl;
     if (!src) return;
     const img = new Image();
     img.src = src;
     img.onload = () => { imgRef.current = img; draw(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [video?.youtubeId]);
+  }, [video?.youtubeId, video?.videoUrl]);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -509,24 +509,40 @@ function TimeframeStep({ video, onComplete }) {
   }, [video?.youtubeId]);
 
   const seekTo = (s) => {
-    if (playerRef.current && playerRef.current.seekTo) {
-      playerRef.current.seekTo(s, true);
+    if (video?.videoUrl) {
+      if (playerHostRef.current) playerHostRef.current.currentTime = s
+    } else {
+      if (playerRef.current?.seekTo) playerRef.current.seekTo(s, true)
     }
-  };
+  }
 
   const nudge = (delta) => {
-    if (!playerRef.current) return;
-    const now = playerRef.current.getCurrentTime?.() ?? 0;
-    const next = Math.max(0, Math.min(duration || Infinity, now + delta));
-    playerRef.current.seekTo(next, true);
-    setCurrentTime(next);
-  };
+    if (video?.videoUrl) {
+      const el = playerHostRef.current
+      if (!el) return
+      el.currentTime = Math.max(0, Math.min(duration, el.currentTime + delta))
+      setCurrentTime(el.currentTime)
+    } else {
+      if (!playerRef.current) return;
+      const now = playerRef.current.getCurrentTime?.() ?? 0;
+      const next = Math.max(0, Math.min(duration || Infinity, now + delta));
+      playerRef.current.seekTo(next, true);
+      setCurrentTime(next);
+    }
+  }
 
   const togglePlay = () => {
-    if (!playerRef.current) return;
-    if (playing) playerRef.current.pauseVideo?.();
-    else playerRef.current.playVideo?.();
-  };
+    if (video?.videoUrl) {
+      const el = playerHostRef.current
+      if (!el) return
+      if (playing) el.pause()
+      else el.play()
+    } else {
+      if (!playerRef.current) return;
+      if (playing) playerRef.current.pauseVideo?.();
+      else playerRef.current.playVideo?.();
+    }
+  }
 
   const setHandle = (which) => {
     const t = playerRef.current?.getCurrentTime?.() ?? 0;
@@ -567,7 +583,18 @@ function TimeframeStep({ video, onComplete }) {
         position: 'relative', width: '100%', aspectRatio: '16 / 9',
         background: '#000', borderRadius: 8, overflow: 'hidden',
       }}>
-        <div ref={playerHostRef} style={{ width: '100%', height: '100%' }} />
+        {video?.videoUrl ? (
+          <video
+          src={video.videoUrl}
+          controls
+          style={{ width: '100%', height: '100%', display: 'block' }}
+          onLoadedMetadata={e => { setDuration(e.target.duration); setReady(true); }}
+          onTimeUpdate={e => setCurrentTime(e.target.currentTime)}
+          ref={playerHostRef}
+          />
+        ) : (
+          <div ref={playerHostRef} style={{ width: '100%', height: '100%' }} />
+        )}
         {!ready && (
           <div style={{
             position: 'absolute', inset: 0, display: 'flex',
