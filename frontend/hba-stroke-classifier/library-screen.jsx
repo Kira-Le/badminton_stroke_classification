@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useTheme, Btn, Badge, SectionHeader } from './shared';
 import matchesData from './data/matches.json';
-const API_BASE = 'http://localhost:24082' // TODO: Replace with link to config file
 
 const frameModules = import.meta.glob('./data/frames/*.jpg', { eager: true, import: 'default' });
 const frameUrl = (id) => frameModules[`./data/frames/${id}.jpg`];
@@ -298,7 +297,7 @@ function UploadTab({ onUpload }) {
     setError(null);
     const formData = new FormData();
     formData.append('file', file);
-    const uploadPromise = fetch(`${API_BASE}/api/upload`, {
+    const uploadPromise = fetch('/api/upload', {
       method: 'POST',
       body: formData,
     })
