@@ -181,8 +181,10 @@ class Taxonomy:
     excluded_base_stroke_types: frozenset[str]
 
     def __post_init__(self):
-        if 'unknown' in self.classes:
-            assert self.classes[-1] == 'unknown', (
+        if 'unknown' in self.classes and self.classes[-1] != 'unknown':
+            # Raise rather than assert: assertions strip under python -O,
+            # this contract needs to bite in production too.
+            raise ValueError(
                 f'taxonomy {self.name!r}: unknown must sit at index -1; '
                 f'found at index {self.classes.index("unknown")}.'
             )
