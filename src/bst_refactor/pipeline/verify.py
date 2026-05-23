@@ -13,9 +13,13 @@ from pathlib import Path
 
 from pipeline.config import (
     CLIPS_OUTPUT_DIR, SHUTTLE_OUTPUT_DIR, EXCLUDED_VIDEOS, REMOVED_SHOTS,
-    MERGE_MAP, PLAYERS, SPLITS,  # noqa: F401
-    UNPREFIXED_TYPES, TAXONOMY_UNE_MERGE_V1, Taxonomy,
+    PLAYERS, SPLITS,  # noqa: F401
+    UNPREFIXED_TYPES, Taxonomy, resolve_taxonomy,
 )
+
+# Default taxonomy when callers don't pass one. Matches the project's
+# working baseline.
+_DEFAULT_TAXONOMY = resolve_taxonomy('une_v1_14')
 
 
 def _parse_clip_filename(filename: str) -> tuple[int, int, int, int] | None:
@@ -89,7 +93,7 @@ def verify_no_removed_shots(
 
 def verify_class_merge(
     clips_dir: Path = CLIPS_OUTPUT_DIR,
-    taxonomy: Taxonomy = TAXONOMY_UNE_MERGE_V1,
+    taxonomy: Taxonomy = _DEFAULT_TAXONOMY,
 ) -> bool:
     """Check that source folders for merged classes no longer exist.
 

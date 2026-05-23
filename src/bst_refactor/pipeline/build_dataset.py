@@ -22,9 +22,15 @@ from pathlib import Path
 
 from pipeline.config import (
     RAW_VIDEO_DIR, CLIPS_OUTPUT_DIR, RESOLUTION_CSV_PATH,
-    SPLITS, EXCLUDED_VIDEOS, REMOVED_SHOTS, MERGE_MAP, CLIP_WINDOW,  # noqa: F401
-    TAXONOMIES, TAXONOMY_UNE_MERGE_V1, DEFAULT_TAXONOMY, Taxonomy,
+    SPLITS, EXCLUDED_VIDEOS, REMOVED_SHOTS, CLIP_WINDOW,  # noqa: F401
+    TAXONOMIES, Taxonomy, resolve_taxonomy,
 )
+
+# Default taxonomy for pipeline operations when not explicitly overridden.
+# Matches the project's working baseline; pick a different one via the CLI
+# --taxonomy flag for one-off runs.
+_DEFAULT_TAXONOMY_NAME = 'une_v1_14'
+_DEFAULT_TAXONOMY = resolve_taxonomy(_DEFAULT_TAXONOMY_NAME)
 from pipeline.download_videos import download_all_videos, build_resolution_csv
 from pipeline.clip_generator import generate_all_clips, apply_class_merge
 from pipeline.verify import (
@@ -84,7 +90,7 @@ def dry_run(
     skip_shuttle: bool = False,
     no_merge: bool = False,
     tracknet_dir: Path | None = None,
-    taxonomy: Taxonomy = TAXONOMY_UNE_MERGE_V1,
+    taxonomy: Taxonomy = _DEFAULT_TAXONOMY,
 ) -> None:
     """Preview what the pipeline would do without executing anything.
 
@@ -151,7 +157,7 @@ def run_pipeline(
     workers: int = 2,
     batch_size: int = 32,
     tracknet_python: Path | None = None,
-    taxonomy: Taxonomy = TAXONOMY_UNE_MERGE_V1,
+    taxonomy: Taxonomy = _DEFAULT_TAXONOMY,
 ) -> None:
     """Run the full ShuttleSet data pipeline.
 
@@ -277,8 +283,8 @@ if __name__ == '__main__':
                         help='Skip TrackNetV3 shuttle trajectory extraction')
     parser.add_argument('--no-merge', action='store_true',
                         help='Skip class merging (keep all 19 stroke types)')
-    parser.add_argument('--taxonomy', default=DEFAULT_TAXONOMY, choices=list(TAXONOMIES.keys()),
-                        help=f'Stroke type taxonomy (default: {DEFAULT_TAXONOMY})')
+    parser.add_argument('--taxonomy', default=_DEFAULT_TAXONOMY_NAME, choices=list(TAXONOMIES.keys()),
+                        help=f'Stroke type taxonomy (default: {_DEFAULT_TAXONOMY_NAME})')
     parser.add_argument('--dry-run', action='store_true',
                         help='Preview what the pipeline would do without executing')
     parser.add_argument('--force', action='store_true',

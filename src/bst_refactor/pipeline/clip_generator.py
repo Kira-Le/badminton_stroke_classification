@@ -19,9 +19,13 @@ from pathlib import Path
 from pipeline.config import (
     SET_INFO_DIR, RAW_VIDEO_DIR, CLIPS_OUTPUT_DIR,
     SPLITS, STROKE_TYPES_19, STROKE_TYPES_19_ZH,
-    REMOVED_SHOTS, MERGE_MAP, CLIP_WINDOW, PLAYERS,  # noqa: F401
-    UNPREFIXED_TYPES, TAXONOMY_UNE_MERGE_V1, Taxonomy,
+    REMOVED_SHOTS, CLIP_WINDOW, PLAYERS,  # noqa: F401
+    UNPREFIXED_TYPES, Taxonomy, resolve_taxonomy,
 )
+
+# Default taxonomy when callers don't pass one. Matches the project's
+# working baseline; override via the function arg for one-off runs.
+_DEFAULT_TAXONOMY = resolve_taxonomy('une_v1_14')
 from pipeline.player_mapping import collect_shots
 
 
@@ -302,7 +306,7 @@ def generate_all_clips(
 
 def apply_class_merge(
     output_dir: Path = CLIPS_OUTPUT_DIR,
-    taxonomy: Taxonomy = TAXONOMY_UNE_MERGE_V1,
+    taxonomy: Taxonomy = _DEFAULT_TAXONOMY,
 ) -> None:
     """Merge rare subtype folders into their parent type folders.
 
