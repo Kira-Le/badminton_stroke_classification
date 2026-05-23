@@ -42,6 +42,7 @@ from pipeline.config import (
     label_for_row,
     resolve_taxonomy,
 )
+from pipeline.data_access import env_path, env_path_or_none, load_repo_dotenv
 
 
 def get_H(homography_info: pd.Series):
@@ -975,6 +976,10 @@ def main():
         PYTHONPATH=src/bst_refactor:src/bst_refactor/stroke_classification \\
             python -m preparing_data.prepare_train_on_shuttleset --tracknet-dir /path/to/TrackNetV3
     """
+    # Populate os.environ from <repo>/.env so argparse defaults below can
+    # read BST_* vars. Same pattern as pipeline.data_access.
+    load_repo_dotenv()
+
     parser = argparse.ArgumentParser(
         description=(
             "Prepare ShuttleSet training data in 3 steps:\n"
@@ -1025,11 +1030,14 @@ def main():
     )
 
     # Path overrides (only the ones that genuinely vary)
+    # Defaults read from .env (loaded above via load_repo_dotenv) when the
+    # corresponding BST_* env var is set; otherwise fall back to the repo-
+    # rooted constants from pipeline/config.py. Same pattern as data_access.
     parser.add_argument(
         "--clips-dir",
         type=Path,
-        default=CLIPS_OUTPUT_DIR,
-        help=f"Clip .mp4 input directory (default: {CLIPS_OUTPUT_DIR})",
+        default=env_path('BST_CLIPS_DIR', CLIPS_OUTPUT_DIR),
+        help=f"Clip .mp4 input directory (default: BST_CLIPS_DIR or {CLIPS_OUTPUT_DIR})",
     )
     parser.add_argument(
         "--tracknet-dir",
@@ -1040,8 +1048,8 @@ def main():
     parser.add_argument(
         "--shuttle-csv-dir",
         type=Path,
-        default=SHUTTLE_CSV_DIR,
-        help=f"Directory with TrackNetV3 shuttle CSVs (default: {SHUTTLE_CSV_DIR})",
+        default=env_path('BST_SHUTTLE_CSV_DIR', SHUTTLE_CSV_DIR),
+        help=f"Directory with TrackNetV3 shuttle CSVs (default: BST_SHUTTLE_CSV_DIR or {SHUTTLE_CSV_DIR})",
     )
 
     # Step 3 (collation) configuration: drives split + label assignment from
@@ -1051,9 +1059,12 @@ def main():
     parser.add_argument(
         "--clips-csv",
         type=Path,
-        default=Path(__file__).resolve().parents[4] / "notebooks" / "clips_master.csv",
+        default=env_path(
+            'BST_CLIPS_CSV',
+            Path(__file__).resolve().parents[4] / "notebooks" / "clips_master.csv",
+        ),
         help="Master clips CSV with split + label per clip "
-             "(default: <repo>/notebooks/clips_master.csv).",
+             "(default: BST_CLIPS_CSV or <repo>/notebooks/clips_master.csv).",
     )
     parser.add_argument(
         "--split-column",
@@ -1072,10 +1083,10 @@ def main():
     parser.add_argument(
         "--clip-npy-dir",
         type=Path,
-        default=None,
-        help="FLAT per-clip dir (Step 2 writer + Step 3 reader). Defaults to "
-             "the per-taxonomy preparing_root + "
-             "'dataset[_3d]_npy_between_2_hits_with_max_limits_flat'.",
+        default=env_path_or_none('BST_MMPOSE_NPY_DIR'),
+        help="FLAT per-clip dir (Step 2 writer + Step 3 reader). Default reads "
+             "BST_MMPOSE_NPY_DIR; if unset, falls back to the per-taxonomy "
+             "preparing_root + 'dataset[_3d]_npy_between_2_hits_with_max_limits_flat'.",
     )
     parser.add_argument(
         "--unknown-clip-npy-dir",
@@ -1126,10 +1137,18 @@ def main():
     str_3d = "_3d" if args.use_3d_pose else ""
     # Preparing root uses the resolved canonical taxonomy name. Legacy
     # aliases (e.g. 'une_merge_v1_nosides') resolve to canonical here so the
-    # on-disk dir lands under the new naming.
-    preparing_root = (
-        Path(__file__).resolve().parent / f"ShuttleSet_data_{taxonomy.name}"
-    )
+    # on-disk dir lands under the new naming. The ROOT under which all
+    # ShuttleSet_data_<tax>/ dirs live reads BST_X_COLLATED_DATA_ROOT when
+    # set (matches the FE serving contract in frontend_integration_guide.md);
+    # otherwise falls back to the in-repo preparing_data/ convention for
+    # local dev where /scratch isn't available.
+    collated_data_root = env_path_or_none('BST_X_COLLATED_DATA_ROOT')
+    if collated_data_root is not None:
+        preparing_root = collated_data_root / f"ShuttleSet_data_{taxonomy.name}"
+    else:
+        preparing_root = (
+            Path(__file__).resolve().parent / f"ShuttleSet_data_{taxonomy.name}"
+        )
     preparing_root.mkdir(parents=True, exist_ok=True)
 
     # Parse + validate --pose-styles.

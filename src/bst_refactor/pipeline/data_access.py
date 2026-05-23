@@ -191,13 +191,13 @@ def load_repo_dotenv(path: Path = _DOTENV_PATH) -> None:
                 os.environ[key] = value
 
 
-def _env_path(var: str, default: Path) -> Path:
+def env_path(var: str, default: Path) -> Path:
     """Return Path from env var if set, otherwise the default."""
     val = os.environ.get(var, '').strip()
     return Path(val) if val else default
 
 
-def _env_path_or_none(var: str) -> Path | None:
+def env_path_or_none(var: str) -> Path | None:
     """Return Path from env var if set and non-empty, otherwise None."""
     val = os.environ.get(var, '').strip()
     return Path(val) if val else None
@@ -233,16 +233,16 @@ class DataPaths:
     """
 
     clips_dir: Path = field(
-        default_factory=lambda: _env_path('BST_CLIPS_DIR', CLIPS_OUTPUT_DIR)
+        default_factory=lambda: env_path('BST_CLIPS_DIR', CLIPS_OUTPUT_DIR)
     )
     shuttle_npy_dir: Path = field(
-        default_factory=lambda: _env_path('BST_SHUTTLE_NPY_DIR', SHUTTLE_OUTPUT_DIR)
+        default_factory=lambda: env_path('BST_SHUTTLE_NPY_DIR', SHUTTLE_OUTPUT_DIR)
     )
     mmpose_npy_dir: Path | None = field(
-        default_factory=lambda: _env_path_or_none('BST_MMPOSE_NPY_DIR')
+        default_factory=lambda: env_path_or_none('BST_MMPOSE_NPY_DIR')
     )
     clips_csv: Path = field(
-        default_factory=lambda: _env_path('BST_CLIPS_CSV', _DEFAULT_CLIPS_CSV)
+        default_factory=lambda: env_path('BST_CLIPS_CSV', _DEFAULT_CLIPS_CSV)
     )
 
 
