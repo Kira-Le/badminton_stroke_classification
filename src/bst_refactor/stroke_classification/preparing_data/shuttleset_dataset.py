@@ -1,3 +1,5 @@
+import warnings
+
 import torch
 from torch import Tensor
 from torch.utils.data import Dataset, DataLoader
@@ -164,6 +166,23 @@ class Dataset_npy_collated(Dataset):
         self.videos_len = np.load(str(branch/'videos_len.npy'))
         self.labels: np.ndarray = np.load(str(branch/'labels.npy'))
 
+        # Row-aligned clip stems sidecar (Step C of the taxon_pinned_w_preds
+        # refactor). Legacy collations don't carry the file -- graceful None
+        # fallback so old collated dirs still load. New consumers (e.g. the
+        # post-hoc FE-JSON converter) should check for None before joining.
+        clip_stems_path = branch/'clip_stems.npy'
+        if clip_stems_path.exists():
+            self.clip_stems: np.ndarray | None = np.load(
+                str(clip_stems_path), allow_pickle=True,
+            )
+        else:
+            warnings.warn(
+                f'{clip_stems_path} not found; this collation predates the '
+                f'taxon_pinned_w_preds refactor. Per-clip alignment unavailable.',
+                stacklevel=2,
+            )
+            self.clip_stems = None
+
         # ---------------------------------------------------------------
         # DIVERGENCE FROM ORIGINAL BST: Drop zero-length clips.
         #
@@ -193,6 +212,8 @@ class Dataset_npy_collated(Dataset):
             self.shuttle = self.shuttle[valid]
             self.videos_len = self.videos_len[valid]
             self.labels = self.labels[valid]
+            if self.clip_stems is not None:
+                self.clip_stems = self.clip_stems[valid]
 
         if set_name == 'train' and train_partial < 1:
             self.adjust_to_partial_train_set(train_partial)
@@ -211,6 +232,9 @@ class Dataset_npy_collated(Dataset):
         new_shuttle = []
         new_videos_len = []
         new_labels = []
+        new_clip_stems: list[np.ndarray] | None = (
+            [] if self.clip_stems is not None else None
+        )
 
         types = np.unique(self.labels)
         for typ in types:
@@ -223,12 +247,16 @@ class Dataset_npy_collated(Dataset):
             new_shuttle.append(self.shuttle[choose_i])
             new_videos_len.append(self.videos_len[choose_i])
             new_labels.append(self.labels[choose_i])
+            if new_clip_stems is not None:
+                new_clip_stems.append(self.clip_stems[choose_i])
 
         self.human_pose = np.concatenate(new_human_pose)
         self.pos = np.concatenate(new_pos)
         self.shuttle = np.concatenate(new_shuttle)
         self.videos_len = np.concatenate(new_videos_len)
         self.labels = np.concatenate(new_labels)
+        if new_clip_stems is not None:
+            self.clip_stems = np.concatenate(new_clip_stems)
 
     def __len__(self):
         return len(self.labels)

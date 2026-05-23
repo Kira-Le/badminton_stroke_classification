@@ -348,7 +348,17 @@ def label_for_row(
         label_str = f'{side}_{merged}'
     else:
         label_str = merged
-    return taxonomy.classes.index(label_str)
+    try:
+        return taxonomy.classes.index(label_str)
+    except ValueError as e:
+        # Re-raise with full debug context (raw_type, side, taxonomy, derived
+        # label). The bare tuple.index ValueError just says "x not in tuple"
+        # which is useless when chasing a misconfigured taxonomy / merge_map.
+        raise ValueError(
+            f"taxonomy {taxonomy.name!r}: derived label {label_str!r} "
+            f"(raw_type={raw_type!r}, side={side!r}) not in classes "
+            f"{list(taxonomy.classes)}"
+        ) from e
 
 
 # ---------------------------------------------------------------------------

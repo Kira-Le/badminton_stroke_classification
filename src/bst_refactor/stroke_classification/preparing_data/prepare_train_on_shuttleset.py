@@ -38,10 +38,9 @@ from pipeline.config import (
     SHUTTLE_CSV_DIR,
     Taxonomy,
     TAXONOMIES,
-    TAXONOMY_UNE_MERGE_V1,
-    DEFAULT_TAXONOMY,
-    derive_ablation_id,
     derive_npy_collated_dir_basename,
+    label_for_row,
+    resolve_taxonomy,
 )
 
 
@@ -718,11 +717,11 @@ def collate_npy(
     save_dir: Path,
     clips_csv: Path,
     split_column: str,
-    taxonomy: Taxonomy = TAXONOMY_UNE_MERGE_V1,
-    drop_unknown: bool = False,
+    taxonomy: Taxonomy,
     shuttle_csv_dir: Path | None = None,
     resolution_df: pd.DataFrame | None = None,
     pose_styles: frozenset[str] = frozenset({"JnB_bone"}),
+    unknown_root_dir: Path | None = None,
 ):
     """Collate per-clip .npy files into stacked batch arrays for one split.
 
@@ -731,7 +730,9 @@ def collate_npy(
     shuttle trajectories from the canonical CSV dir, aligns temporal
     dimensions, applies failed-frame masking, pads to uniform seq_len,
     computes bone vectors and interpolations, then saves the stacked arrays
-    into ``save_dir/set_name/``.
+    into ``save_dir/set_name/``. A row-aligned ``clip_stems.npy`` sidecar
+    is saved alongside ``labels.npy`` so downstream consumers can join row
+    index -> stem directly without re-deriving the CSV filter.
 
     :param root_dir: FLAT per-clip dir containing
         ``{clip_stem}_{joints,pos,failed}.npy`` for every clip.
@@ -743,20 +744,43 @@ def collate_npy(
         ``clip_stem``.
     :param split_column: Column in ``clips_csv`` to use for split assignment,
         e.g. ``'split_bst_baseline'`` or ``'split_v2'``.
-    :param taxonomy: Taxonomy defining the class list and merge_map.
-    :param drop_unknown: If True, drop rows where ``raw_type_en == 'unknown'``.
+    :param taxonomy: Taxonomy. ``label_for_row`` drives per-row class index +
+        the unknown-filter rule (via ``excluded_base_stroke_types``); no
+        separate drop_unknown flag any more.
     :param shuttle_csv_dir: Directory containing TrackNetV3 shuttle CSVs
         ({clip}_ball.csv). Required.
     :param resolution_df: DataFrame with video resolutions (width/height), indexed
         by video ID. Required.
+    :param unknown_root_dir: Optional FLAT per-clip dir for rows whose
+        ``raw_type_en == 'unknown'``. When set, unknown rows resolve their
+        per-clip files from this dir instead of ``root_dir``. Used to point
+        the bst_25 / une_v1_15 collations at the sibling
+        ``ShuttleSet_keypoints_clean_sticky_anchor_unknown/`` extract. Must
+        be None when the taxonomy has ``'unknown'`` in
+        ``excluded_base_stroke_types`` (those rows get dropped anyway).
     """
     assert set_name in ["train", "val", "test"], "Invalid set_name."
     if shuttle_csv_dir is None:
         raise ValueError("shuttle_csv_dir is required")
     if resolution_df is None:
         raise ValueError("resolution_df is required")
+    if unknown_root_dir is not None and 'unknown' in taxonomy.excluded_base_stroke_types:
+        raise ValueError(
+            f"unknown_root_dir set but taxonomy {taxonomy.name!r} excludes "
+            f"unknown rows (excluded_base_stroke_types contains 'unknown'). "
+            f"Either drop unknown_root_dir or pick a taxonomy that retains unknown."
+        )
+    if taxonomy.has_unknown and unknown_root_dir is None:
+        raise ValueError(
+            f"taxonomy {taxonomy.name!r} retains unknown in its class list, "
+            f"but unknown_root_dir is None. The 1,278 unknown clips don't have "
+            f"per-clip files under the canonical extract; they need to come "
+            f"from the sibling _unknown extract. Pass unknown_root_dir=<that "
+            f"sibling dir>, OR pick a taxonomy whose excluded_base_stroke_types "
+            f"includes 'unknown' (e.g. {taxonomy.name.replace('_25', '_24').replace('_15', '_14')!r})."
+        )
 
-    # Filter the master CSV down to this split (and optionally drop unknown).
+    # Filter the master CSV down to this split.
     clips_df = pd.read_csv(clips_csv)
     if split_column not in clips_df.columns:
         raise KeyError(
@@ -764,34 +788,37 @@ def collate_npy(
             f"{list(clips_df.columns)}"
         )
     clips_df = clips_df[clips_df[split_column] == set_name].copy()
-    if drop_unknown:
-        clips_df = clips_df[clips_df["raw_type_en"] != "unknown"]
 
-    # Derive the folder-style label string per clip via the taxonomy:
-    # merge_map normalises rare subtypes to their parent; standalone types
-    # (e.g. 'unknown') skip the side prefix; everything else becomes
-    # f'{Top|Bottom}_{merged_type}' so it lines up with class_list().
-    class_ls = taxonomy.class_list()
-    class_to_idx = {s: i for i, s in enumerate(class_ls)}
-    standalone_set = taxonomy.standalone_set
-    merge_map = taxonomy.merge_map or {}
-
+    # Per-row label derivation + unknown-row routing. label_for_row applies
+    # taxonomy.excluded_base_stroke_types first (returns None -> drop the
+    # row), then merge_map, then side-prefixing per taxonomy.has_sides. The
+    # unknown_root_dir branch pulls per-clip files from the sibling extract
+    # for rows that survived (i.e. taxonomies that retain unknown).
     data_branches: list[str] = []
     labels_ls: list[int] = []
+    stems_ls: list[str] = []
     missing = 0
     for raw_type, side, stem in zip(
         clips_df["raw_type_en"],
         clips_df["player_side"],
         clips_df["clip_stem"],
     ):
-        merged = merge_map.get(raw_type, raw_type)
-        label_str = merged if merged in standalone_set else f"{side}_{merged}"
-        if label_str not in class_to_idx:
+        try:
+            idx = label_for_row(taxonomy, raw_type, side)
+        except ValueError as e:
+            # Add clip stem context to the descriptive error label_for_row
+            # already raises. Preserves the chain via `from e`.
             raise ValueError(
-                f"Derived label {label_str!r} for clip {stem!r} not in "
-                f"taxonomy {taxonomy.name!r}.class_list()"
-            )
-        branch = str(root_dir / stem)
+                f"label derivation failed for clip {stem!r}: {e}"
+            ) from e
+        if idx is None:
+            continue  # filtered out via excluded_base_stroke_types
+        chosen_root = (
+            unknown_root_dir
+            if (raw_type == "unknown" and unknown_root_dir is not None)
+            else root_dir
+        )
+        branch = str(chosen_root / stem)
         # Skip clips whose flat per-clip files are absent. verify_flatten.py
         # should have ruled this out before the originals were deleted, but
         # the check is cheap and prevents a confusing ENOENT mid-collation.
@@ -799,18 +826,23 @@ def collate_npy(
             missing += 1
             continue
         data_branches.append(branch)
-        labels_ls.append(class_to_idx[label_str])
+        labels_ls.append(idx)
+        stems_ls.append(stem)
 
     if missing:
+        unknown_hint = (
+            f" (or {unknown_root_dir} for unknown rows)"
+            if unknown_root_dir is not None else ""
+        )
         print(
             f"  [{set_name}] WARNING: {missing} clips in master CSV had no "
-            f"flat per-clip files under {root_dir}; skipped."
+            f"flat per-clip files under {root_dir}{unknown_hint}; skipped."
         )
     labels = np.asarray(labels_ls, dtype=np.int64)
+    clip_stems_arr = np.asarray(stems_ls, dtype=object)
     print(
         f"  [{set_name}] {len(data_branches)} clips after filter "
-        f"(taxonomy={taxonomy.name}, split_column={split_column}, "
-        f"drop_unknown={drop_unknown})."
+        f"(taxonomy={taxonomy.name}, split_column={split_column})."
     )
 
     # load .npy files
@@ -926,6 +958,9 @@ def collate_npy(
     np.save(str(set_dir / "shuttle.npy"), shuttle)
     np.save(str(set_dir / "videos_len.npy"), videos_len)
     np.save(str(set_dir / "labels.npy"), labels)
+    # Row-aligned clip stems sidecar so the post-hoc FE-JSON converter can
+    # join row index -> stem without re-deriving the CSV filter.
+    np.save(str(set_dir / "clip_stems.npy"), clip_stems_arr, allow_pickle=True)
     print("Collation is complete.")
 
 
@@ -977,9 +1012,11 @@ def main():
     )
     parser.add_argument(
         "--taxonomy",
-        default=DEFAULT_TAXONOMY,
+        default="une_v1_14",
         choices=list(TAXONOMIES.keys()),
-        help=f"Stroke type taxonomy (default: {DEFAULT_TAXONOMY})",
+        help="Stroke type taxonomy (default: une_v1_14). Drives label_for_row "
+             "per-row index + the unknown-filter rule via "
+             "excluded_base_stroke_types.",
     )
     parser.add_argument(
         "--use-3d-pose",
@@ -1026,16 +1063,11 @@ def main():
              "(default: split_bst_baseline).",
     )
     parser.add_argument(
-        "--drop-unknown",
-        action="store_true",
-        help="Drop clips with raw_type_en == 'unknown' before collation.",
-    )
-    parser.add_argument(
         "--ablation-id",
-        default=None,
-        help="Tag suffix on the collated output dir so multiple ablations "
-             "don't collide. Defaults to "
-             "'<taxonomy>_<split_column>_<dropunk|keepunk>'.",
+        required=True,
+        help="Required collation generation tag. Suffixes the collated output "
+             "dir (npy_[3d_][seq{N}_]{ablation_id}) so multiple cells coexist. "
+             "Common values: 'taxon_pinned_w_preds', 'wipe_drop'.",
     )
     parser.add_argument(
         "--clip-npy-dir",
@@ -1044,6 +1076,16 @@ def main():
         help="FLAT per-clip dir (Step 2 writer + Step 3 reader). Defaults to "
              "the per-taxonomy preparing_root + "
              "'dataset[_3d]_npy_between_2_hits_with_max_limits_flat'.",
+    )
+    parser.add_argument(
+        "--unknown-clip-npy-dir",
+        type=Path,
+        default=None,
+        help="Optional FLAT per-clip dir for rows with raw_type_en=='unknown'. "
+             "Routes unknown rows through this dir while everything else comes "
+             "from --clip-npy-dir. Used to point bst_25 / une_v1_15 collations "
+             "at the sibling _unknown extract. Must NOT be set when the "
+             "taxonomy excludes unknown.",
     )
     parser.add_argument(
         "--pose-styles",
@@ -1062,18 +1104,33 @@ def main():
     args = parser.parse_args()
 
     # ---- Resolve taxonomy and derive intermediate paths ----
-    taxonomy = TAXONOMIES[args.taxonomy]
+    taxonomy = resolve_taxonomy(args.taxonomy)
+    if (
+        args.unknown_clip_npy_dir is not None
+        and 'unknown' in taxonomy.excluded_base_stroke_types
+    ):
+        parser.error(
+            f"--unknown-clip-npy-dir is set but taxonomy {taxonomy.name!r} "
+            f"excludes unknown rows (excluded_base_stroke_types={sorted(taxonomy.excluded_base_stroke_types)}). "
+            f"Either drop the flag or pick a taxonomy that retains unknown."
+        )
+    if taxonomy.has_unknown and args.unknown_clip_npy_dir is None:
+        parser.error(
+            f"--taxonomy {taxonomy.name!r} retains unknown in its class list, "
+            f"but --unknown-clip-npy-dir is not set. The 1,278 unknown clips "
+            f"don't have per-clip files under the canonical extract; they need "
+            f"to come from the sibling _unknown extract. Pass "
+            f"--unknown-clip-npy-dir <that sibling dir>, OR pick a taxonomy "
+            f"whose excluded_base_stroke_types includes 'unknown'."
+        )
     str_3d = "_3d" if args.use_3d_pose else ""
+    # Preparing root uses the resolved canonical taxonomy name. Legacy
+    # aliases (e.g. 'une_merge_v1_nosides') resolve to canonical here so the
+    # on-disk dir lands under the new naming.
     preparing_root = (
         Path(__file__).resolve().parent / f"ShuttleSet_data_{taxonomy.name}"
     )
     preparing_root.mkdir(parents=True, exist_ok=True)
-
-    # Default ablation_id encodes the (taxonomy, split, drop) tuple so each
-    # config writes to its own collated dir without collision.
-    ablation_id = derive_ablation_id(
-        taxonomy.name, args.split_column, args.drop_unknown, args.ablation_id,
-    )
 
     # Parse + validate --pose-styles.
     pose_styles = frozenset(s.strip() for s in args.pose_styles.split(",") if s.strip())
@@ -1087,9 +1144,6 @@ def main():
     # Collated dir naming via shared helper (mirrored on the bst_train.py
     # reader side); see ``pipeline.config.derive_npy_collated_dir_basename``.
     npy_collated_dir = preparing_root / derive_npy_collated_dir_basename(
-        taxonomy_name=taxonomy.name,
-        split_column=args.split_column,
-        drop_unknown=args.drop_unknown,
         use_3d_pose=args.use_3d_pose,
         seq_len=args.seq_len,
         ablation_id=args.ablation_id,
@@ -1118,8 +1172,9 @@ def main():
         print(f"  npy_collated:     {npy_collated_dir}")
         print(f"  clips_csv:        {args.clips_csv}")
         print(f"  split_column:     {args.split_column}")
-        print(f"  drop_unknown:     {args.drop_unknown}")
-        print(f"  ablation_id:      {ablation_id}")
+        print(f"  excluded_raw:     {sorted(taxonomy.excluded_base_stroke_types)}")
+        print(f"  unknown_clip_dir: {args.unknown_clip_npy_dir}")
+        print(f"  ablation_id:      {args.ablation_id}")
         print(f"  pose_styles:      {sorted(pose_styles)}")
         print(f'  homography:       {SET_INFO_DIR / "homography.csv"}')
         print(f"  resolution:       {RESOLUTION_CSV_PATH}")
@@ -1192,7 +1247,7 @@ def main():
                 split_column=args.split_column,
                 pose_styles=pose_styles,
                 taxonomy=taxonomy,
-                drop_unknown=args.drop_unknown,
+                unknown_root_dir=args.unknown_clip_npy_dir,
                 shuttle_csv_dir=args.shuttle_csv_dir,
                 resolution_df=resolution_df,
             )
