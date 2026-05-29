@@ -1055,7 +1055,9 @@ def main():
     # Step 3 (collation) configuration: drives split + label assignment from
     # the master clips CSV instead of the on-disk folder layout. The flat
     # per-clip dir holds {clip_stem}_*.npy files shared across all ablations;
-    # the collated dir is per-ablation (encodes taxonomy + split + drop policy).
+    # the collated dir is per-cell -- the parent dir carries the taxonomy and
+    # the basename carries split + generation tag, so cells that share a
+    # taxonomy but differ by split don't collide.
     parser.add_argument(
         "--clips-csv",
         type=Path,
@@ -1165,6 +1167,7 @@ def main():
     npy_collated_dir = preparing_root / derive_npy_collated_dir_basename(
         use_3d_pose=args.use_3d_pose,
         seq_len=args.seq_len,
+        split_column=args.split_column,
         ablation_id=args.ablation_id,
     )
     if args.seq_len == 30:

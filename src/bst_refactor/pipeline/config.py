@@ -463,23 +463,36 @@ SPLITS: dict[str, list[int]] = {
 # source of truth so they stay in lockstep.
 
 def derive_npy_collated_dir_basename(
-    *, use_3d_pose: bool, seq_len: int, ablation_id: str,
+    *, use_3d_pose: bool, seq_len: int, split_column: str, ablation_id: str,
 ) -> str:
-    """Format the collated dir basename: ``npy_[3d_][seq{N}_]{ablation_id}``.
+    """Format the collated dir basename:
+    ``npy_[3d_][seq{N}_]{split}_{ablation_id}``.
 
     The ``3d_`` prefix appears only when ``use_3d_pose=True``; the ``seq{N}_``
-    prefix appears only when ``seq_len != 100``.
+    prefix only when ``seq_len != 100``. ``split`` is the split column with its
+    ``split_`` prefix stripped (``split_v2`` -> ``v2``, ``split_bst_baseline``
+    -> ``bst_baseline``) and is always present, so two cells that share a
+    taxonomy + ablation_id but differ by split land in distinct dirs instead
+    of clobbering each other. The taxonomy itself lives in the parent dir
+    (``ShuttleSet_data_<tax>/``), so it isn't repeated here.
 
     ``ablation_id`` is required (no auto-derive). The legacy default
-    tuple-string pattern (``{taxonomy}_{split_column}_{drop_unknown_tag}``)
-    is gone; callers pass the tag they want explicitly.
+    tuple-string pattern (``{taxonomy}_{split_column}_{drop_unknown_tag}``) is
+    gone; callers pass the generation tag explicitly and the split is folded
+    in here rather than hand-baked into the tag per cell.
 
-    Historical note: this field is named ``ablation_id`` in the Hyp tuple
-    and on disk, but today its content is a collation generation tag
-    (``'taxon_pinned_w_preds'``, ``'wipe_drop'``, etc.) rather than tagging
-    an ablation study. A rename to ``collation_id`` is parked for a
-    follow-up pass after the taxon_pinned_w_preds refactor lands.
+    Historical note: ``ablation_id`` names a collation generation tag
+    (``'taxon_pinned_w_preds'``, ``'wipe_drop'``, etc.) rather than an ablation
+    study. A rename to ``collation_id`` is parked for a follow-up pass.
+
+    :param use_3d_pose: whether the collation holds 3D pose (adds ``3d_``).
+    :param seq_len: target clip length; non-100 adds a ``seq{N}_`` tag.
+    :param split_column: clips_csv split column (``split_v2`` /
+        ``split_bst_baseline``); its ``split_`` prefix is stripped for the tag.
+    :param ablation_id: collation generation tag; trails the basename.
+    :return: the collated dir basename.
     """
     three_d_tag = '3d_' if use_3d_pose else ''
     seq_tag = '' if seq_len == 100 else f'seq{seq_len}_'
-    return f'npy_{three_d_tag}{seq_tag}{ablation_id}'
+    split_tag = split_column.removeprefix('split_')
+    return f'npy_{three_d_tag}{seq_tag}{split_tag}_{ablation_id}'
