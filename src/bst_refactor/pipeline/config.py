@@ -463,36 +463,69 @@ SPLITS: dict[str, list[int]] = {
 # source of truth so they stay in lockstep.
 
 def derive_npy_collated_dir_basename(
-    *, use_3d_pose: bool, seq_len: int, split_column: str, ablation_id: str,
+    *, use_3d_pose: bool, seq_len: int, split_column: str, collation_id: str,
 ) -> str:
     """Format the collated dir basename:
-    ``npy_[3d_][seq{N}_]{split}_{ablation_id}``.
+    ``npy_[3d_][seq{N}_]{split}_{collation_id}``.
 
     The ``3d_`` prefix appears only when ``use_3d_pose=True``; the ``seq{N}_``
     prefix only when ``seq_len != 100``. ``split`` is the split column with its
     ``split_`` prefix stripped (``split_v2`` -> ``v2``, ``split_bst_baseline``
     -> ``bst_baseline``) and is always present, so two cells that share a
-    taxonomy + ablation_id but differ by split land in distinct dirs instead
+    taxonomy + collation_id but differ by split land in distinct dirs instead
     of clobbering each other. The taxonomy itself lives in the parent dir
     (``ShuttleSet_data_<tax>/``), so it isn't repeated here.
 
-    ``ablation_id`` is required (no auto-derive). The legacy default
-    tuple-string pattern (``{taxonomy}_{split_column}_{drop_unknown_tag}``) is
-    gone; callers pass the generation tag explicitly and the split is folded
-    in here rather than hand-baked into the tag per cell.
+    ``collation_id`` is the collation generation tag (``'taxon_pinned_w_preds'``,
+    ``'wipe_drop'``, etc.); it discriminates re-collations of the same taxonomy
+    + split on disk and is required (no auto-derive). The legacy auto-derived
+    tuple-string (``{taxonomy}_{split_column}_{drop_unknown_tag}``) is gone;
+    callers pass the tag explicitly.
 
-    Historical note: ``ablation_id`` names a collation generation tag
-    (``'taxon_pinned_w_preds'``, ``'wipe_drop'``, etc.) rather than an ablation
-    study. A rename to ``collation_id`` is parked for a follow-up pass.
+    Note: a training-time ``ablation_id`` (different augs / loss / wiring on a
+    fixed collation) is a separate, manifest-only field. It does NOT enter the
+    path, so it plays no part here. Don't conflate the two.
 
     :param use_3d_pose: whether the collation holds 3D pose (adds ``3d_``).
     :param seq_len: target clip length; non-100 adds a ``seq{N}_`` tag.
     :param split_column: clips_csv split column (``split_v2`` /
         ``split_bst_baseline``); its ``split_`` prefix is stripped for the tag.
-    :param ablation_id: collation generation tag; trails the basename.
+    :param collation_id: collation generation tag; trails the basename.
     :return: the collated dir basename.
     """
     three_d_tag = '3d_' if use_3d_pose else ''
     seq_tag = '' if seq_len == 100 else f'seq{seq_len}_'
     split_tag = split_column.removeprefix('split_')
-    return f'npy_{three_d_tag}{seq_tag}{split_tag}_{ablation_id}'
+    return f'npy_{three_d_tag}{seq_tag}{split_tag}_{collation_id}'
+
+
+def collation_id_from_manifest(manifest: dict) -> str | None:
+    """Resolve a run's collation generation tag from its manifest, old or new.
+
+    New-schema manifests carry it directly as ``config.collation_id``.
+    Pre-refactor manifests predate that field: the tag lived in
+    ``config.ablation_id`` (the Hyp dump, ``None`` for the auto-derived runs)
+    and always in ``extra.data_provenance.effective_ablation_id`` (the resolved
+    value). Falls back through those in order; ``None`` if none is present.
+
+    For internal analysis scripts that read historical run data. The live FE
+    registry does NOT use this: it only ever sees new-schema manifests and reads
+    ``config.collation_id`` directly (refactor plan, Step J5).
+
+    Meaning-flip caveat: on a pre-refactor manifest ``config.ablation_id`` is
+    the *collation* tag, not a training ablation. A caller that also wants the
+    new training ``ablation_id`` must gate it on ``collation_id`` being present
+    in ``config`` (new schema); a legacy manifest has no training tag. Reading
+    new-schema ``config.collation_id`` first means we never misread a new
+    manifest's training ``ablation_id`` as the collation tag.
+
+    :param manifest: a parsed run manifest (e.g. ``yaml.safe_load`` of manifest.yaml).
+    :return: the collation generation tag, or None if the manifest carries none.
+    """
+    config = manifest.get('config') or {}
+    if config.get('collation_id'):
+        return config['collation_id']
+    if config.get('ablation_id'):
+        return config['ablation_id']
+    provenance = (manifest.get('extra') or {}).get('data_provenance') or {}
+    return provenance.get('collation_id') or provenance.get('effective_ablation_id')

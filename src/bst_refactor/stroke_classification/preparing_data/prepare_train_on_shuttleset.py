@@ -1076,11 +1076,13 @@ def main():
              "(default: split_bst_baseline).",
     )
     parser.add_argument(
-        "--ablation-id",
+        "--collation-id",
         required=True,
         help="Required collation generation tag. Suffixes the collated output "
-             "dir (npy_[3d_][seq{N}_]{ablation_id}) so multiple cells coexist. "
-             "Common values: 'taxon_pinned_w_preds', 'wipe_drop'.",
+             "dir (npy_[3d_][seq{N}_]{split}_{collation_id}) so re-collations of "
+             "the same taxonomy + split coexist. Common values: "
+             "'taxon_pinned_w_preds', 'wipe_drop'. A training-time ablation tag "
+             "is separate and lives in the run manifest, not the collation path.",
     )
     parser.add_argument(
         "--clip-npy-dir",
@@ -1168,7 +1170,7 @@ def main():
         use_3d_pose=args.use_3d_pose,
         seq_len=args.seq_len,
         split_column=args.split_column,
-        ablation_id=args.ablation_id,
+        collation_id=args.collation_id,
     )
     if args.seq_len == 30:
         default_flat_dir = preparing_root / f"dataset{str_3d}_npy_flat"
@@ -1196,7 +1198,7 @@ def main():
         print(f"  split_column:     {args.split_column}")
         print(f"  excluded_raw:     {sorted(taxonomy.excluded_base_stroke_types)}")
         print(f"  unknown_clip_dir: {args.unknown_clip_npy_dir}")
-        print(f"  ablation_id:      {args.ablation_id}")
+        print(f"  collation_id:     {args.collation_id}")
         print(f"  pose_styles:      {sorted(pose_styles)}")
         print(f'  homography:       {SET_INFO_DIR / "homography.csv"}')
         print(f"  resolution:       {RESOLUTION_CSV_PATH}")

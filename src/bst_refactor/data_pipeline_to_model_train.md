@@ -200,7 +200,7 @@ Key flags: `--seq-len` (30 or 100), `--taxonomy` (`une_merge_v1`, `une_merge_v1_
 #### Collated output structure
 
 ```
-preparing_data/ShuttleSet_data_{taxonomy.name}/npy_[3d_][seq{N}_]{ablation_id}/
+preparing_data/ShuttleSet_data_{taxonomy.name}/npy_[3d_][seq{N}_]{split}_{collation_id}/
   train/
     JnB_bone.npy                                    # default single pose file
     pos.npy, shuttle.npy, videos_len.npy, labels.npy
@@ -484,11 +484,11 @@ pipeline/build_dataset.py             # Orchestrates Steps 1-6 (--taxonomy flag)
     |
     v  (produces ShuttleSet/clips/ and ShuttleSet/shuttle_npy/)
     |
-preparing_data/prepare_train_on_shuttleset.py  (--taxonomy, --split-column, --drop-unknown, --clip-npy-dir)
+preparing_data/prepare_train_on_shuttleset.py  (--taxonomy, --split-column, --collation-id, --clip-npy-dir)
   -> MMPose (2D/3D pose estimation)   # Writes {clip_stem}_*.npy flat
-  -> collate_npy(clips_csv, split_column, taxonomy, ...)  # CSV-driven; stacks per ablation
+  -> collate_npy(clips_csv, split_column, taxonomy, ...)  # CSV-driven; stacks per collation
     |
-    v  (produces preparing_data/ShuttleSet_data_{taxonomy.name}/npy_[3d_][seq{N}_]{ablation_id}/)
+    v  (produces preparing_data/ShuttleSet_data_{taxonomy.name}/npy_[3d_][seq{N}_]{split}_{collation_id}/)
     |
 validation_scripts/validate_zeroed_frames.py  # Data quality check (optional, pre-training)
   -> validation_scripts/hit_frame_lookup.py   # Hit-frame index derivation from set CSVs
