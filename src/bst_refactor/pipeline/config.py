@@ -59,18 +59,62 @@ STROKE_TYPES_19 = list(EN_TO_ZH.keys())
 # The 19 types as Chinese strings, for matching against CSV annotation data
 STROKE_TYPES_19_ZH = list(EN_TO_ZH.values())
 
+
 # ---------------------------------------------------------------------------
-# Class merging: 19 -> 12 stroke types (rare subtypes folded into parents)
+# Stroke-type base lists (inputs to the Taxonomy objects below)
 # ---------------------------------------------------------------------------
-MERGE_MAP: dict[str, str] = {
+# Naming convention: STROKE_TYPES_<count>_<provenance>. Count is the number of
+# unprefixed base types (no Top_/Bottom_, no 'unknown'). Provenance tags where
+# the list comes from:
+#   _CSV     -- raw ShuttleSet CSV annotation values (the 19)
+#   _RAW     -- derived from _CSV by stripping specific raw types
+#   _MERGED  -- project-defined merge target (the 12 merged stroke types)
+#   _UNE_V1  -- the project's UNE-v1 merge target (14 types; keeps wrist_smash
+#              and passive_drop distinct)
+# These are inputs to Taxonomy objects; counts here do NOT include 'unknown'
+# or side prefixing -- those are applied at Taxonomy construction.
+
+# The 12 merged stroke types (English), in a stable order.
+# Used to build the BST 25-class family: bst_25 = 12 * 2 sides + 1 unknown.
+STROKE_TYPES_12_MERGED = [
+    'net_shot', 'return_net', 'smash', 'lob',
+    'clear', 'drive', 'drop', 'push',
+    'rush', 'cross_court_net_shot', 'short_service', 'long_service',
+]
+
+# The 14 UNE-v1 merged stroke types: keeps wrist_smash and passive_drop as
+# distinct classes, folds driven_flight into drive (per UNE_MERGE_V1_MAP).
+STROKE_TYPES_14_UNE_V1 = [
+    'net_shot', 'return_net', 'smash', 'wrist_smash',
+    'lob', 'clear', 'drive', 'drop',
+    'passive_drop', 'push', 'rush', 'cross_court_net_shot',
+    'short_service', 'long_service',
+]
+
+# The 18 raw stroke types: STROKE_TYPES_19 minus 'unknown'. Used by the
+# shuttleset_18 taxonomy (raw types, no merge, no sides, no unknown).
+STROKE_TYPES_18_RAW = [s for s in STROKE_TYPES_19 if s != 'unknown']
+
+
+# ---------------------------------------------------------------------------
+# Class merging maps: raw_type_en (CSV) -> merged-target name.
+# ---------------------------------------------------------------------------
+# Paper-faithful merge for the BST 25-class system. Folds rare subtypes into
+# parents per BST paper supplementary Table G. Key fix vs the legacy MERGE_MAP:
+# driven_flight maps to 'drive', NOT 'unknown'. The legacy 35-class behaviour
+# bled into the 25-class collations historically; bst_25 here matches the
+# published BST 25-class convention exactly.
+MERGE_MAP_25: dict[str, str] = {
     'wrist_smash':            'smash',
     'defensive_return_lob':   'lob',
-    'driven_flight':          'unknown',
+    'driven_flight':          'drive',
     'back_court_drive':       'drive',
     'passive_drop':           'drop',
     'defensive_return_drive': 'drive',
 }
 
+# UNE-v1 merge: keeps wrist_smash and passive_drop distinct (they're high-info
+# subtypes for the project's analysis); still folds driven_flight into drive.
 UNE_MERGE_V1_MAP: dict[str, str] = {
     'defensive_return_lob':   'lob',
     'driven_flight':          'drive',
@@ -78,27 +122,6 @@ UNE_MERGE_V1_MAP: dict[str, str] = {
     'defensive_return_drive': 'drive',
 }
 
-# The 12 merged stroke types (English), in a stable order.
-# These are the types that receive Top_/Bottom_ prefixes in the 25-class system.
-STROKE_TYPES_12_MERGED = [
-    'net_shot', 'return_net', 'smash', 'lob',
-    'clear', 'drive', 'drop', 'push',
-    'rush', 'cross_court_net_shot', 'short_service', 'long_service',
-]
-
-# The 14 UNE merged stroke types: keeps wrist_smash and passive_drop as
-# distinct classes, folds driven_flight into drive instead of unknown.
-STROKE_TYPES_14_UNE_MERGE_V1 = [
-    'net_shot', 'return_net', 'smash', 'wrist_smash',
-    'lob', 'clear', 'drive', 'drop',
-    'passive_drop', 'push', 'rush', 'cross_court_net_shot',
-    'short_service', 'long_service',
-]
-
-# The 17 raw stroke types (English) that receive Top_/Bottom_ prefixes in the
-# 35-class system. This is all 19 minus 'unknown' and 'driven_flight' (which
-# is always folded into 'unknown' even in the "raw" 35-class system).
-STROKE_TYPES_17_RAW = [s for s in STROKE_TYPES_19 if s not in ('unknown', 'driven_flight')]
 
 # ---------------------------------------------------------------------------
 # Players
@@ -106,187 +129,236 @@ STROKE_TYPES_17_RAW = [s for s in STROKE_TYPES_19 if s not in ('unknown', 'drive
 PLAYERS = ('Top', 'Bottom')
 
 # ---------------------------------------------------------------------------
-# Unprefixed types (clip-generation concern, NOT a taxonomy property)
-# These raw ShuttleSet types never get Top_/Bottom_ prefixed folders because
-# they lack meaningful player attribution.  Constant across all taxonomies.
-# 'driven_flight' is a transient type that always gets merged into 'unknown'
-# before training — it only exists as an unprefixed folder during pipeline clip
-# generation.
+# Side-prefixing rule (label layer)
 # ---------------------------------------------------------------------------
+# Types that NEVER get Top_/Bottom_ prefixed labels, regardless of taxonomy.
+# Consulted by label_for_row() below.
+SIDE_AGNOSTIC_TYPES: frozenset[str] = frozenset({'unknown'})
+
+# ---------------------------------------------------------------------------
+# Unprefixed types (clip-generation concern, NOT a taxonomy property)
+# ---------------------------------------------------------------------------
+# These raw ShuttleSet types never get Top_/Bottom_ prefixed folders during
+# clip generation, because they lack meaningful player attribution.
+# 'driven_flight' is included because it's a transient type that always gets
+# merged before training -- but at clip-generation time the raw folder still
+# exists, just unprefixed.
 UNPREFIXED_TYPES: frozenset[str] = frozenset({'unknown', 'driven_flight'})
 
 
 # ---------------------------------------------------------------------------
-# Taxonomy: single source of truth for class grouping schemes
+# Taxonomy: contractual class definitions
 # ---------------------------------------------------------------------------
 @dataclass(frozen=True)
 class Taxonomy:
-    """A stroke-type grouping scheme for training and evaluation.
+    """A pinned class taxonomy for training and evaluation.
 
-    :param name: Short identifier, e.g. 'merged_25', 'raw_35'.
-    :param merge_map: Maps rare subtype names to parent names, or None if no
-        merging is applied.  Only used by the pipeline merge/verify steps.
-    :param base_types: Stroke types that receive Top_/Bottom_ player prefixes.
-    :param standalone_types: Types that appear unprefixed in the final class
-        list (e.g. ``('unknown',)``).
-    :param unknown_first: If True, standalone types are placed *before* the
-        prefixed types in ``class_list()``; otherwise they come last.
+    Each Taxonomy commits its full class list explicitly (the ``classes``
+    field). labels.npy values are in ``[0, len(classes))``; no runtime
+    active/full remapping. The collator filters out rows whose ``raw_type_en``
+    is in ``excluded_base_stroke_types`` BEFORE merge or side-prefixing, and
+    ``__post_init__`` enforces that ``'unknown'`` (if present) always sits at
+    index ``-1``.
+
+    :param name: Short identifier, e.g. ``'bst_25'``, ``'une_v1_14'``.
+    :param classes: The full ordered class list. With sides, this includes
+        ``Top_``/``Bottom_``-prefixed entries. ``'unknown'`` (if present)
+        sits at index ``-1``.
+    :param merge_map: Maps rare raw types to parent names (e.g.
+        ``'driven_flight' -> 'drive'``), or ``None`` if no merging is applied.
+        Used by ``label_for_row()`` at the collator's per-row decision point.
+    :param has_sides: ``True`` if the taxonomy uses ``Top_``/``Bottom_``
+        player prefixes; ``False`` for nosides taxonomies.
+    :param excluded_base_stroke_types: Raw types (CSV-level) to drop before
+        merge or side-prefixing. e.g. ``frozenset({'unknown'})`` for a
+        taxonomy whose class list doesn't include unknown; ``frozenset()``
+        for a taxonomy that retains unknown.
     """
-
     name: str
+    classes: tuple[str, ...]
     merge_map: dict[str, str] | None
-    base_types: tuple[str, ...]
-    standalone_types: tuple[str, ...]
-    unknown_first: bool
+    has_sides: bool
+    excluded_base_stroke_types: frozenset[str]
+
+    def __post_init__(self):
+        if 'unknown' in self.classes and self.classes[-1] != 'unknown':
+            # Raise rather than assert: assertions strip under python -O,
+            # this contract needs to bite in production too.
+            raise ValueError(
+                f'taxonomy {self.name!r}: unknown must sit at index -1; '
+                f'found at index {self.classes.index("unknown")}.'
+            )
 
     @property
     def n_classes(self) -> int:
-        """Total number of classes when side='Both' (full taxonomy, including unknown)."""
-        return len(self.base_types) * 2 + len(self.standalone_types)
-
-    @property
-    def standalone_set(self) -> frozenset[str]:
-        return frozenset(self.standalone_types)
+        return len(self.classes)
 
     @property
     def has_unknown(self) -> bool:
-        """True if 'unknown' is one of the standalone types in this taxonomy."""
-        return 'unknown' in self.standalone_types
-
-    def class_list(self, side: str = 'Both') -> list[str]:
-        """Build the full class label list with Top_/Bottom_ prefixes (English).
-
-        Used for training labels, evaluation display, and folder-to-index
-        mapping.  NOT used for clip-generation folder creation (that uses
-        the module-level ``UNPREFIXED_TYPES`` constant).
-
-        :param side: ``'Both'``, ``'Top'``, or ``'Bottom'``.
-        :return: Ordered list of class label strings.
-        """
-        base = list(self.base_types)
-        standalone = list(self.standalone_types)
-        match side:
-            case 'Both':
-                prefixed = (
-                    [f'Top_{s}' for s in base]
-                    + [f'Bottom_{s}' for s in base]
-                )
-            case 'Top':
-                prefixed = [f'Top_{s}' for s in base]
-            case 'Bottom':
-                prefixed = [f'Bottom_{s}' for s in base]
-            case _:
-                raise ValueError(
-                    f"side must be 'Both', 'Top', or 'Bottom', got {side!r}"
-                )
-        # unknown_first only applies to side='Both' (BST convention).
-        # Single-side lists always place standalone types at the end.
-        if side == 'Both' and self.unknown_first:
-            return standalone + prefixed
-        return prefixed + standalone
-
-    def active_class_list(
-        self,
-        present_indices: set[int],
-        side: str = 'Both',
-    ) -> list[str]:
-        """Subset of ``class_list(side)`` at the given full-taxonomy indices, ordered.
-
-        The model's output head is sized to ``len(active_class_list)``;
-        ground-truth labels (after remapping) live in
-        ``[0, len(active_class_list))``. The full ``class_list()`` still owns
-        label decoding from on-disk values, since the collator wrote
-        ``labels.npy`` against the full-taxonomy index space.
-
-        :param present_indices: full-taxonomy indices that should appear in
-            the active head. Typically derived empirically from
-            ``labels.npy`` via ``np.unique(labels)``.
-        :param side: passed through to ``class_list``.
-        :return: ordered list of active class names, in their original
-            ``class_list`` relative order.
-        :raises ValueError: when ``present_indices`` contains values outside
-            ``[0, n_classes(side))``.
-        """
-        full = self.class_list(side=side)
-        bad = present_indices - set(range(len(full)))
-        if bad:
-            raise ValueError(
-                f'present_indices {sorted(bad)} out of range for taxonomy '
-                f'{self.name!r} with n_classes={len(full)}'
-            )
-        return [full[i] for i in sorted(present_indices)]
-
-    def full_to_active_remap(
-        self,
-        present_indices: set[int],
-        side: str = 'Both',
-    ) -> list[int]:
-        """Per-index map from full-taxonomy idx to active idx (or -1 if absent).
-
-        Same input contract as ``active_class_list``: ``present_indices`` is
-        typically derived from ``labels.npy``. Indices not in the present
-        set get -1 sentinels; indices in the present set get their position
-        in the sorted active list.
-
-        :param present_indices: full-taxonomy indices that map into the
-            active head.
-        :param side: passed through to ``class_list``.
-        :return: list of length ``len(class_list(side))`` where
-            ``remap[i]`` is the active-list position of
-            ``class_list(side)[i]`` if ``i in present_indices``, else -1.
-        """
-        full = self.class_list(side=side)
-        sorted_present = sorted(present_indices)
-        active_idx_of = {full_idx: i for i, full_idx in enumerate(sorted_present)}
-        return [active_idx_of.get(full_idx, -1) for full_idx in range(len(full))]
+        return 'unknown' in self.classes
 
 
-TAXONOMY_MERGED_25 = Taxonomy(
-    name='merged_25',
-    merge_map=MERGE_MAP,
-    base_types=tuple(STROKE_TYPES_12_MERGED),
-    standalone_types=('unknown',),
-    unknown_first=True,
+def _sided_classes(
+    base: list[str], with_unknown: bool,
+) -> tuple[str, ...]:
+    """Build a (Top_..., Bottom_..., 'unknown'?) class tuple from base names.
+
+    Helper for constructing ``Taxonomy.classes`` when ``has_sides=True``.
+    Drops in ``'unknown'`` at index ``-1`` if requested.
+
+    :param base: ordered list of unprefixed stroke type names.
+    :param with_unknown: if True, append ``'unknown'`` at the end.
+    :return: tuple of class names in canonical order.
+    """
+    side_prefixed = [f'Top_{b}' for b in base] + [f'Bottom_{b}' for b in base]
+    if with_unknown:
+        side_prefixed = side_prefixed + ['unknown']
+    return tuple(side_prefixed)
+
+
+# ---------------------------------------------------------------------------
+# Taxonomy registry
+# ---------------------------------------------------------------------------
+# Six pinned taxonomies. Each commits its full class list explicitly; the
+# Taxonomy.__post_init__ check enforces 'unknown' at index -1 when present.
+#
+# raw_35 (the BST paper's 35-class with-driven_flight system) is intentionally
+# NOT registered here. To reinstate: define merge_map={'driven_flight':
+# 'unknown'}, has_sides=True, base = STROKE_TYPES_19 minus {'unknown',
+# 'driven_flight'} (17 types Top_/Bottom_ prefixed plus unknown at index -1).
+# Note that historical raw_35 collations used the buggy merge convention
+# (driven_flight -> unknown) on the BST 25-class taxonomy too; bst_25 here is
+# paper-faithful with driven_flight -> drive.
+
+TAXONOMY_BST_25 = Taxonomy(
+    name='bst_25',
+    classes=_sided_classes(STROKE_TYPES_12_MERGED, with_unknown=True),
+    merge_map=MERGE_MAP_25,
+    has_sides=True,
+    excluded_base_stroke_types=frozenset(),  # keeps unknown rows
 )
 
-TAXONOMY_UNE_MERGE_V1 = Taxonomy(
-    name='une_merge_v1',
+TAXONOMY_BST_24 = Taxonomy(
+    name='bst_24',
+    classes=_sided_classes(STROKE_TYPES_12_MERGED, with_unknown=False),
+    merge_map=MERGE_MAP_25,
+    has_sides=True,
+    excluded_base_stroke_types=frozenset({'unknown'}),
+)
+
+TAXONOMY_BST_12 = Taxonomy(
+    name='bst_12',
+    classes=tuple(STROKE_TYPES_12_MERGED),
+    merge_map=MERGE_MAP_25,
+    has_sides=False,
+    excluded_base_stroke_types=frozenset({'unknown'}),
+)
+
+TAXONOMY_UNE_V1_14 = Taxonomy(
+    name='une_v1_14',
+    classes=tuple(STROKE_TYPES_14_UNE_V1),
     merge_map=UNE_MERGE_V1_MAP,
-    base_types=tuple(STROKE_TYPES_14_UNE_MERGE_V1),
-    standalone_types=('unknown',),
-    unknown_first=True,
+    has_sides=False,
+    excluded_base_stroke_types=frozenset({'unknown'}),
 )
 
-# Same merge_map and stroke set as une_merge_v1, but with the Top_/Bottom_
-# side prefixes collapsed: every type lands in standalone_types so the
-# collator emits an unprefixed label (the side branch in collate_npy is
-# skipped whenever ``merged in standalone_set``). Tests whether a 14-class
-# space with double the per-class N beats the split 28-class space, on the
-# theory that Top_X and Bottom_X are spatial mirrors of the same shot.
-TAXONOMY_UNE_MERGE_V1_NOSIDES = Taxonomy(
-    name='une_merge_v1_nosides',
+TAXONOMY_UNE_V1_15 = Taxonomy(
+    name='une_v1_15',
+    classes=tuple(STROKE_TYPES_14_UNE_V1) + ('unknown',),
     merge_map=UNE_MERGE_V1_MAP,
-    base_types=(),
-    standalone_types=tuple(STROKE_TYPES_14_UNE_MERGE_V1) + ('unknown',),
-    unknown_first=False,
+    has_sides=False,
+    excluded_base_stroke_types=frozenset(),
 )
 
-TAXONOMY_RAW_35 = Taxonomy(
-    name='raw_35',
+TAXONOMY_SHUTTLESET_18 = Taxonomy(
+    name='shuttleset_18',
+    classes=tuple(STROKE_TYPES_18_RAW),
     merge_map=None,
-    base_types=tuple(STROKE_TYPES_17_RAW),
-    standalone_types=('unknown',),
-    unknown_first=False,
+    has_sides=False,
+    excluded_base_stroke_types=frozenset({'unknown'}),
 )
 
-DEFAULT_TAXONOMY = 'une_merge_v1'
 
 TAXONOMIES: dict[str, Taxonomy] = {
-    'merged_25':            TAXONOMY_MERGED_25,
-    'une_merge_v1':         TAXONOMY_UNE_MERGE_V1,
-    'une_merge_v1_nosides': TAXONOMY_UNE_MERGE_V1_NOSIDES,
-    'raw_35':               TAXONOMY_RAW_35,
+    t.name: t for t in (
+        TAXONOMY_BST_25, TAXONOMY_BST_24, TAXONOMY_BST_12,
+        TAXONOMY_UNE_V1_14, TAXONOMY_UNE_V1_15,
+        TAXONOMY_SHUTTLESET_18,
+    )
 }
+
+
+# ---------------------------------------------------------------------------
+# Back-compat for legacy taxonomy names.
+# ---------------------------------------------------------------------------
+# Maps historical names (recorded in pre-refactor manifests, YAML registries,
+# scratch dirs, and best_model_id.txt notes) to the closest equivalent in the
+# new contractual set. Resume + alias lookup uses this; new code should pass
+# the canonical names from TAXONOMIES directly.
+#
+# Intended phase-out: remove entries one-by-one as historical runs retire.
+# Removing an entry implies the paired /scratch/comp320a/ShuttleSet_data_<old>/
+# dir is no longer needed and can be reclaimed manually.
+TAXONOMY_ALIASES: dict[str, str] = {
+    'une_merge_v1_nosides': 'une_v1_14',   # current best (run_20260505_154907)
+    'une_merge_v1':         'une_v1_15',   # legacy with-unknown 14-class
+    'merged_25':            'bst_25',      # legacy; OLD runs used buggy merge
+    'raw_35':               'bst_25',      # never collated; aliased for completeness
+}
+
+
+def resolve_taxonomy(name: str) -> Taxonomy:
+    """Look up a Taxonomy by name, following TAXONOMY_ALIASES for legacy values.
+
+    :param name: canonical taxonomy name (e.g. ``'bst_25'``) or a legacy alias
+        (e.g. ``'une_merge_v1_nosides'``).
+    :return: the matched Taxonomy object.
+    :raises KeyError: when ``name`` is neither canonical nor an alias.
+    """
+    if name in TAXONOMIES:
+        return TAXONOMIES[name]
+    if name in TAXONOMY_ALIASES:
+        return TAXONOMIES[TAXONOMY_ALIASES[name]]
+    raise KeyError(
+        f'taxonomy {name!r} not registered and not aliased; '
+        f'known: {sorted(TAXONOMIES)}; aliases: {sorted(TAXONOMY_ALIASES)}'
+    )
+
+
+def label_for_row(
+    taxonomy: Taxonomy, raw_type: str, side: str,
+) -> int | None:
+    """Resolve a per-row class index, or None if the row should be filtered out.
+
+    Single decision point for both the collator and ``_derive_class_label``.
+    ``excluded_base_stroke_types`` drops rows before any merge or side-prefix
+    step; ``merge_map`` applies next; side-prefixing kicks in when
+    ``has_sides=True`` and the merged type is not in ``SIDE_AGNOSTIC_TYPES``.
+
+    :param taxonomy: target Taxonomy.
+    :param raw_type: ``raw_type_en`` value from ``clips_master.csv``.
+    :param side: ``'Top'`` or ``'Bottom'``. Ignored when ``has_sides=False`` or
+        when the merged type is side-agnostic.
+    :return: index in ``[0, taxonomy.n_classes)`` or None if filtered out.
+    """
+    if raw_type in taxonomy.excluded_base_stroke_types:
+        return None
+    merged = (taxonomy.merge_map or {}).get(raw_type, raw_type)
+    if taxonomy.has_sides and merged not in SIDE_AGNOSTIC_TYPES:
+        label_str = f'{side}_{merged}'
+    else:
+        label_str = merged
+    try:
+        return taxonomy.classes.index(label_str)
+    except ValueError as e:
+        # Re-raise with full debug context (raw_type, side, taxonomy, derived
+        # label). The bare tuple.index ValueError just says "x not in tuple"
+        # which is useless when chasing a misconfigured taxonomy / merge_map.
+        raise ValueError(
+            f"taxonomy {taxonomy.name!r}: derived label {label_str!r} "
+            f"(raw_type={raw_type!r}, side={side!r}) not in classes "
+            f"{list(taxonomy.classes)}"
+        ) from e
 
 
 # ---------------------------------------------------------------------------
@@ -386,42 +458,74 @@ SPLITS: dict[str, list[int]] = {
 # ---------------------------------------------------------------------------
 # Collated-dir naming
 # ---------------------------------------------------------------------------
-# Both prepare_train_on_shuttleset.py (writer) and bst_train.py (reader)
-# need to construct the same collated dir basename for the same config.
-# Single source of truth so they stay in lockstep.
-
-def derive_ablation_id(
-    taxonomy_name: str,
-    split_column: str,
-    drop_unknown: bool,
-    ablation_id: str | None = None,
-) -> str:
-    """Default ablation_id if not overridden, encoding the (taxonomy, split, drop) tuple."""
-    if ablation_id:
-        return ablation_id
-    drop_tag = 'dropunk' if drop_unknown else 'keepunk'
-    return f'{taxonomy_name}_{split_column}_{drop_tag}'
-
+# Both prepare_train_on_shuttleset.py (writer) and bst_train.py (reader) need
+# to construct the same collated dir basename for the same config. Single
+# source of truth so they stay in lockstep.
 
 def derive_npy_collated_dir_basename(
-    taxonomy_name: str,
-    split_column: str,
-    drop_unknown: bool,
-    use_3d_pose: bool,
-    seq_len: int,
-    ablation_id: str | None = None,
+    *, use_3d_pose: bool, seq_len: int, split_column: str, collation_id: str,
 ) -> str:
-    """Format the collated dir basename: ``npy_[3d_][seq{N}_]{ablation_id}``.
+    """Format the collated dir basename:
+    ``npy_[3d_][seq{N}_]{split}_{collation_id}``.
 
     The ``3d_`` prefix appears only when ``use_3d_pose=True``; the ``seq{N}_``
-    prefix appears only when ``seq_len != 100``. ``ablation_id`` overrides
-    the default ``{taxonomy}_{split}_{drop}`` tuple if provided.
+    prefix only when ``seq_len != 100``. ``split`` is the split column with its
+    ``split_`` prefix stripped (``split_v2`` -> ``v2``, ``split_bst_baseline``
+    -> ``bst_baseline``) and is always present, so two cells that share a
+    taxonomy + collation_id but differ by split land in distinct dirs instead
+    of clobbering each other. The taxonomy itself lives in the parent dir
+    (``ShuttleSet_data_<tax>/``), so it isn't repeated here.
+
+    ``collation_id`` is the collation generation tag (``'taxon_pinned_w_preds'``,
+    ``'wipe_drop'``, etc.); it discriminates re-collations of the same taxonomy
+    + split on disk and is required (no auto-derive). The legacy auto-derived
+    tuple-string (``{taxonomy}_{split_column}_{drop_unknown_tag}``) is gone;
+    callers pass the tag explicitly.
+
+    Note: a training-time ``ablation_id`` (different augs / loss / wiring on a
+    fixed collation) is a separate, manifest-only field. It does NOT enter the
+    path, so it plays no part here. Don't conflate the two.
+
+    :param use_3d_pose: whether the collation holds 3D pose (adds ``3d_``).
+    :param seq_len: target clip length; non-100 adds a ``seq{N}_`` tag.
+    :param split_column: clips_csv split column (``split_v2`` /
+        ``split_bst_baseline``); its ``split_`` prefix is stripped for the tag.
+    :param collation_id: collation generation tag; trails the basename.
+    :return: the collated dir basename.
     """
-    eff_ablation = derive_ablation_id(
-        taxonomy_name, split_column, drop_unknown, ablation_id,
-    )
     three_d_tag = '3d_' if use_3d_pose else ''
     seq_tag = '' if seq_len == 100 else f'seq{seq_len}_'
-    return f'npy_{three_d_tag}{seq_tag}{eff_ablation}'
+    split_tag = split_column.removeprefix('split_')
+    return f'npy_{three_d_tag}{seq_tag}{split_tag}_{collation_id}'
 
 
+def collation_id_from_manifest(manifest: dict) -> str | None:
+    """Resolve a run's collation generation tag from its manifest, old or new.
+
+    New-schema manifests carry it directly as ``config.collation_id``.
+    Pre-refactor manifests predate that field: the tag lived in
+    ``config.ablation_id`` (the Hyp dump, ``None`` for the auto-derived runs)
+    and always in ``extra.data_provenance.effective_ablation_id`` (the resolved
+    value). Falls back through those in order; ``None`` if none is present.
+
+    For internal analysis scripts that read historical run data. The live FE
+    registry does NOT use this: it only ever sees new-schema manifests and reads
+    ``config.collation_id`` directly (refactor plan, Step J5).
+
+    Meaning-flip caveat: on a pre-refactor manifest ``config.ablation_id`` is
+    the *collation* tag, not a training ablation. A caller that also wants the
+    new training ``ablation_id`` must gate it on ``collation_id`` being present
+    in ``config`` (new schema); a legacy manifest has no training tag. Reading
+    new-schema ``config.collation_id`` first means we never misread a new
+    manifest's training ``ablation_id`` as the collation tag.
+
+    :param manifest: a parsed run manifest (e.g. ``yaml.safe_load`` of manifest.yaml).
+    :return: the collation generation tag, or None if the manifest carries none.
+    """
+    config = manifest.get('config') or {}
+    if config.get('collation_id'):
+        return config['collation_id']
+    if config.get('ablation_id'):
+        return config['ablation_id']
+    provenance = (manifest.get('extra') or {}).get('data_provenance') or {}
+    return provenance.get('collation_id') or provenance.get('effective_ablation_id')

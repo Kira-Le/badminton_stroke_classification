@@ -73,7 +73,7 @@ def main() -> None:
         help='Serial in manifest to read F1 from. Default: best_serials[0].',
     )
     parser.add_argument('--bottom-n', type=int, default=10)
-    parser.add_argument('--taxonomy', default='une_merge_v1')
+    parser.add_argument('--taxonomy', default='une_v1_14')
     parser.add_argument(
         '--bin-pct', type=int, default=20,
         help='Bin width (percent) for the per-class drop-rate breakdown. '
@@ -90,7 +90,7 @@ def main() -> None:
         )
 
     sys.path.insert(0, str(BST_REFACTOR))
-    from pipeline.config import TAXONOMIES
+    from pipeline.config import label_for_row, resolve_taxonomy
 
     flat_dir = _resolve_flat_dir(args.flat_dir)
     if not flat_dir.is_dir():
@@ -98,10 +98,7 @@ def main() -> None:
 
     run_dir = _resolve_run_dir(args.run) if args.run else None
 
-    taxonomy = TAXONOMIES[args.taxonomy]
-    merge_map = taxonomy.merge_map or {}
-    standalone = taxonomy.standalone_set
-    class_list = taxonomy.class_list()
+    taxonomy = resolve_taxonomy(args.taxonomy)
 
     df = pd.read_csv(args.clips_csv)
     df = df[df[args.split_column].isin(['train', 'val', 'test'])]
@@ -112,11 +109,14 @@ def main() -> None:
     for raw_type, side, stem in zip(
         df['raw_type_en'], df['player_side'], df['clip_stem'],
     ):
-        merged = merge_map.get(raw_type, raw_type)
-        label = merged if merged in standalone else f'{side}_{merged}'
-        if label not in class_list:
+        # Single source of the merge + side + exclusion rule. None means the
+        # taxonomy drops this raw type (e.g. unknown), so it's out-of-taxonomy
+        # for the audit.
+        idx = label_for_row(taxonomy, raw_type, side)
+        if idx is None:
             skipped_label += 1
             continue
+        label = taxonomy.classes[idx]
         path = flat_dir / f'{stem}_failed.npy'
         if not path.exists():
             missing += 1
@@ -125,7 +125,7 @@ def main() -> None:
 
     f1_by_class = _read_f1(run_dir, args.serial) if run_dir else None
     bot_n = _bottom_n(f1_by_class, args.bottom_n) if f1_by_class else []
-    ordered = _order_classes(class_list, f1_by_class, rates_by_class)
+    ordered = _order_classes(list(taxonomy.classes), f1_by_class, rates_by_class)
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     run_suffix = f'__{run_dir.name}' if run_dir else ''
