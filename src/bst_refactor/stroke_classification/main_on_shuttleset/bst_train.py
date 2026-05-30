@@ -416,17 +416,20 @@ def train_network(
             f'JnB_interp uses joint-pair midpoints, Jn2B uses both. Lift the equivalents '
             f'to torch in preparing_data/augmentations.py before re-enabling the others.'
         )
+    # Direct index rather than .get(key, default): the Hyp always carries all
+    # five aug keys (dict literal + all-or-nothing CLI override), so a missing
+    # key is a malformed config and should fail loud, not train on a default.
     aug_cfg = hyp.augmentation
     coupled_flip = CoupledFlip(
-        p=aug_cfg.get('p_flip', 0.5),
+        p=aug_cfg['p_flip'],
         n_joints=17,
         n_bones=n_bones,
     )
     constrained_jitter = ConstrainedJitter(
-        p_roll=aug_cfg.get('p_jitter', 0.2),
-        cap_y=aug_cfg.get('cap_y', 0.05),
-        cap_x=aug_cfg.get('cap_x', 0.10),
-        eps=aug_cfg.get('eps', 0.15),
+        p_roll=aug_cfg['p_jitter'],
+        cap_y=aug_cfg['cap_y'],
+        cap_x=aug_cfg['cap_x'],
+        eps=aug_cfg['eps'],
     )
     print(
         f"[aug] coupled flip p={coupled_flip.p}, "
