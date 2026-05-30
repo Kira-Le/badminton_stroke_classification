@@ -20,15 +20,21 @@ import importlib
 import sys
 from pathlib import Path
 
-from pipeline.config import derive_ablation_id, derive_npy_collated_dir_basename
+from pipeline.config import derive_npy_collated_dir_basename
+from pipeline.data_access import env_path_or_none, load_repo_dotenv
 
 
 def main() -> int:
+    # Mirror bst_train's root resolution: BST_X_COLLATED_DATA_ROOT (from .env or
+    # the shell) when set, else /scratch/comp320a. Keeps the pre-flight check
+    # aimed at the same tree the trainer will read.
+    load_repo_dotenv()
+    default_root = env_path_or_none('BST_X_COLLATED_DATA_ROOT') or Path('/scratch/comp320a')
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     parser.add_argument(
-        '--root', type=Path, default=Path('/scratch/comp320a'),
-        help='Scratch root holding ShuttleSet_data_<tax>/ trees '
-             '(default: /scratch/comp320a).',
+        '--root', type=Path, default=default_root,
+        help='Root holding ShuttleSet_data_<tax>/ trees (default: '
+             'BST_X_COLLATED_DATA_ROOT, else /scratch/comp320a).',
     )
     args = parser.parse_args()
 
@@ -40,29 +46,23 @@ def main() -> int:
     print('hyp config:')
     print(f'  taxonomy:        {hyp.taxonomy}')
     print(f'  split_column:    {hyp.split_column}')
-    print(f'  drop_unknown:    {hyp.drop_unknown}')
-    print(f'  ablation_id:     {hyp.ablation_id}')
+    print(f'  collation_id:    {hyp.collation_id}')
+    print(f'  ablation_id:     {hyp.ablation_id}  (training tag; not in the path)')
     print(f'  seq_len:         {hyp.seq_len}')
     print(f'  use_3d_pose:     {hyp.use_3d_pose}')
     print(f'  pose_style:      {hyp.pose_style}')
     print(f'  n_epochs:        {hyp.n_epochs}')
     print(f'  batch_size:      {hyp.batch_size}')
 
-    eff_ablation = derive_ablation_id(
-        hyp.taxonomy, hyp.split_column, hyp.drop_unknown, hyp.ablation_id,
-    )
     basename = derive_npy_collated_dir_basename(
-        taxonomy_name=hyp.taxonomy,
-        split_column=hyp.split_column,
-        drop_unknown=hyp.drop_unknown,
         use_3d_pose=hyp.use_3d_pose,
         seq_len=hyp.seq_len,
-        ablation_id=hyp.ablation_id,
+        split_column=hyp.split_column,
+        collation_id=hyp.collation_id,
     )
 
     expected_dir = args.root / f'ShuttleSet_data_{hyp.taxonomy}' / basename
     print()
-    print(f'Effective ablation_id: {eff_ablation}')
     print(f'Resolved collated basename: {basename}')
     print(f'Expected collated path: {expected_dir}')
     print()

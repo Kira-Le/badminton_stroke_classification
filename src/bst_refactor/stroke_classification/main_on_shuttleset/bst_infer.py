@@ -1,22 +1,39 @@
-# BST inference script for ShuttleSet
-# Loads a trained checkpoint and predicts stroke types.
-# Suitable as a backend for Gradio GUI — call task.infer() to get predictions.
+# BST inference for ShuttleSet. Two faces:
+#
+#   1. Library: infer() + Task — load a checkpoint and predict, for a live
+#      single-clip backend (e.g. a Gradio GUI).
+#   2. CLI --fe mode: post-hoc batch dump of per-stroke logits + top-k for an
+#      already-trained run, writing the same npz schema bst_train emits at
+#      end-of-serial. Folds in the retired eval_dump_predictions.py; lets the
+#      FE-shape converter / calibration run against a run without retraining.
 #
 # Run from the repo root with both package roots on PYTHONPATH:
 #   PYTHONPATH=src/bst_refactor:src/bst_refactor/stroke_classification \
-#       python -m main_on_shuttleset.bst_infer
+#       python -m main_on_shuttleset.bst_infer --fe \
+#           --run-dir .../experiments/run_<id> --serial 5 \
+#           --fe-output-dir /some/dump/root
 #
 # See bst_train.py for detailed PyTorch/TF comparison comments.
 
+import argparse
+import sys
+from pathlib import Path
+
+import numpy as np
 import torch
+import yaml
 from torch import Tensor, nn
 from torch.utils.data import DataLoader
 
-from pathlib import Path
-
 from preparing_data.shuttleset_dataset import Dataset_npy_collated
-from pipeline.config import TAXONOMIES, DEFAULT_TAXONOMY, Taxonomy
-from main_on_shuttleset.bst_common import build_bst_network
+from pipeline.config import (
+    Taxonomy,
+    collation_id_from_manifest,
+    derive_npy_collated_dir_basename,
+    resolve_taxonomy,
+)
+from pipeline.data_access import env_path_or_none, load_repo_dotenv
+from main_on_shuttleset.bst_common import build_bst_network, dump_topk_predictions
 
 
 @torch.no_grad()  # no gradient tracking needed for inference — saves memory
@@ -47,6 +64,13 @@ def infer(
 
 
 class Task:
+    """Live single-clip inference helper (Gradio-style backend).
+
+    Build the head at ``taxonomy.n_classes`` and decode predictions against
+    ``taxonomy.classes``. Labels on disk are already in that index space (no
+    runtime remap), so the head dim is just the taxonomy size.
+    """
+
     def __init__(self, n_joints=17) -> None:
         self.use_cuda = torch.cuda.is_available()
         self.device = 'cuda' if self.use_cuda else 'cpu'
@@ -69,39 +93,30 @@ class Task:
     def get_network_architecture(
         self,
         *,
+        taxonomy: Taxonomy,
         model_name: str = 'BST_CG_AP',
         seq_len: int = 100,
         in_channels: int = 2,
-        taxonomy: Taxonomy | None = None,
-        n_active_classes: int,
-        active_class_list: list[str],
     ):
-        """Build the inference model at the supplied head dim.
+        """Build the inference model at the taxonomy head dim.
 
-        ``n_active_classes`` and ``active_class_list`` describe the
-        architectural era of the weights being loaded; both must be
-        supplied. For a post-fix run, read both from the run's
-        ``manifest.yaml`` under ``extra.arch``. For pre-fix weights with
-        no manifest arch block, pass
-        ``n_active_classes=taxonomy.n_classes`` and
-        ``active_class_list=taxonomy.class_list()`` explicitly to opt
-        into the legacy full-taxonomy head.
+        The weights being loaded were trained against ``taxonomy.classes``;
+        a mismatch between the weight file's head dim and
+        ``taxonomy.n_classes`` raises a clear shape error inside
+        ``load_state_dict``. For a legacy run, pass the taxonomy the run
+        recorded (``resolve_taxonomy(manifest['config']['taxonomy'])``).
 
-        Mismatch between the weight file's head dim and
-        ``n_active_classes`` raises a clear shape error inside
-        ``load_state_dict``.
+        :param taxonomy: the taxonomy the weights were trained under.
+        :param in_channels: 2 for 2D (xy) keypoints, 3 for 3D (xyz).
         """
-        if taxonomy is None:
-            taxonomy = TAXONOMIES[DEFAULT_TAXONOMY]
         self.taxonomy = taxonomy
-        self.n_active_classes = n_active_classes
-        self.active_class_list = active_class_list
+        self.class_list = list(taxonomy.classes)
         self.net, _n_bones = build_bst_network(
             model_name,
             n_joints=self.n_joints,
             pose_style=self.pose_style,
             in_channels=in_channels,
-            n_class=self.n_active_classes,
+            n_class=taxonomy.n_classes,
             seq_len=seq_len,
             device=self.device,
         )
@@ -113,65 +128,173 @@ class Task:
         return infer(self.net, self.infer_loader, self.device)
 
 
+# ==========================================================================
+# --fe batch dump: per-stroke logits + top-k npz for an existing run
+# ==========================================================================
+
+def _resolve_collated_dir(
+    manifest: dict, config: dict, collated_data_root: Path | None, run_dir: Path,
+) -> Path:
+    """Resolve the collated dir the run trained on, for a post-hoc dump.
+
+    Prefers the recorded ``extra.data_provenance.npy_collated_dir`` (carries the
+    historical basename verbatim, including pre-split-fold names like
+    ``npy_wipe_drop``); falls back to deriving it from the recorded config.
+
+    Root order: ``--collated-data-root`` override, then
+    ``BST_X_COLLATED_DATA_ROOT`` (e.g. /scratch/comp320a on bourbaki), then the
+    in-repo ``preparing_data/`` convention (``run_dir.parents[2]`` is the
+    stroke_classification dir).
+    """
+    recorded_dir = (
+        (manifest.get('extra') or {}).get('data_provenance', {}).get('npy_collated_dir')
+    )
+    basename = recorded_dir or derive_npy_collated_dir_basename(
+        use_3d_pose=config['use_3d_pose'],
+        seq_len=config['seq_len'],
+        split_column=config['split_column'],
+        collation_id=collation_id_from_manifest(manifest),
+    )
+    if collated_data_root is None:
+        collated_data_root = (
+            env_path_or_none('BST_X_COLLATED_DATA_ROOT')
+            or run_dir.parents[2] / 'preparing_data'
+        )
+    return collated_data_root / f"ShuttleSet_data_{config['taxonomy']}" / basename
+
+
+def dump_run_predictions(
+    *,
+    run_dir: Path,
+    serial: int,
+    fe_output_dir: Path,
+    splits: tuple[str, ...] = ('val', 'test'),
+    collated_data_root: Path | None = None,
+    model_name: str = 'BST_CG_AP',
+    n_joints: int = 17,
+    batch_size: int = 128,
+) -> Path:
+    """Dump per-split prediction npz for an already-trained run.
+
+    Same npz schema as ``bst_train``'s end-of-serial dump (logits, y_true,
+    y_pred_top1, topk_idx, class_list, run_id, serial_no, taxonomy_name). New-
+    schema runs only: labels.npy is in active class space, so there's no remap.
+
+    :return: the predictions output dir (``fe_output_dir/<run_id>/predictions``).
+    """
+    manifest = yaml.safe_load((run_dir / 'manifest.yaml').read_text())
+    config = manifest['config']
+    taxonomy = resolve_taxonomy(config['taxonomy'])
+
+    target = next(
+        (s for s in manifest.get('serials', []) if s['serial_no'] == serial), None
+    )
+    if target is None:
+        sys.exit(f'serial {serial} not found in {run_dir}/manifest.yaml')
+    weights_path = run_dir / 'weights' / Path(target['weights_path']).name
+    if not weights_path.is_file():
+        sys.exit(f'weights file missing: {weights_path}')
+
+    collated_dir = _resolve_collated_dir(manifest, config, collated_data_root, run_dir)
+    if not collated_dir.is_dir():
+        sys.exit(f'collated dir missing: {collated_dir}')
+
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    net, _n_bones = build_bst_network(
+        model_name,
+        n_joints=n_joints,
+        pose_style=config['pose_style'],
+        in_channels=(3 if config['use_3d_pose'] else 2),
+        n_class=taxonomy.n_classes,
+        seq_len=config['seq_len'],
+        device=device,
+    )
+    net.load_state_dict(
+        torch.load(str(weights_path), map_location=device, weights_only=True)
+    )
+
+    print(f'run_dir: {run_dir}')
+    print(f'weights: {weights_path}')
+    print(f'collated_dir: {collated_dir}')
+    print(f'taxonomy: {taxonomy.name} ({taxonomy.n_classes} classes)')
+
+    out_dir = fe_output_dir / run_dir.name / 'predictions'
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for split in splits:
+        loader = DataLoader(
+            Dataset_npy_collated(collated_dir, split, config['pose_style']),
+            batch_size=batch_size, shuffle=False,
+        )
+        dump = dump_topk_predictions(net, loader, device, k=5)
+        out_path = out_dir / f'{split}_serial_{serial}.npz'
+        np.savez(
+            out_path,
+            logits=dump['logits'],
+            y_true=dump['y_true'],
+            y_pred_top1=dump['y_pred_top1'],
+            topk_idx=dump['topk_idx'],
+            class_list=np.array(taxonomy.classes, dtype=object),
+            run_id=np.array(run_dir.name, dtype=object),
+            serial_no=np.array(serial, dtype=np.int64),
+            taxonomy_name=np.array(taxonomy.name, dtype=object),
+        )
+        print(f'saved: {out_path} ({len(dump["y_true"])} rows)')
+    return out_dir
+
+
 if __name__ == '__main__':
-    # Inference example.
-    #
-    # Architecture is no longer a function of any flag; it has to come from
-    # the run that produced the weights. Two paths:
-    #   1. Post-fix weights: load ``extra.arch`` from the run's manifest.yaml
-    #      and pass ``n_active_classes`` / ``active_class_list`` straight in.
-    #   2. Pre-fix weights (no arch block in the manifest): fall back to the
-    #      full taxonomy explicitly. The weight file shape is then
-    #      ``taxonomy.n_classes`` and the decoder uses ``taxonomy.class_list()``.
+    # Load .env so BST_X_COLLATED_DATA_ROOT resolves the same way the collator
+    # and bst_train do. No-op without .env; shell exports win.
+    load_repo_dotenv()
 
-    import yaml
-
-    taxonomy = TAXONOMIES[DEFAULT_TAXONOMY]
-
-    # Update to the run id you want to infer from.
-    run_id = 'run_YYYYMMDD_HHMMSS'
-    run_dir = Path('experiments') / run_id
-
-    manifest_path = run_dir / 'manifest.yaml'
-    if manifest_path.exists():
-        with open(manifest_path) as f:
-            manifest = yaml.safe_load(f) or {}
-        arch = manifest.get('extra', {}).get('arch')
-    else:
-        arch = None
-
-    if arch is None:
-        # Pre-fix run with no arch block; opt into legacy full-taxonomy head.
-        n_active_classes = taxonomy.n_classes
-        active_class_list = taxonomy.class_list()
-    else:
-        n_active_classes = arch['n_active_classes']
-        active_class_list = arch['active_class_list']
-
-    task = Task(n_joints=17)
-    task.prepare_loader(
-        # Example path; update the collation_id suffix to whichever collation
-        # you're inferring on (e.g. taxon_pinned_w_preds).
-        # Format: npy_[3d_][seq{N}_]{split}_{collation_id} (prefixes only when non-default).
-        npy_collated_dir=Path(f'preparing_data/ShuttleSet_data_{taxonomy.name}')
-                        / "npy_v2_taxon_pinned_w_preds",
-        pose_style="JnB_bone",
+    parser = argparse.ArgumentParser(
+        description='BST inference. --fe runs the post-hoc batch dump of '
+                    'per-stroke logits + top-k for an existing run.',
     )
-    task.get_network_architecture(
-        model_name='BST_CG_AP',
-        seq_len=100,
-        in_channels=2,
-        taxonomy=taxonomy,
-        n_active_classes=n_active_classes,
-        active_class_list=active_class_list,
+    parser.add_argument(
+        '--fe', action='store_true',
+        help='FE/batch dump mode. Requires --fe-output-dir and --run-dir.',
     )
-    task.load_weight(Path('weight')
-                     /"bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_2.pt")
+    parser.add_argument(
+        '--fe-output-dir', type=Path, default=None,
+        help='Destination root for FE-mode npz dumps. Required when --fe is set. '
+             'Files land at <fe-output-dir>/<run_id>/predictions/<split>_serial_<n>.npz.',
+    )
+    parser.add_argument(
+        '--run-dir', type=Path, default=None,
+        help='experiments/run_<id>/ whose weights to dump. Required when --fe is set.',
+    )
+    parser.add_argument('--serial', type=int, default=5,
+                        help='Serial number whose weights to evaluate.')
+    parser.add_argument('--splits', default='val,test',
+                        help='Comma-separated splits to dump (default: val,test).')
+    parser.add_argument(
+        '--collated-data-root', type=Path, default=None,
+        help='Root holding ShuttleSet_data_<tax>/. Defaults to '
+             'BST_X_COLLATED_DATA_ROOT, then the in-repo preparing_data/.',
+    )
+    parser.add_argument('--model-name', default='BST_CG_AP',
+                        help='BST variant; matches the partial used at train time.')
+    args = parser.parse_args()
 
-    pred = task.infer()
+    # Mutual-implication guard: --fe <-> --fe-output-dir, and no implicit dump.
+    if args.fe and args.fe_output_dir is None:
+        parser.error('--fe requires --fe-output-dir <path>')
+    if args.fe_output_dir is not None and not args.fe:
+        parser.error('--fe-output-dir requires --fe (no implicit dump mode)')
+    if not args.fe:
+        parser.error(
+            'bst_infer CLI currently only implements --fe (batch dump) mode. '
+            'For live single-clip inference, import infer() / Task instead.'
+        )
+    if args.run_dir is None:
+        parser.error('--fe requires --run-dir <experiments/run_...>')
 
-    # Decode against the active class list so labels line up with the
-    # head the model was built with.
-    classes = task.active_class_list
-    pred_cls = [classes[e] for e in pred]
-    print(pred_cls)
+    dump_run_predictions(
+        run_dir=args.run_dir.resolve(),
+        serial=args.serial,
+        fe_output_dir=args.fe_output_dir,
+        splits=tuple(s.strip() for s in args.splits.split(',') if s.strip()),
+        collated_data_root=args.collated_data_root,
+        model_name=args.model_name,
+    )

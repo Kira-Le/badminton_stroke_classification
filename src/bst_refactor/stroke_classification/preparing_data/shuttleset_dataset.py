@@ -15,7 +15,7 @@ from pathlib import Path
 def pad_class_labels(labels: list[str]) -> list[str]:
     """Pad class label strings to uniform width for aligned display (e.g. F1 table).
 
-    :param labels: Class label list from ``taxonomy.class_list()``.
+    :param labels: Class label list (e.g. ``list(taxonomy.classes)``).
     :return: Labels padded with spaces to the length of the longest label.
     """
     max_len = max(len(s) for s in labels)

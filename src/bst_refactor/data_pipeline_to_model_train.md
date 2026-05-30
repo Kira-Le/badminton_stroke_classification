@@ -91,7 +91,7 @@ The pipeline downloads match videos, cuts them into labeled stroke clips, option
 
 | Module | Role | Key functions / concepts |
 |--------|------|--------------------------|
-| `config.py` | Single source of truth for paths, stroke types, splits, flaw records, and merge rules. Every other pipeline module imports from here. | `Taxonomy` (frozen dataclass with `class_list()`, `n_classes`, `merge_map`, `standalone_set`), `TAXONOMIES` (dict of named taxonomies: `'une_merge_v1'`, `'une_merge_v1_nosides'`, `'merged_25'`, `'raw_35'`), `DEFAULT_TAXONOMY` (name of the default taxonomy, currently `'une_merge_v1'`), `UNPREFIXED_TYPES` (frozenset of raw types that never get Top_/Bottom_ prefixed folders during clip generation), `SPLITS` (train/val/test video ID lists, auto-stripped of excluded videos), `UNE_MERGE_V1_MAP` (default 19 -> 14 class reduction), `MERGE_MAP` (legacy 19 -> 12 class reduction), `EN_TO_ZH` / `ZH_TO_EN` (English-Chinese name mapping for CSV I/O only), `parse_flaw_records()` (reads `flaw_shot_records.csv` to populate `EXCLUDED_VIDEOS` and `REMOVED_SHOTS`). |
+| `config.py` | Single source of truth for paths, stroke types, splits, flaw records, and merge rules. Every other pipeline module imports from here. | `Taxonomy` (frozen dataclass: `classes` (the authoritative ordered class list), `n_classes`, `has_unknown`, `merge_map`, `has_sides`, `excluded_base_stroke_types`), `TAXONOMIES` (dict of pinned taxonomies: `'bst_25'`, `'bst_24'`, `'bst_12'`, `'une_v1_14'`, `'une_v1_15'`, `'shuttleset_18'`), `TAXONOMY_ALIASES` + `resolve_taxonomy()` (legacy names like `'une_merge_v1_nosides'`/`'merged_25'` resolve to their current equivalent), `label_for_row()` (the single merge + side + exclusion decision point, used by the collator), `UNPREFIXED_TYPES` (frozenset of raw types that never get Top_/Bottom_ prefixed folders during clip generation), `SPLITS` (train/val/test video ID lists, auto-stripped of excluded videos), `UNE_MERGE_V1_MAP` (19 -> 14 class reduction) + `MERGE_MAP_25` (19 -> 12, paper-faithful `driven_flight -> drive`), `EN_TO_ZH` / `ZH_TO_EN` (English-Chinese name mapping for CSV I/O only), `parse_flaw_records()` (reads `flaw_shot_records.csv` to populate `EXCLUDED_VIDEOS` and `REMOVED_SHOTS`). |
 | `build_dataset.py` | One-command orchestrator. Runs steps 1-6 in order with CLI flags to skip individual steps (`--skip-download`, `--skip-resolution`, `--skip-clips`, `--skip-verify`, `--skip-shuttle`). `--skip-clips` skips both clip generation (step 3) and class merge (step 4) since they are tightly coupled: the merge moves clips out of their original folders, so re-running step 3 after a merge would re-generate them from video. | `run_pipeline()` (main entry point), `dry_run()` (preview without side effects), `_validate_inputs()` (fail-fast checks before long work). |
 | `download_videos.py` | Downloads 40 ShuttleSet match videos from YouTube via yt-dlp. Also builds a resolution CSV by scanning each video with OpenCV. | `download_all_videos(max_workers)`, `build_resolution_csv()`. Output: `ShuttleSet/raw_video/{id} {match_name}.mp4` and `ShuttleSet/my_raw_video_resolution.csv`. |
 | `clip_generator.py` | Extracts individual stroke clips from full match videos. Reads ShuttleSet CSV annotations (Chinese column names), maps A/B players to Top/Bottom, filters excluded videos and removed shots, and organizes clips into `{split}/{Player}_{stroke_type}/` folders. | `generate_all_clips()`, `apply_class_merge()` (moves clips from rare subtype folders into their parent type folders per the active taxonomy's merge map). Three clip window modes: `middle_in_a_sec`, `between_2_hits`, `between_2_hits_with_max_limits` (default, clamps to 1.5s each side). |
@@ -120,7 +120,7 @@ Split and label assignment for `shuttle_npy/` (and downstream pose npys) come fr
 
 #### Key concepts
 
-- **Class merging**: The default pipeline taxonomy (`une_merge_v1`) folds 4 rare subtypes into parent types, reducing 19 raw types to 14 merged types (29 classes with Top/Bottom prefixes + `unknown`). The `une_merge_v1_nosides` variant uses the same merge map but collapses the Top/Bottom side prefixes (15 classes; current Architecture 1 active config). The legacy `merged_25` taxonomy folds 6 subtypes down to 12 types (25 classes). The `raw_35` taxonomy applies no merging (35 classes).
+- **Class merging**: Each taxonomy pins its full ordered class list and a merge map that folds rare raw subtypes into parents. The current Architecture 1 active config is `une_v1_14` (4 subtypes folded -> 14 merged types, no sides, unknown excluded); `une_v1_15` is the same plus `unknown` (15). The BST-paper family folds 6 subtypes to 12 base types: `bst_25` (12 x Top/Bottom + `unknown` = 25), `bst_24` (no unknown = 24), `bst_12` (nosides = 12). `shuttleset_18` keeps the 18 raw types (no merge, no sides, no unknown). Legacy names (`une_merge_v1`, `une_merge_v1_nosides`, `merged_25`, `raw_35`) resolve to their current equivalent via `TAXONOMY_ALIASES` / `resolve_taxonomy()`. Whether `unknown` is kept is contractual per taxonomy (its `excluded_base_stroke_types`), not a runtime flag.
 - **Flaw records**: `flaw_shot_records.csv` is the single source of truth for data exclusions. Whole-video exclusions and individual shot removals are parsed at import time.
 - **Clip windows**: Control how much temporal context surrounds each stroke. `between_2_hits_with_max_limits` (default) uses the interval between adjacent shots, clamped to 1.5s per side.
 - **Homography resolution**: The pre-computed homography matrices in `ShuttleSet/set/homography.csv` were calculated at 1280x720. `court_utils.scale_pos_by_resolution()` rescales coordinates from the video's native resolution to 1280x720 before applying the homography. This quantization is negligible for court-position features (~1cm precision on a 13m court), but worth keeping in mind if homography-derived coordinates are ever combined with features extracted at native resolution (e.g., shuttle trajectory positions relative to a video crop). In practice any mismatch would be sub-pixel at typical crop sizes and likely acts as minor augmentation noise.
@@ -140,13 +140,13 @@ The pipeline produces **video clips** and **shuttle .npy files**. BST does not o
 
 #### Setup
 
-On engelbart, the taxonomy output directory lives on scratch. The script auto-creates it locally via `mkdir(parents=True)`, but if you want the data on scratch you need a symlink:
+On the HPC nodes the collation output lives on scratch. Set `BST_X_COLLATED_DATA_ROOT` (e.g. `/scratch/comp320a/`) in `.env` and both the collator and `bst_train` write/read `<root>/ShuttleSet_data_<taxonomy>/<basename>/` there directly. With the env var unset, both fall back to the in-repo `preparing_data/` convention; if you'd rather keep the data on scratch under that fallback, symlink it:
 
 ```bash
-# On engelbart (replace taxonomy name as needed):
-mkdir -p /scratch/comp320a/ShuttleSet_data_une_merge_v1
+# Fallback (no BST_X_COLLATED_DATA_ROOT); replace taxonomy name as needed:
+mkdir -p /scratch/comp320a/ShuttleSet_data_une_v1_14
 cd ~/badminton_stroke_classification/src/bst_refactor/stroke_classification/preparing_data
-ln -s /scratch/comp320a/ShuttleSet_data_une_merge_v1 ShuttleSet_data_une_merge_v1
+ln -s /scratch/comp320a/ShuttleSet_data_une_v1_14 ShuttleSet_data_une_v1_14
 ```
 
 If running locally or without scratch, no setup is needed -- the script creates `ShuttleSet_data_{taxonomy}/` and all subdirectories automatically.
@@ -178,7 +178,7 @@ python -m preparing_data.prepare_train_on_shuttleset --skip-trajectory --skip-po
 python -m preparing_data.prepare_train_on_shuttleset --tracknet-dir /path/to/TrackNetV3
 ```
 
-Key flags: `--seq-len` (30 or 100), `--taxonomy` (`une_merge_v1`, `une_merge_v1_nosides`, `merged_25`, or `raw_35`), `--use-3d-pose`, `--skip-trajectory`, `--skip-pose`, `--skip-collate`, `--clips-dir`, `--tracknet-dir`, `--shuttle-csv-dir` (default: `ShuttleSet/shuttle_csv/`), `--dry-run`.
+Key flags: `--seq-len` (30 or 100), `--taxonomy` (`bst_25`, `bst_24`, `bst_12`, `une_v1_14`, `une_v1_15`, or `shuttleset_18`; legacy names resolve via the alias table), `--collation-id` (required generation tag, e.g. `taxon_pinned_w_preds`), `--split-column` (`split_v2` / `split_bst_baseline`), `--use-3d-pose`, `--skip-trajectory`, `--skip-pose`, `--skip-collate`, `--clips-dir`, `--tracknet-dir`, `--shuttle-csv-dir` (default: `ShuttleSet/shuttle_csv/`), `--dry-run`.
 
 #### Data transformations in detail
 
@@ -212,7 +212,7 @@ preparing_data/ShuttleSet_data_{taxonomy.name}/npy_[3d_][seq{N}_]{split}_{collat
 
 Passing `--pose-styles J_only,JnB_bone,Jn2B` (etc.) saves the listed styles instead.
 
-For example, `ShuttleSet_data_une_merge_v1/`, `ShuttleSet_data_merged_25/`, or `ShuttleSet_data_raw_35/`.
+For example, `ShuttleSet_data_une_v1_14/`, `ShuttleSet_data_bst_25/`, or `ShuttleSet_data_shuttleset_18/`.
 
 ---
 
@@ -325,7 +325,7 @@ class ClipVideoDataset(Dataset):
         return load_video(self._path_by_stem[stem]), label
 ```
 
-`_derive_label` applies `taxonomy.merge_map` + `standalone_set` to `(row.raw_type_en, row.player_side)` to produce an int label; see `collate_npy` in `prepare_train_on_shuttleset.py` for the canonical reference implementation. The video decoder (`load_video`) is caller's choice — cv2, decord, or torchvision.io. With this pattern the nested `clips/` layout stays transparent: any `split_column` in `clips_master.csv` (e.g. `split_bst_baseline`, `split_v2`) works without reorganizing the clips tree.
+`label_for_row(taxonomy, row.raw_type_en, row.player_side)` produces the int label (or `None` to skip the row), applying the taxonomy's merge map + side rule + exclusions in one place; see `collate_npy` in `prepare_train_on_shuttleset.py` for the canonical reference implementation. The video decoder (`load_video`) is caller's choice — cv2, decord, or torchvision.io. With this pattern the nested `clips/` layout stays transparent: any `split_column` in `clips_master.csv` (e.g. `split_bst_baseline`, `split_v2`) works without reorganizing the clips tree.
 
 For ad-hoc queries or when a Dataset wants a higher-level "give me clip + shuttle + mmpose triples for this split and class" API, `pipeline.data_access.get_clip_records` wraps the CSV read, taxonomy label derivation, and flat-path resolution into one call (and exposes the same thing via CLI / TUI at `python -m pipeline.data_access`). `clip_index.build_clip_path_index` remains the zero-dep pathlib helper it calls internally for clip-stem lookup.
 
@@ -395,7 +395,7 @@ Stage 5 spans two files:
 
 | Name | Lives in | Role |
 |------|----------|------|
-| `Hyp` (namedtuple) | `bst_train.py` | Active config (see `bst_train.py:62-79`): `n_epochs=80`, `early_stop_n_epochs=40`, `batch_size=128`, `lr=5e-4`, `warm_up_step=100`, `taxonomy='une_merge_v1_nosides'`, `seq_len=100`, `pose_style='JnB_bone'`, `use_3d_pose=False`, `train_partial=1.0`, `use_aux_schedule=True`, `aux_fade_end_epoch=15`, `split_column='split_v2'`, `drop_unknown=True`, `ablation_id='une_merge_v1_nosides_split_v2_dropunk_h_sticky_anchor'`. Compressed warm-start-then-finetune schedule paired with the CG/AP cosine fade. Original BST-paper defaults (`n_epochs=1600`, `warm_up_step=400`, `early_stop_n_epochs=300`, `taxonomy='merged_25'`, `aux_fade_end_epoch=60`) are recorded verbatim in `scratch/architecture_notes/historical_bst.md` for reproduction. Current LR + aux schedule rationale lives in `scratch/architecture_notes/arch_1_directions.md`. |
+| `Hyp` (namedtuple) | `bst_train.py` | Active config (see the `Hyp`/`hyp` block near the top of `bst_train.py`): `n_epochs=80`, `early_stop_n_epochs=40`, `batch_size=128`, `lr=5e-4`, `warm_up_step=100`, `taxonomy='une_v1_14'`, `seq_len=100`, `pose_style='JnB_bone'`, `use_3d_pose=False`, `train_partial=1.0`, `use_aux_schedule=True`, `aux_fade_end_epoch=15`, `split_column='split_v2'`, `collation_id='taxon_pinned_w_preds'`, `ablation_id=None`. (`drop_unknown` / `expected_active_classes` were dropped in the taxon_pinned_w_preds refactor: the taxonomy's `excluded_base_stroke_types` carries the unknown-drop rule, and labels.npy lands in active class space so there's no runtime head sizing. `ablation_id` is now a nullable training-time tag, separate from the `collation_id` path tag.) Compressed warm-start-then-finetune schedule paired with the CG/AP cosine fade. Original BST-paper defaults (`n_epochs=1600`, `warm_up_step=400`, `early_stop_n_epochs=300`, `taxonomy='merged_25'`, `aux_fade_end_epoch=60`) are recorded verbatim in `scratch/architecture_notes/historical_bst.md` for reproduction. Current LR + aux schedule rationale lives in `scratch/architecture_notes/arch_1_directions.md`. |
 | `train_one_epoch()` | `bst_train.py` | Standard PyTorch training loop: forward pass, cross-entropy loss (with label smoothing 0.1), backward, optimizer step, scheduler step. Applies `RandomTranslation_batch` to joints (not bones). |
 | `validate()` | `bst_train.py` | Evaluates on val set. Accumulates per-class TP/FP/FN across batches, computes macro F1 and min-class F1. |
 | `test()` | `bst_train.py` (`Task.test`) | Runs inference on test set, returns `(predictions, ground_truth)` tensors. |
@@ -541,7 +541,7 @@ BST's dataset classes return a specific tuple format: `(human_pose, pos, shuttle
   - Does your model handle variable-length sequences internally (e.g. via packed sequences or attention masks), or does it need pre-padded fixed-length input? BST uses fixed-length padding + a `video_len` mask.
   - Does your model operate on pre-collated batched arrays, or per-clip files? `Dataset_npy_collated` loads pre-collated arrays into RAM at init; if a future model needs lazy per-clip loading, write a new Dataset (the legacy `Dataset_npy` lazy loader was excised pre-phase-2; the verbatim source is in `scratch/architecture_notes/historical_bst.md` section 4.1).
 
-- **Label list construction**: All class labels are now English. Use `taxonomy.class_list()` from any `Taxonomy` instance in `pipeline.config.TAXONOMIES` to get the label list. Pipeline default is `TAXONOMIES[DEFAULT_TAXONOMY]` (`une_merge_v1`, 29 classes). Available taxonomies: `'une_merge_v1'`, `'une_merge_v1_nosides'`, `'merged_25'`, `'raw_35'`. To add a custom taxonomy, define it in `pipeline/config.py` (see the `Taxonomy` dataclass and existing instances for the pattern).
+- **Label list construction**: All class labels are now English. Read `taxonomy.classes` (the authoritative ordered tuple) from any `Taxonomy` in `pipeline.config.TAXONOMIES`, or `resolve_taxonomy(name)` to follow the legacy-alias table. Labels.npy lands in `[0, taxonomy.n_classes)` directly (no runtime active/full remap). Available taxonomies: `'bst_25'`, `'bst_24'`, `'bst_12'`, `'une_v1_14'` (Architecture 1 active), `'une_v1_15'`, `'shuttleset_18'`. To add a custom taxonomy, define it in `pipeline/config.py` (see the `Taxonomy` dataclass and existing instances for the pattern).
 
 #### 3. Model architecture (`model/`)
 
