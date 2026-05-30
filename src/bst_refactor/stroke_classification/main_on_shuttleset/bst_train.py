@@ -1127,10 +1127,14 @@ if __name__ == '__main__':
     # Cell selectors: override the Hyp defaults when the runner (or a manual
     # invocation) passes them. Each is independent and nullable.
     cell_overrides = {}
-    if args.taxonomy is not None:     cell_overrides['taxonomy']     = args.taxonomy
-    if args.split_column is not None: cell_overrides['split_column'] = args.split_column
-    if args.collation_id is not None: cell_overrides['collation_id'] = args.collation_id
-    if args.ablation_id is not None:  cell_overrides['ablation_id']  = args.ablation_id
+    if args.taxonomy is not None:
+        cell_overrides['taxonomy'] = args.taxonomy
+    if args.split_column is not None:
+        cell_overrides['split_column'] = args.split_column
+    if args.collation_id is not None:
+        cell_overrides['collation_id'] = args.collation_id
+    if args.ablation_id is not None:
+        cell_overrides['ablation_id'] = args.ablation_id
     if cell_overrides:
         hyp = hyp._replace(**cell_overrides)
 

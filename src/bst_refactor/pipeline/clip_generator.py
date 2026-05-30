@@ -23,10 +23,11 @@ from pipeline.config import (
     UNPREFIXED_TYPES, Taxonomy, resolve_taxonomy,
 )
 
+from pipeline.player_mapping import collect_shots
+
 # Default taxonomy when callers don't pass one. Matches the project's
 # working baseline; override via the function arg for one-off runs.
 _DEFAULT_TAXONOMY = resolve_taxonomy('une_v1_14')
-from pipeline.player_mapping import collect_shots
 
 
 # ---------------------------------------------------------------------------

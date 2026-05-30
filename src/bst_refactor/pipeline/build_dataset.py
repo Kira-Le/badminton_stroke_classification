@@ -26,11 +26,6 @@ from pipeline.config import (
     TAXONOMIES, Taxonomy, resolve_taxonomy,
 )
 
-# Default taxonomy for pipeline operations when not explicitly overridden.
-# Matches the project's working baseline; pick a different one via the CLI
-# --taxonomy flag for one-off runs.
-_DEFAULT_TAXONOMY_NAME = 'une_v1_14'
-_DEFAULT_TAXONOMY = resolve_taxonomy(_DEFAULT_TAXONOMY_NAME)
 from pipeline.download_videos import download_all_videos, build_resolution_csv
 from pipeline.clip_generator import generate_all_clips, apply_class_merge
 from pipeline.verify import (
@@ -39,6 +34,12 @@ from pipeline.verify import (
     verify_shuttle_sync, warn_orphan_files, print_dataset_summary,
 )
 from pipeline.shuttle_extractor import extract_all_shuttles, shuttle_csvs_to_npy
+
+# Default taxonomy for pipeline operations when not explicitly overridden.
+# Matches the project's working baseline; pick a different one via the CLI
+# --taxonomy flag for one-off runs.
+_DEFAULT_TAXONOMY_NAME = 'une_v1_14'
+_DEFAULT_TAXONOMY = resolve_taxonomy(_DEFAULT_TAXONOMY_NAME)
 
 
 def _step(number: int, title: str) -> None:
