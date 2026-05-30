@@ -91,9 +91,12 @@ def dump_topk_predictions(
     write to npz. Raw logits are kept so any consumer can derive softmax and
     fit post-hoc temperature scaling without re-running inference.
 
-    Row order follows the loader, so a ``shuffle=False`` loader over a
-    collated split keeps the returned arrays row-aligned with that split's
-    ``clip_stems.npy`` / ``labels.npy``.
+    Row order follows the loader: a ``shuffle=False`` loader yields rows in the
+    dataset's in-memory order, so the returned arrays row-align with that
+    dataset's own ``labels`` / ``clip_stems`` (i.e. after the zero-length-clip
+    drop and any train_partial reorder), NOT with the raw on-disk
+    ``clip_stems.npy``. Callers that want the stems pull them from the same
+    dataset and store them alongside (see ``Task.dump_predictions``).
 
     :param model: a built BST network (any variant); set to eval here.
     :param loader: yields ``((human_pose, pos, shuttle), video_len, labels)``.

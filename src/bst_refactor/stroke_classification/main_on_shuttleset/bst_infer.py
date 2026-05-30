@@ -10,13 +10,15 @@
 # Run from the repo root with both package roots on PYTHONPATH:
 #   PYTHONPATH=src/bst_refactor:src/bst_refactor/stroke_classification \
 #       python -m main_on_shuttleset.bst_infer --fe \
-#           --run-dir .../experiments/run_<id> --serial 5 \
-#           --fe-output-dir /some/dump/root
+#           --run-dir .../experiments/run_<id> --serial 5
+#   The dump lands in <run-dir>/inference_runs/<timestamp>/ (npz +
+#   inference_manifest.yaml); pass --fe-output-dir to redirect it elsewhere.
 #
 # See bst_train.py for detailed PyTorch/TF comparison comments.
 
 import argparse
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -167,7 +169,7 @@ def dump_run_predictions(
     *,
     run_dir: Path,
     serial: int,
-    fe_output_dir: Path,
+    fe_output_dir: Path | None = None,
     splits: tuple[str, ...] = ('val', 'test'),
     collated_data_root: Path | None = None,
     model_name: str = 'BST_CG_AP',
@@ -176,11 +178,19 @@ def dump_run_predictions(
 ) -> Path:
     """Dump per-split prediction npz for an already-trained run.
 
-    Same npz schema as ``bst_train``'s end-of-serial dump (logits, y_true,
-    y_pred_top1, topk_idx, class_list, run_id, serial_no, taxonomy_name). New-
-    schema runs only: labels.npy is in active class space, so there's no remap.
+    Each dump lands in its own timestamped dir so post-hoc inference never
+    clobbers the run's training-time ``predictions/`` and re-dumps don't
+    collide: ``<base>/inference_runs/<YYYYmmdd_HHMMSS>/``. ``base`` defaults to
+    ``run_dir`` (co-located with the run), or ``fe_output_dir/<run_id>`` when an
+    override is passed. A small ``inference_manifest.yaml`` records the source
+    weights / serial / splits / time alongside the npz.
 
-    :return: the predictions output dir (``fe_output_dir/<run_id>/predictions``).
+    Same npz schema as ``bst_train``'s end-of-serial dump (logits, y_true,
+    y_pred_top1, topk_idx, clip_stems, class_list, run_id, serial_no,
+    taxonomy_name). New-schema runs only: labels.npy is in active class space,
+    so there's no remap.
+
+    :return: the timestamped output dir holding this dump's npz + manifest.
     """
     manifest = yaml.safe_load((run_dir / 'manifest.yaml').read_text())
     config = manifest['config']
@@ -218,14 +228,26 @@ def dump_run_predictions(
     print(f'collated_dir: {collated_dir}')
     print(f'taxonomy: {taxonomy.name} ({taxonomy.n_classes} classes)')
 
-    out_dir = fe_output_dir / run_dir.name / 'predictions'
+    # Own timestamped dir per dump: co-located in the run by default, or under
+    # fe_output_dir/<run_id> when overridden. Never the run's training-time
+    # predictions/ dir, so a re-dump can't clobber it.
+    now = datetime.now()
+    base = (fe_output_dir / run_dir.name) if fe_output_dir is not None else run_dir
+    out_dir = base / 'inference_runs' / f'{now:%Y%m%d_%H%M%S}'
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    written = []
     for split in splits:
-        loader = DataLoader(
-            Dataset_npy_collated(collated_dir, split, config['pose_style']),
-            batch_size=batch_size, shuffle=False,
-        )
+        dataset = Dataset_npy_collated(collated_dir, split, config['pose_style'])
+        loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
         dump = dump_topk_predictions(net, loader, device, k=5)
+        # Hard-fail on a None sidecar (a legacy collation with no clip_stems.npy):
+        # np.asarray(None) writes a silent 0-d array that would desync the npz
+        # row -> stem join. New collations always carry clip_stems.npy.
+        assert dataset.clip_stems is not None, (
+            f'{split}: dataset.clip_stems is None (legacy collation with no '
+            f'clip_stems.npy); re-collate before dumping predictions.'
+        )
         out_path = out_dir / f'{split}_serial_{serial}.npz'
         np.savez(
             out_path,
@@ -233,12 +255,30 @@ def dump_run_predictions(
             y_true=dump['y_true'],
             y_pred_top1=dump['y_pred_top1'],
             topk_idx=dump['topk_idx'],
+            # clip_stems off the in-memory dataset: row-aligned through the
+            # dataset's filters, so the npz row -> stem join is self-contained.
+            clip_stems=np.asarray(dataset.clip_stems, dtype=object),
             class_list=np.array(taxonomy.classes, dtype=object),
             run_id=np.array(run_dir.name, dtype=object),
             serial_no=np.array(serial, dtype=np.int64),
             taxonomy_name=np.array(taxonomy.name, dtype=object),
         )
+        written.append(out_path.name)
         print(f'saved: {out_path} ({len(dump["y_true"])} rows)')
+
+    # Small provenance manifest so a dump self-describes when/from-what, beyond
+    # what each npz already carries.
+    (out_dir / 'inference_manifest.yaml').write_text(yaml.safe_dump({
+        'source_run_id': run_dir.name,
+        'created_at': now.isoformat(timespec='seconds'),
+        'serial_no': serial,
+        'splits': list(splits),
+        'taxonomy': taxonomy.name,
+        'weights_path': str(weights_path),
+        'collated_dir': str(collated_dir),
+        'npz_files': written,
+    }, sort_keys=False))
+    print(f'wrote: {out_dir / "inference_manifest.yaml"}')
     return out_dir
 
 
@@ -253,12 +293,13 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         '--fe', action='store_true',
-        help='FE/batch dump mode. Requires --fe-output-dir and --run-dir.',
+        help='FE/batch dump mode. Requires --run-dir.',
     )
     parser.add_argument(
         '--fe-output-dir', type=Path, default=None,
-        help='Destination root for FE-mode npz dumps. Required when --fe is set. '
-             'Files land at <fe-output-dir>/<run_id>/predictions/<split>_serial_<n>.npz.',
+        help='Optional override for where the dump lands. Default writes into '
+             '<run-dir>/inference_runs/<timestamp>/; with an override, '
+             '<fe-output-dir>/<run_id>/inference_runs/<timestamp>/.',
     )
     parser.add_argument(
         '--run-dir', type=Path, default=None,
@@ -277,9 +318,7 @@ if __name__ == '__main__':
                         help='BST variant; matches the partial used at train time.')
     args = parser.parse_args()
 
-    # Mutual-implication guard: --fe <-> --fe-output-dir, and no implicit dump.
-    if args.fe and args.fe_output_dir is None:
-        parser.error('--fe requires --fe-output-dir <path>')
+    # --fe-output-dir is an optional override that only makes sense in --fe mode.
     if args.fe_output_dir is not None and not args.fe:
         parser.error('--fe-output-dir requires --fe (no implicit dump mode)')
     if not args.fe:

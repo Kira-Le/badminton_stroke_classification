@@ -29,8 +29,6 @@ import time
 from datetime import datetime, timedelta
 import sys
 
-import yaml
-
 from preparing_data.shuttleset_dataset import prepare_npy_collated_loaders, \
                                               pad_class_labels
 from preparing_data.augmentations import CoupledFlip, ConstrainedJitter
@@ -850,10 +848,7 @@ class Task:
             ``train_network`` (None on the load path or a degenerate run).
         """
         model_info = f'_{model_info}' if model_info != '' else ''
-        # Recorded Hyp string, not the resolved Taxonomy.name: a legacy resume
-        # (--taxonomy une_merge_v1_nosides -> alias -> une_v1_14) must look for
-        # the on-disk weight file suffixed with the historical name.
-        taxonomy_info = f'_{hyp.taxonomy}'
+        taxonomy_info = f'_{self.taxonomy.name}'
         serial_str = f'_{serial_no}' if serial_no != 1 else ''
 
         model_postfix = '_' + self.pose_style \
@@ -967,9 +962,13 @@ class Task:
         ``run_dir/predictions/``. Non-best serials are pruned manually after the
         runner finishes (no auto-deletion).
 
-        Each split is re-read through a fresh ``shuffle=False`` loader so the
-        npz row order matches that split's ``clip_stems.npy`` / ``labels.npy``;
-        the FE-shape JSON converter can then join row -> stem by index.
+        Each split is re-read through a fresh ``shuffle=False`` loader, and the
+        npz carries its own ``clip_stems`` column row-aligned with ``logits`` /
+        ``y_true``. The stems come from the in-memory dataset, so they track the
+        rows the model actually saw -- after the zero-length-clip drop and any
+        train_partial reorder -- NOT the raw on-disk ``clip_stems.npy``. The
+        FE-shape JSON converter joins row -> stem inside the npz, no external
+        sidecar and no re-deriving the collation filters.
 
         :param run_dir: experiments/<run_id>/ for this run.
         :param serial_no: serial whose weights are currently loaded in self.net.
@@ -983,17 +982,29 @@ class Task:
             ('test',  self.test_loader),
         )
         for split_name, source in sources:
+            dataset = source.dataset
             ordered = DataLoader(
-                source.dataset, batch_size=source.batch_size,
+                dataset, batch_size=source.batch_size,
                 shuffle=False, num_workers=0, pin_memory=False,
             )
             dump = dump_topk_predictions(self.net, ordered, self.device, k=k)
+            # clip_stems straight off the in-memory dataset: kept in lockstep
+            # with labels through the drop + train_partial reorder, and the
+            # shuffle=False loader preserves that order, so the npz is a
+            # self-contained row -> stem join. Hard-fail on a None sidecar (a
+            # legacy collation with no clip_stems.npy): np.asarray(None) writes a
+            # silent 0-d array, which would desync every row from its stem.
+            assert dataset.clip_stems is not None, (
+                f'{split_name}: dataset.clip_stems is None (legacy collation with '
+                f'no clip_stems.npy); re-collate before dumping predictions.'
+            )
             np.savez(
                 out_dir / f'{split_name}_serial_{serial_no}.npz',
                 logits=dump['logits'],
                 y_true=dump['y_true'],
                 y_pred_top1=dump['y_pred_top1'],
                 topk_idx=dump['topk_idx'],
+                clip_stems=np.asarray(dataset.clip_stems, dtype=object),
                 class_list=np.array(self.taxonomy.classes, dtype=object),
                 run_id=np.array(run_dir.name, dtype=object),
                 serial_no=np.array(serial_no, dtype=np.int64),
@@ -1120,8 +1131,8 @@ if __name__ == '__main__':
     if cell_overrides:
         hyp = hyp._replace(**cell_overrides)
 
-    # Resolve the taxonomy object (alias table handles legacy names). The
-    # recorded hyp.taxonomy string drives on-disk path + weight-file naming.
+    # Resolve the taxonomy; its canonical name drives the on-disk dir +
+    # weight-file naming, matching what the collator wrote.
     taxonomy = resolve_taxonomy(hyp.taxonomy)
 
     # Collated dir naming via shared helper (mirrored on the prepare_train
@@ -1151,29 +1162,18 @@ if __name__ == '__main__':
 
     # ----------------------------------------------------------------------
     # Per-run experiment folder (tracked via run_tracker).
-    # Every invocation mints a fresh experiments/run_<timestamp>/ with:
+    # Every run mints experiments/run_<timestamp>/ with:
     #   manifest.yaml          (hyperparams + config.classes, git SHA, per-serial metrics)
     #   weights/<save_name>.pt (best checkpoint per serial)
     #   tb/serial_N/           (TB event files per serial)
     #   predictions/<split>_serial_N.npz (per-stroke logits + top-k dump)
-    # Old flat weight/<name>.pt layout caused silent training-skips after
-    # hyperparam changes, so the cache is scoped to the run folder.
-    #
-    # To re-test / extend an existing run without retraining, pass --run-id of
-    # its folder name (e.g. 'run_20260417_091933'). The cache then finds saved
-    # weights under experiments/<run-id>/weights/ and skips training. Only
-    # tracker-era runs resume cleanly; legacy weight/run_*/ folders need their
-    # .pt files copied into experiments/<id>/weights/ first.
-    #
-    # track_serial rewrites the whole manifest each serial (yaml.safe_dump
-    # reformats), so a resume re-test loses the original file's formatting. The
-    # original is snapshotted to manifest.yaml.<timestamp>.bak before any work.
-    # Test logs are safe regardless: each invocation gets a fresh timestamped log.
+    # The runner passes a fixed --run-id across a cell's serials so they share
+    # one run dir + log: serial 1 creates the manifest, later serials append via
+    # track_serial. Weights are per-serial, so re-running a serial with --run-id
+    # finds its .pt and skips training.
     # ----------------------------------------------------------------------
-    resume_from: str | None = args.run_id
-
     timestamp = f'{datetime.now():%Y%m%d_%H%M%S}'
-    run_id = resume_from or f'run_{timestamp}'
+    run_id = args.run_id or f'run_{timestamp}'
 
     # Test output is auto-teed to a timestamped log file so metrics are never
     # lost to a dropped terminal. Training stdout stays on terminal only; TB
@@ -1189,16 +1189,6 @@ if __name__ == '__main__':
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = Path(args.log_path) if args.log_path else log_dir / f'test_{timestamp}.log'
     experiments_dir = script_dir / 'experiments'
-
-    # Snapshot the original manifest before track_serial rewrites it on resume,
-    # so the historical formatting / ordering is always recoverable.
-    if resume_from:
-        src_manifest = experiments_dir / resume_from / 'manifest.yaml'
-        if src_manifest.exists():
-            backup = src_manifest.parent / f'{src_manifest.name}.{timestamp}.bak'
-            backup.write_bytes(src_manifest.read_bytes())
-            print(f'[resume] backed up original manifest to {backup.name}')
-        print(f'[resume] resuming {resume_from!r}.')
 
     extra = compute_data_provenance(
         clips_csv_path=Path(hyp.clips_csv),
@@ -1217,38 +1207,21 @@ if __name__ == '__main__':
     )
     weight_dir = run_dir / 'weights'
 
-    # Path source. Fresh runs derive the collated dir basename from the live
-    # Hyp. A resume instead reads the recorded basename from the original
-    # manifest's provenance, so pre-split-fold names (e.g. 'npy_wipe_drop',
-    # which carry no {split} segment) still resolve and Hyp drift can't repoint
-    # the read. ShuttleSet_data_<tax> uses hyp.taxonomy either way (set
-    # --taxonomy to the recorded legacy name when resuming a legacy run, which
-    # also matches the weight-file suffix).
-    if resume_from:
-        existing_manifest_path = run_dir / 'manifest.yaml'
-        if existing_manifest_path.exists():
-            with open(existing_manifest_path) as f:
-                existing = yaml.safe_load(f) or {}
-            recorded_dir = (
-                (existing.get('extra') or {}).get('data_provenance', {})
-                .get('npy_collated_dir')
-            )
-            if recorded_dir:
-                npy_collated_dir = recorded_dir
-
-    # Mirror the collator's root resolution: BST_X_COLLATED_DATA_ROOT (e.g.
-    # /scratch/comp320a on bourbaki) when set, else the in-repo preparing_data/
-    # convention for local dev. Without this the reader looks in-repo while the
-    # writer wrote to /scratch, so the runner would never find the cells.
+    # Collated dir, resolved the same way the collator wrote it:
+    # BST_X_COLLATED_DATA_ROOT (e.g. /scratch/comp320a on bourbaki) when set,
+    # else the in-repo preparing_data/ convention for local dev. taxonomy.name
+    # is the resolved canonical name, matching the writer's parent dir. Without
+    # the env var the reader looks in-repo while the writer wrote to /scratch,
+    # so the runner would never find the cells.
     collated_data_root = env_path_or_none('BST_X_COLLATED_DATA_ROOT')
     if collated_data_root is not None:
         collated_root = (
-            collated_data_root / f'ShuttleSet_data_{hyp.taxonomy}' / npy_collated_dir
+            collated_data_root / f'ShuttleSet_data_{taxonomy.name}' / npy_collated_dir
         )
     else:
         collated_root = (
             Path(__file__).resolve().parent.parent
-            / f'preparing_data/ShuttleSet_data_{hyp.taxonomy}'
+            / f'preparing_data/ShuttleSet_data_{taxonomy.name}'
             / npy_collated_dir
         )
 
