@@ -9,9 +9,11 @@
 #   PyTorch: you write the loop yourself — iterate batches, compute loss, call backward(), step()
 #   This is more verbose but gives full control over every training step.
 
+import numpy as np
 import torch
 from torch import Tensor, nn, optim  # nn = layers/models, optim = optimizers (like tf.keras.optimizers)
 import torch.nn.functional as F      # F = stateless functions (one_hot, softmax, etc.)
+from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter  # TensorBoard logging (same viewer as TF)
 from torcheval.metrics.functional import multiclass_f1_score
 
@@ -27,24 +29,22 @@ import time
 from datetime import datetime, timedelta
 import sys
 
-import yaml
-
 from preparing_data.shuttleset_dataset import prepare_npy_collated_loaders, \
                                               pad_class_labels
 from preparing_data.augmentations import CoupledFlip, ConstrainedJitter
 from result_utils import show_f1_results, plot_confusion_matrix
 from pipeline.config import (
-    TAXONOMIES,
     Taxonomy,
-    derive_ablation_id,
     derive_npy_collated_dir_basename,
+    resolve_taxonomy,
 )
+from pipeline.data_access import env_path_or_none, load_repo_dotenv
 from run_tracker import track_run, track_serial
 from main_on_shuttleset.bst_common import (
     Tee,
     build_bst_network,
     compute_data_provenance,
-    derive_active_classes_from_labels,
+    dump_topk_predictions,
 )
 from main_on_shuttleset.loss.adaptive_focal import (
     AdaptiveFocalLoss,
@@ -62,17 +62,19 @@ DEFAULT_CLIPS_CSV = REPO_ROOT / 'notebooks' / 'clips_master.csv'
 # Active LR + aux schedule rationale: scratch/architecture_notes/arch_1_directions.md.
 # Dated retune history: scratch/architecture_notes/historical_bst.md section 3.
 # ==========================================================================
-# ablation_id tags the collated dir so multiple ablations don't collide;
-# it defaults to a tuple of (taxonomy, split_column, drop_unknown) when None.
+# collation_id picks which on-disk collation generation to read (path + manifest
+# tag, e.g. 'taxon_pinned_w_preds'); it discriminates re-collations of the same
+# taxonomy + split. ablation_id is a separate, nullable training-time tag (augs /
+# loss / wiring on a fixed collation): manifest-only, never in the path. See
+# pipeline.config.derive_npy_collated_dir_basename for the disentanglement.
 Hyp = namedtuple('Hyp', [
     'n_epochs', 'batch_size', 'lr', 'warm_up_step',
     'taxonomy', 'seq_len', 'early_stop_n_epochs',
     'pose_style', 'use_3d_pose', 'train_partial',
     'use_aux_schedule', 'aux_fade_end_epoch',
-    'clips_csv', 'split_column', 'drop_unknown', 'ablation_id',
+    'clips_csv', 'split_column', 'collation_id', 'ablation_id',
     'label_smoothing', 'class_weights', 'adaptive_focal',
     'augmentation',
-    'expected_active_classes',
 ])
 hyp = Hyp(
     n_epochs=80,
@@ -80,7 +82,7 @@ hyp = Hyp(
     batch_size=128,
     lr=5e-4,
     warm_up_step=100,
-    taxonomy='une_merge_v1_nosides',
+    taxonomy='une_v1_14',
     seq_len=100,
     pose_style='JnB_bone',
     use_3d_pose=False,
@@ -89,8 +91,8 @@ hyp = Hyp(
     aux_fade_end_epoch=15,
     clips_csv=str(DEFAULT_CLIPS_CSV),
     split_column='split_v2',
-    drop_unknown=True,
-    ablation_id='wipe_drop',
+    collation_id='taxon_pinned_w_preds',
+    ablation_id=None,
     label_smoothing=0.0,  # CDB-F1 cell forces LS=0; LS softens targets so confident-correct samples have p_t < 1.0, contaminating focal's per-sample hardness signal
     # Manual per-class CE weights for the wrist_smash <-> smash confusion-pair smoke test.
     # Pair-balanced (both at 2.0) so the gradient has no directional bias toward one class:
@@ -137,10 +139,6 @@ hyp = Hyp(
         'cap_x':    0.10,
         'eps':      0.15,
     },
-    # Optional belt-and-braces lever: when non-None, the empirical active class list
-    # derived from train labels gets asserted equal to this. Mismatch raises with
-    # both lists side-by-side. Default None means "trust the data".
-    expected_active_classes=None,
 )
 
 
@@ -418,17 +416,20 @@ def train_network(
             f'JnB_interp uses joint-pair midpoints, Jn2B uses both. Lift the equivalents '
             f'to torch in preparing_data/augmentations.py before re-enabling the others.'
         )
+    # Direct index rather than .get(key, default): the Hyp always carries all
+    # five aug keys (dict literal + all-or-nothing CLI override), so a missing
+    # key is a malformed config and should fail loud, not train on a default.
     aug_cfg = hyp.augmentation
     coupled_flip = CoupledFlip(
-        p=aug_cfg.get('p_flip', 0.5),
+        p=aug_cfg['p_flip'],
         n_joints=17,
         n_bones=n_bones,
     )
     constrained_jitter = ConstrainedJitter(
-        p_roll=aug_cfg.get('p_jitter', 0.2),
-        cap_y=aug_cfg.get('cap_y', 0.05),
-        cap_x=aug_cfg.get('cap_x', 0.10),
-        eps=aug_cfg.get('eps', 0.15),
+        p_roll=aug_cfg['p_jitter'],
+        cap_y=aug_cfg['cap_y'],
+        cap_x=aug_cfg['cap_x'],
+        eps=aug_cfg['eps'],
     )
     print(
         f"[aug] coupled flip p={coupled_flip.p}, "
@@ -501,10 +502,9 @@ def train_network(
         for cls_name, multiplier in hyp.class_weights.items():
             if cls_name not in class_ls:
                 raise ValueError(
-                    f"class_weights key '{cls_name}' not in active class list "
-                    f"{class_ls}. (Full taxonomy {taxonomy.name!r} has "
-                    f"{len(taxonomy.class_list())} classes; this run uses "
-                    f"{len(class_ls)}.)"
+                    f"class_weights key '{cls_name}' not in the taxonomy "
+                    f"{taxonomy.name!r} class list ({len(class_ls)} classes): "
+                    f"{class_ls}."
                 )
             weights[class_ls.index(cls_name)] = multiplier
         weights = weights * (n_classes / weights.sum())  # renormalise mean to 1.0
@@ -534,6 +534,13 @@ def train_network(
     best_min_epoch = second_min_epoch = 0
     best_val_loss, best_val_loss_epoch = float('inf'), 0
     early_stop_count = 0
+
+    # Per-class val F1 snapshot, captured at the best-macro epoch (not a
+    # per-class argmax across epochs) so the recorded breakdown matches the
+    # checkpoint that actually gets saved. Surfaced to the serial manifest.
+    best_val_f1_per_class = None
+    best_val_present = None
+    best_macro_epoch_snap = None
 
     for epoch in range(1, hyp.n_epochs+1):
         # Auxiliary module schedule: cosine fade of CG/AP from 1.0 -> 0.0 across the run.
@@ -618,6 +625,11 @@ def train_network(
         writer.add_scalar('Aug/shuttle_oob_rate', shuttle_oob_rate, epoch)
         for i, c in enumerate(class_ls):
             writer.add_scalar(f'F1_train/{c}', train_per_class_f1[i].item(), epoch)
+            # Val per-class F1 only for classes present in val this epoch; an
+            # absent class scores F1=0 by construction and would read as a real
+            # regression on the TB curve.
+            if present[i]:
+                writer.add_scalar(f'F1_val/{c}', f1_per_class[i].item(), epoch)
             if isinstance(loss_fn, AdaptiveFocalLoss):
                 writer.add_scalar(f'Alpha/{c}', loss_fn.alpha[i].item(), epoch)
 
@@ -631,6 +643,11 @@ def train_network(
             # state_dict() = snapshot of all model weights as a dict (like model.get_weights() in TF)
             # deepcopy because state_dict returns references that would change as training continues
             best_state = deepcopy(model.state_dict())
+            # Snapshot the per-class val F1 at this same best-macro epoch so the
+            # recorded breakdown matches the saved checkpoint.
+            best_val_f1_per_class = f1_per_class.detach().cpu().numpy()
+            best_val_present = present.detach().cpu().numpy()
+            best_macro_epoch_snap = epoch
             print(f'Picked! => Best value {curr_macro:.3f}')
             # Compact per-class snapshot on new-best epochs: top-5 and bot-5
             # of present classes, one line each. Full per-class breakdown
@@ -699,7 +716,18 @@ def train_network(
     )
     writer.close()
 
-    return model
+    # Per-class val F1 at the best-macro epoch, present classes only, for the
+    # serial manifest (extra.val_at_best_macro_epoch). None if no epoch ever
+    # beat the macro=0.0 init (degenerate run).
+    val_at_best = {
+        'epoch': best_macro_epoch_snap,
+        'per_class_f1': {
+            class_ls[i]: float(best_val_f1_per_class[i])
+            for i in range(len(class_ls))
+            if best_val_present[i]
+        },
+    } if best_val_f1_per_class is not None else None
+    return model, val_at_best
 
 
 # ==========================================================================
@@ -713,12 +741,10 @@ class Task:
         self.use_cuda = torch.cuda.is_available()
         self.device = 'cuda' if self.use_cuda else 'cpu'
         self.n_joints = n_joints
-        self.taxonomy = taxonomy or TAXONOMIES[hyp.taxonomy]
-        # Active label space gets derived from labels.npy in
-        # prepare_dataloaders; architecture is a function of the data here,
-        # not of any flag. Stays None until the dataloaders return.
-        self.n_active_classes: int | None = None
-        self.active_class_list: list[str] | None = None
+        # Head dim and class names come straight off the taxonomy now: labels.npy
+        # lands in [0, taxonomy.n_classes) at collation time, so there's no
+        # runtime active/full remap and no data-derived head sizing.
+        self.taxonomy = taxonomy or resolve_taxonomy(hyp.taxonomy)
         # Where to save/load weights for this run. Caller should pass a
         # per-invocation subdir (e.g. weight/run_YYYYMMDD_HHMMSS) so fresh
         # runs never collide with older weights — see __main__ setup.
@@ -743,52 +769,72 @@ class Task:
             )
 
         self.pose_style = pose_style
-        self._derive_active_classes_from_loaded_labels()
+        self._assert_label_coverage()
 
-    def _derive_active_classes_from_loaded_labels(self) -> None:
-        """Inspect loaded labels (post-train_partial slicing), build active
-        class list + remap, write back. Architecture is sized to whatever
-        train can teach. val/test must be subsets of train's present classes;
-        rogue val/test labels raise ValueError with a clear message.
+    def _assert_label_coverage(self) -> None:
+        """Contract guard replacing the old runtime active-class adapter.
 
-        ``labels.npy`` on disk stays untouched; existing collated dirs and
-        weight files keep working without recollation.
+        Labels.npy lands in ``[0, taxonomy.n_classes)`` at collation time, so
+        the head is the full taxonomy. Two invariants, both fail loud:
+
+        - train must cover every class in the taxonomy. A class the head can
+          emit but train never teaches would carry a label-smoothed ghost
+          gradient every step; better to refuse the run.
+        - val/test must not carry any class absent from train (a class train
+          never saw can't be evaluated meaningfully).
+
+        Reads labels post-``train_partial`` slicing, so a too-aggressive
+        partial that starves a class is caught here too.
         """
-        train_ds = self.train_loader.dataset
-        val_ds = self.val_loader.dataset
-        test_ds = self.test_loader.dataset
+        expected = set(range(self.taxonomy.n_classes))
+        train_present = {int(x) for x in np.unique(self.train_loader.dataset.labels)}
+        val_present = {int(x) for x in np.unique(self.val_loader.dataset.labels)}
+        test_present = {int(x) for x in np.unique(self.test_loader.dataset.labels)}
 
-        active, _remap, remapped = derive_active_classes_from_labels(
-            taxonomy=self.taxonomy,
-            train_labels=train_ds.labels,
-            validation_label_arrays={
-                'val':  val_ds.labels,
-                'test': test_ds.labels,
-            },
-        )
-        train_ds.labels = remapped['train']
-        val_ds.labels = remapped['val']
-        test_ds.labels = remapped['test']
-        self.active_class_list = active
-        self.n_active_classes = len(active)
+        missing_in_train = expected - train_present
+        if missing_in_train:
+            named = [self.taxonomy.classes[i] for i in sorted(missing_in_train)]
+            raise ValueError(
+                f'taxonomy {self.taxonomy.name!r} has {len(expected)} classes '
+                f'but train covers only {len(train_present)}. Missing class '
+                f'indices: {sorted(missing_in_train)} ({named}). Either lift '
+                f'train_partial (currently {hyp.train_partial}) or use a '
+                f'taxonomy whose head matches what train can teach.'
+            )
+
+        n = self.taxonomy.n_classes
+        for split_name, present in (('val', val_present), ('test', test_present)):
+            rogue = present - train_present
+            if rogue:
+                # After the coverage check, train_present holds every in-range
+                # class, so a rogue index is an out-of-range (corrupt) label;
+                # name it safely rather than IndexError on classes[i].
+                named = [
+                    self.taxonomy.classes[i] if 0 <= i < n else f'<oob:{i}>'
+                    for i in sorted(rogue)
+                ]
+                raise ValueError(
+                    f'{split_name} has classes absent from train: '
+                    f'{sorted(rogue)} ({named}). Fix the split assignment in '
+                    f'clips_master.csv or pick a taxonomy whose classes match '
+                    f'the data shape.'
+                )
 
     def get_network_architecture(self, model_name='BST_CG_AP', in_channels=2):
-        """Create the model at the active head dim and ground its inputs.
+        """Create the model at the taxonomy head dim and ground its inputs.
 
         :param in_channels: 2 for 2D (xy) keypoints, 3 for 3D (xyz).
 
-        Output dim is ``n_active_classes``, derived empirically from the
-        train labels in ``_derive_active_classes_from_loaded_labels``.
-        Whenever the data has fewer classes than the full taxonomy
-        (e.g. unknown empty after the writer drop), the head shrinks to
-        match — no ghost output channel.
+        Output dim is ``taxonomy.n_classes`` directly; labels on disk are
+        already in that index space (no runtime remap), and
+        ``_assert_label_coverage`` has confirmed train teaches the whole head.
         """
         self.net, self.n_bones = build_bst_network(
             model_name,
             n_joints=self.n_joints,
             pose_style=self.pose_style,
             in_channels=in_channels,
-            n_class=self.n_active_classes,
+            n_class=self.taxonomy.n_classes,
             seq_len=hyp.seq_len,
             device=self.device,
         )
@@ -797,7 +843,12 @@ class Task:
     def seek_network_weights(self, model_info='', serial_no=1, tb_dir: Path | None = None):
         """Load existing weights if found, otherwise train from scratch.
         Weight filenames encode the full experiment config, e.g.:
-        'bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_2.pt'
+        'bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_bst_24_2.pt'
+
+        :return: ``(weight_existed, val_at_best)``. ``weight_existed`` is True
+            when a checkpoint was loaded (no training ran), False when freshly
+            trained. ``val_at_best`` is the per-class val F1 snapshot from
+            ``train_network`` (None on the load path or a degenerate run).
         """
         model_info = f'_{model_info}' if model_info != '' else ''
         taxonomy_info = f'_{self.taxonomy.name}'
@@ -822,39 +873,39 @@ class Task:
             self.net.load_state_dict(
                 torch.load(str(weight_path), map_location=self.device, weights_only=True)
             )
-            return True  # weight already existed
+            return True, None  # weight already existed; no fresh val snapshot
         else:
             train_t0 = time.time()
-            self.net = train_network(
+            self.net, val_at_best = train_network(
                 model=self.net,
                 train_loader=self.train_loader,
                 val_loader=self.val_loader,
                 device=self.device,
                 save_path=weight_path,
                 n_bones=self.n_bones,
-                n_classes=self.n_active_classes,
-                class_ls=self.active_class_list,
+                n_classes=self.taxonomy.n_classes,
+                class_ls=list(self.taxonomy.classes),
                 taxonomy=self.taxonomy,
                 tb_dir=tb_dir,
             )
             t = timedelta(seconds=int(time.time() - train_t0))
             print(f'Total training time: {t}')
-            return False  # newly trained
+            return False, val_at_best  # newly trained
 
     def test(self, show_details=False, show_confusion_matrix=False) -> dict:
         pred, gt = test(self.net, self.test_loader, self.device)
         print(f'Test (num_strokes: {len(pred)}) =>')
 
         f1_score_each = multiclass_f1_score(
-            pred, gt, num_classes=self.n_active_classes, average=None
+            pred, gt, num_classes=self.taxonomy.n_classes, average=None
         )
 
-        # Mirror validate(): generic zero-support guard. Any active class
-        # with no ground truth in the test set would otherwise score F1=0
-        # by construction, dragging macro down by 1/n and pinning min at 0.
-        present = torch.bincount(gt, minlength=self.n_active_classes) > 0
+        # Mirror validate(): generic zero-support guard. Any class with no
+        # ground truth in the test set would otherwise score F1=0 by
+        # construction, dragging macro down by 1/n and pinning min at 0.
+        present = torch.bincount(gt, minlength=self.taxonomy.n_classes) > 0
         present_idx = present.nonzero(as_tuple=True)[0].tolist()
-        class_ls = self.active_class_list
+        class_ls = list(self.taxonomy.classes)
 
         show_f1_results(
             model_name=self.model_name,
@@ -905,89 +956,86 @@ class Task:
         print(f'Top{k} Accuracy: {acc:.3f}')
         return {f'top{k}_accuracy': float(acc)}
 
+    def dump_predictions(self, run_dir: Path, serial_no: int, k: int = 5) -> None:
+        """Dump per-split prediction npz (raw logits + top-k + ground truth).
 
-# ==========================================================================
-# Per-run arch validation and manifest enrichment
-# ==========================================================================
+        The per-stroke-logits payload that motivated the refactor: lets the FE
+        show per-clip confidence and any consumer fit post-hoc temperature
+        scaling without re-running inference. One npz per split per serial under
+        ``run_dir/predictions/``. Non-best serials are pruned manually after the
+        runner finishes (no auto-deletion).
 
-def _validate_and_record_arch(
-    *,
-    run_dir: Path,
-    task: 'Task',
-    taxonomy: Taxonomy,
-    hyp: 'Hyp',
-    resumed_manifest_arch: dict | None,
-    tee,
-) -> None:
-    """First-serial post-prepare hook: surface arch invariants and update manifest.
+        Each split is re-read through a fresh ``shuffle=False`` loader, and the
+        npz carries its own ``clip_stems`` column row-aligned with ``logits`` /
+        ``y_true``. The stems come from the in-memory dataset, so they track the
+        rows the model actually saw -- after the zero-length-clip drop and any
+        train_partial reorder -- NOT the raw on-disk ``clip_stems.npy``. The
+        FE-shape JSON converter joins row -> stem inside the npz, no external
+        sidecar and no re-deriving the collation filters.
 
-    Runs once per run, after the first serial's ``prepare_dataloaders``
-    has populated the active class list from the data. Builds the loud
-    ``[arch]`` printout (captured by the tee'd log), checks
-    ``hyp.expected_active_classes`` if set, checks resume consistency
-    against the loaded manifest's ``extra.arch`` if resuming, then
-    rewrites the manifest's ``extra.arch`` block in place.
-
-    :param run_dir: experiments/<run_id>/ for this run.
-    :param task: Task whose ``n_active_classes`` and ``active_class_list``
-        have been populated.
-    :param taxonomy: full taxonomy under which the run is operating.
-    :param hyp: the active Hyp tuple (for the optional
-        ``expected_active_classes`` lever).
-    :param resumed_manifest_arch: ``extra.arch`` block read from the
-        existing manifest when ``resume_from`` is set, else None.
-    :param tee: file-like object writing to terminal + log_path so the
-        ``[arch]`` print lands in both.
-    """
-    arch_block = {
-        'n_classes_full':    taxonomy.n_classes,
-        'n_active_classes':  task.n_active_classes,
-        'has_unknown':       taxonomy.has_unknown,
-        'unknown_first':     taxonomy.unknown_first,
-        'active_class_list': task.active_class_list,
-    }
-
-    with redirect_stdout(tee):
-        print(
-            f'[arch] taxonomy={taxonomy.name}, '
-            f'has_unknown={taxonomy.has_unknown}, '
-            f'unknown_first={taxonomy.unknown_first}'
+        :param run_dir: experiments/<run_id>/ for this run.
+        :param serial_no: serial whose weights are currently loaded in self.net.
+        :param k: top-k width recorded per row.
+        """
+        out_dir = run_dir / 'predictions'
+        out_dir.mkdir(parents=True, exist_ok=True)
+        sources = (
+            ('train', self.train_loader),
+            ('val',   self.val_loader),
+            ('test',  self.test_loader),
         )
-        print(
-            f'       full taxonomy n_classes={taxonomy.n_classes}, '
-            f'n_active_classes={task.n_active_classes} '
-            f'(derived from train labels post train_partial)'
-        )
-        print(f'       active class_list: {task.active_class_list}')
-
-    expected = getattr(hyp, 'expected_active_classes', None)
-    if expected is not None and list(expected) != list(task.active_class_list):
-        raise ValueError(
-            f'hyp.expected_active_classes != empirical active list.\n'
-            f'  expected ({len(expected)}): {expected}\n'
-            f'  empirical ({task.n_active_classes}): {task.active_class_list}\n'
-            f'  Either fix the expectation, fix the dir, or set '
-            f'expected_active_classes=None to trust the data.'
-        )
-
-    if resumed_manifest_arch is not None:
-        prev_n = resumed_manifest_arch.get('n_active_classes')
-        prev_list = resumed_manifest_arch.get('active_class_list')
-        if prev_n != task.n_active_classes or prev_list != task.active_class_list:
-            raise ValueError(
-                f'Resume manifest disagrees with live derivation:\n'
-                f'  manifest: n_active={prev_n}, list={prev_list}\n'
-                f'  live:     n_active={task.n_active_classes}, '
-                f'list={task.active_class_list}\n'
-                f'  Has the collated dir contents changed since the original run?'
+        for split_name, source in sources:
+            dataset = source.dataset
+            ordered = DataLoader(
+                dataset, batch_size=source.batch_size,
+                shuffle=False, num_workers=0, pin_memory=False,
+            )
+            dump = dump_topk_predictions(self.net, ordered, self.device, k=k)
+            # clip_stems straight off the in-memory dataset: kept in lockstep
+            # with labels through the drop + train_partial reorder, and the
+            # shuffle=False loader preserves that order, so the npz is a
+            # self-contained row -> stem join. Hard-fail on a None sidecar (a
+            # legacy collation with no clip_stems.npy): np.asarray(None) writes a
+            # silent 0-d array, which would desync every row from its stem.
+            assert dataset.clip_stems is not None, (
+                f'{split_name}: dataset.clip_stems is None (legacy collation with '
+                f'no clip_stems.npy); re-collate before dumping predictions.'
+            )
+            np.savez(
+                out_dir / f'{split_name}_serial_{serial_no}.npz',
+                logits=dump['logits'],
+                y_true=dump['y_true'],
+                y_pred_top1=dump['y_pred_top1'],
+                topk_idx=dump['topk_idx'],
+                clip_stems=np.asarray(dataset.clip_stems, dtype=object),
+                class_list=np.array(self.taxonomy.classes, dtype=object),
+                run_id=np.array(run_dir.name, dtype=object),
+                serial_no=np.array(serial_no, dtype=np.int64),
+                taxonomy_name=np.array(self.taxonomy.name, dtype=object),
             )
 
-    manifest_path = run_dir / 'manifest.yaml'
-    with open(manifest_path) as f:
-        manifest = yaml.safe_load(f) or {}
-    manifest.setdefault('extra', {})['arch'] = arch_block
-    with open(manifest_path, 'w') as f:
-        yaml.safe_dump(manifest, f, sort_keys=False, default_flow_style=False)
+
+# ==========================================================================
+# Per-run taxonomy printout
+# ==========================================================================
+
+def _print_taxonomy_block(taxonomy: Taxonomy, tee) -> None:
+    """Loud one-time taxonomy summary at run start, captured by the tee'd log.
+
+    Replaces the old ``_validate_and_record_arch`` + ``extra.arch`` manifest
+    block: with labels in active class space and the head pinned to the
+    taxonomy, there's no data-derived architecture to validate or record. The
+    resolved class list lives in the manifest's ``config.classes`` field
+    (written at ``track_run`` time); the train/val/test coverage invariants are
+    enforced by ``Task._assert_label_coverage``.
+
+    :param taxonomy: the resolved taxonomy the run trains under.
+    :param tee: file-like writing to terminal + log_path so the line lands in both.
+    """
+    with redirect_stdout(tee):
+        print(f'[taxonomy] {taxonomy.name}: {taxonomy.n_classes} classes, '
+              f'has_sides={taxonomy.has_sides}, has_unknown={taxonomy.has_unknown}')
+        print(f'[taxonomy] classes: {list(taxonomy.classes)}')
 
 
 # ==========================================================================
@@ -995,6 +1043,10 @@ def _validate_and_record_arch(
 # ==========================================================================
 
 if __name__ == '__main__':
+    # Load .env so BST_X_COLLATED_DATA_ROOT (and any BST_* paths) resolve the
+    # same way the collator does; shell exports still win. No-op without .env.
+    load_repo_dotenv()
+
     # CLI is wrapper-friendly: hparam_sweep.py drives per-serial invocations
     # by setting --serial-no with a fixed --run-id and --log-path so all five
     # serials share a run dir and a single test log. Manual invocations leave
@@ -1028,14 +1080,25 @@ if __name__ == '__main__':
     parser.add_argument('--cap-y', type=float, default=None)
     parser.add_argument('--cap-x', type=float, default=None)
     parser.add_argument('--eps', type=float, default=None)
+    # Cell selectors for collation_runner.py (and any manual override). All
+    # optional; absent ones fall back to the module-level Hyp defaults.
+    # --taxonomy / --split-column / --collation-id together pick the on-disk
+    # collation to read; --ablation-id is the nullable training-time tag (augs
+    # / loss / wiring on a fixed collation), manifest-only, never in the path.
+    parser.add_argument('--taxonomy', default=None)
+    parser.add_argument('--split-column', default=None)
+    parser.add_argument('--collation-id', default=None)
+    parser.add_argument('--ablation-id', default=None)
     args = parser.parse_args()
 
     # Per-serial invocation contract: pass all three sharing-flags together so
-    # the five invocations land in one run dir with one continuous log file.
+    # every serial lands in one run dir with one continuous log file. The
+    # runner drives serial count per cell (5 default, 10 for headline cells),
+    # so there's no fixed upper bound here beyond "1-indexed".
     if args.serial_no is not None:
-        if not (1 <= args.serial_no <= 5):
+        if args.serial_no < 1:
             raise ValueError(
-                f'--serial-no must be 1-5, got {args.serial_no!r}.'
+                f'--serial-no must be >= 1, got {args.serial_no!r}.'
             )
         if args.serial_no > 1 and (args.log_path is None or args.run_id is None):
             raise ValueError(
@@ -1061,22 +1124,33 @@ if __name__ == '__main__':
             'eps':      args.eps,
         })
 
-    taxonomy = TAXONOMIES[hyp.taxonomy]
+    # Cell selectors: override the Hyp defaults when the runner (or a manual
+    # invocation) passes them. Each is independent and nullable.
+    cell_overrides = {}
+    if args.taxonomy is not None:
+        cell_overrides['taxonomy'] = args.taxonomy
+    if args.split_column is not None:
+        cell_overrides['split_column'] = args.split_column
+    if args.collation_id is not None:
+        cell_overrides['collation_id'] = args.collation_id
+    if args.ablation_id is not None:
+        cell_overrides['ablation_id'] = args.ablation_id
+    if cell_overrides:
+        hyp = hyp._replace(**cell_overrides)
+
+    # Resolve the taxonomy; its canonical name drives the on-disk dir +
+    # weight-file naming, matching what the collator wrote.
+    taxonomy = resolve_taxonomy(hyp.taxonomy)
 
     # Collated dir naming via shared helper (mirrored on the prepare_train
     # writer side); see ``pipeline.config.derive_npy_collated_dir_basename``.
     if hyp.seq_len not in (30, 100):
         raise NotImplementedError(f'Unsupported hyp.seq_len={hyp.seq_len!r}; expected 30 or 100.')
-    effective_ablation_id = derive_ablation_id(
-        taxonomy.name, hyp.split_column, hyp.drop_unknown, hyp.ablation_id,
-    )
     npy_collated_dir = derive_npy_collated_dir_basename(
-        taxonomy_name=taxonomy.name,
-        split_column=hyp.split_column,
-        drop_unknown=hyp.drop_unknown,
         use_3d_pose=hyp.use_3d_pose,
         seq_len=hyp.seq_len,
-        ablation_id=hyp.ablation_id,
+        split_column=hyp.split_column,
+        collation_id=hyp.collation_id,
     )
 
     # Weights filename suffix. Independent of the collated-dir name; encodes
@@ -1095,32 +1169,18 @@ if __name__ == '__main__':
 
     # ----------------------------------------------------------------------
     # Per-run experiment folder (tracked via run_tracker).
-    # Every invocation mints a fresh experiments/run_<timestamp>/ with:
-    #   manifest.yaml          (hyperparams, git SHA, per-serial metrics)
+    # Every run mints experiments/run_<timestamp>/ with:
+    #   manifest.yaml          (hyperparams + config.classes, git SHA, per-serial metrics)
     #   weights/<save_name>.pt (best checkpoint per serial)
     #   tb/serial_N/           (TB event files per serial)
-    # Old flat weight/<name>.pt layout caused silent training-skips after
-    # hyperparam changes, so the cache is scoped to the run folder.
-    #
-    # To re-test an existing run without retraining, set resume_from to its
-    # folder name (e.g. 'run_20260417_091933'). The cache then finds saved
-    # weights under experiments/<resume_from>/weights/ and skips training.
-    # Only tracker-era runs resume cleanly; legacy weight/run_*/ folders
-    # need their .pt files copied into experiments/<id>/weights/ first.
-    # Leave as None for normal fresh-train behaviour.
-    #
-    # Resume mutates the run's manifest.yaml in place on serial 1
-    # (`_validate_and_record_arch` rewrites the file with the live arch
-    # derivation, so historical formatting / ordering does not survive).
-    # The script auto-backs the manifest up to
-    # ``manifest.yaml.<timestamp>.bak`` next to the live file before any
-    # work begins, so the original is always recoverable. Test logs are
-    # safe regardless: each invocation gets a fresh timestamped log file.
+    #   predictions/<split>_serial_N.npz (per-stroke logits + top-k dump)
+    # The runner passes a fixed --run-id across a cell's serials so they share
+    # one run dir + log: serial 1 creates the manifest, later serials append via
+    # track_serial. Weights are per-serial, so re-running a serial with --run-id
+    # finds its .pt and skips training.
     # ----------------------------------------------------------------------
-    resume_from: str | None = args.run_id
-
     timestamp = f'{datetime.now():%Y%m%d_%H%M%S}'
-    run_id = resume_from or f'run_{timestamp}'
+    run_id = args.run_id or f'run_{timestamp}'
 
     # Test output is auto-teed to a timestamped log file so metrics are never
     # lost to a dropped terminal. Training stdout stays on terminal only; TB
@@ -1137,58 +1197,44 @@ if __name__ == '__main__':
     log_path = Path(args.log_path) if args.log_path else log_dir / f'test_{timestamp}.log'
     experiments_dir = script_dir / 'experiments'
 
-    # Resume mutates manifest.yaml on serial 1 (see _validate_and_record_arch).
-    # Snapshot the original alongside the live file so the historical
-    # formatting / ordering is always recoverable, no user action required.
-    if resume_from:
-        src_manifest = experiments_dir / resume_from / 'manifest.yaml'
-        if src_manifest.exists():
-            backup = src_manifest.parent / f'{src_manifest.name}.{timestamp}.bak'
-            backup.write_bytes(src_manifest.read_bytes())
-            print(f'[resume] backed up original manifest to {backup.name}')
-        print(
-            f'[resume] resuming {resume_from!r}; manifest.yaml will be '
-            f'rewritten in place on serial 1.'
-        )
-
     extra = compute_data_provenance(
         clips_csv_path=Path(hyp.clips_csv),
-        effective_ablation_id=effective_ablation_id,
+        collation_id=hyp.collation_id,
         npy_collated_dir=npy_collated_dir,
     )
-    # extra['arch'] stays unset here. _validate_and_record_arch populates
-    # it on the first serial after prepare_dataloaders has run the live
-    # derivation against the actual training data (post train_partial).
+    # config.classes lands the resolved class list next to the Hyp dump,
+    # mirroring BRIC's manifest schema; the FE registry reads it without
+    # importing any taxonomy module. track_run treats the dict as a Mapping and
+    # stores it verbatim (config.collation_id / config.ablation_id ride along).
+    config_payload = dict(hyp._asdict())
+    config_payload['classes'] = list(taxonomy.classes)
     run_dir, run_id = track_run(
-        config=hyp, run_id=run_id, log_path=log_path, extra=extra,
+        config=config_payload, run_id=run_id, log_path=log_path, extra=extra,
         experiments_dir=experiments_dir,
     )
     weight_dir = run_dir / 'weights'
 
-    collated_root = (
-        Path(__file__).resolve().parent.parent
-        / f'preparing_data/ShuttleSet_data_{taxonomy.name}'
-        / npy_collated_dir
-    )
+    # Collated dir, resolved the same way the collator wrote it:
+    # BST_X_COLLATED_DATA_ROOT (e.g. /scratch/comp320a on bourbaki) when set,
+    # else the in-repo preparing_data/ convention for local dev. taxonomy.name
+    # is the resolved canonical name, matching the writer's parent dir. Without
+    # the env var the reader looks in-repo while the writer wrote to /scratch,
+    # so the runner would never find the cells.
+    collated_data_root = env_path_or_none('BST_X_COLLATED_DATA_ROOT')
+    if collated_data_root is not None:
+        collated_root = (
+            collated_data_root / f'ShuttleSet_data_{taxonomy.name}' / npy_collated_dir
+        )
+    else:
+        collated_root = (
+            Path(__file__).resolve().parent.parent
+            / f'preparing_data/ShuttleSet_data_{taxonomy.name}'
+            / npy_collated_dir
+        )
 
-    # Resume cross-check: capture the original manifest's arch block now so
-    # the live derivation can be compared against it on serial 1.
-    resumed_manifest_arch: dict | None = None
-    if resume_from:
-        manifest_path = run_dir / 'manifest.yaml'
-        if manifest_path.exists():
-            with open(manifest_path) as f:
-                existing = yaml.safe_load(f) or {}
-            resumed_manifest_arch = existing.get('extra', {}).get('arch')
-        if resumed_manifest_arch is None:
-            print(
-                '[arch:resume] resuming pre-fix run; load_state_dict will '
-                'fail on shape mismatch for v1/nosides/raw_35 dropunk weights.'
-            )
-
-    # Per-serial invocation: run only the requested serial. Otherwise loop 1-5
-    # as before. Log open mode flips to append for serial-no > 1 so the second
-    # through fifth invocations don't clobber the S1 block.
+    # Per-serial invocation: run only the requested serial. Otherwise loop the
+    # manual default of 5. Log open mode flips to append for serial-no > 1 so
+    # later per-serial invocations don't clobber the earlier blocks.
     if args.serial_no is not None:
         serial_range = range(args.serial_no, args.serial_no + 1)
         log_open_mode = 'a' if args.serial_no > 1 else 'w'
@@ -1196,19 +1242,9 @@ if __name__ == '__main__':
         serial_range = range(1, 6)
         log_open_mode = 'w'
 
-    # Arch validation gate: skip if the manifest already carries an arch block.
-    # This handles per-serial invocations (S2-S5 skip because S1 already
-    # validated) and resumed cells (skip if arch was preserved). Fresh runs
-    # and resumed-without-arch cells fall through and validate.
-    arch_already_present = False
-    manifest_path_check = run_dir / 'manifest.yaml'
-    if manifest_path_check.exists():
-        with open(manifest_path_check) as f:
-            existing_manifest = yaml.safe_load(f) or {}
-        arch_already_present = 'arch' in existing_manifest.get('extra', {})
-
     with open(log_path, log_open_mode) as log_f:
         tee = Tee(sys.stdout, log_f)
+        _print_taxonomy_block(taxonomy, tee)
         for serial_no in serial_range:
             print(f'Running serial {serial_no} ...')
             task = Task(
@@ -1220,25 +1256,10 @@ if __name__ == '__main__':
                 train_partial=hyp.train_partial
             )
 
-            # Validate arch the first time in this invocation if not already
-            # validated. Surfaces the live arch derivation, runs the
-            # expected_active_classes lever and the resume cross-check, and
-            # writes the arch block into the manifest.
-            if not arch_already_present:
-                _validate_and_record_arch(
-                    run_dir=run_dir,
-                    task=task,
-                    taxonomy=taxonomy,
-                    hyp=hyp,
-                    resumed_manifest_arch=resumed_manifest_arch,
-                    tee=tee,
-                )
-                arch_already_present = True
-
             task.get_network_architecture(model_name='BST_CG_AP', in_channels=(3 if hyp.use_3d_pose else 2))
 
             tb_dir = run_dir / 'tb' / f'serial_{serial_no}'
-            weight_exists = task.seek_network_weights(
+            weight_exists, val_at_best = task.seek_network_weights(
                 model_info=model_info, serial_no=serial_no, tb_dir=tb_dir,
             )
 
@@ -1247,12 +1268,18 @@ if __name__ == '__main__':
                 test_metrics = task.test(show_details=True, show_confusion_matrix=False)
                 topk_metrics = task.test_topk_acc(k=2)
 
+            # Per-stroke logits dump (all splits) for the FE / calibration. Runs
+            # every serial; non-best are pruned manually after the runner finishes.
+            task.dump_predictions(run_dir=run_dir, serial_no=serial_no, k=5)
+
             track_serial(
                 run_dir=run_dir,
                 serial_no=serial_no,
                 weights_path=task.weight_path,
                 tb_dir=tb_dir,
                 metrics={**test_metrics, **topk_metrics},
+                extra=({'val_at_best_macro_epoch': val_at_best}
+                       if val_at_best else None),
             )
 
             print('Serial', serial_no, 'done.')

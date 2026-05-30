@@ -21,8 +21,12 @@ the clips tree.
 
 Taxonomy class names
 --------------------
-The default taxonomy is 'une_merge_v1' (29 classes):
-  Top_<stroke> / Bottom_<stroke> for each of the 14 base types, plus 'unknown'.
+The default taxonomy is 'une_v1_14' (14 classes, no sides, no unknown).
+Picking a taxonomy that retains unknown (e.g. 'bst_25', 'une_v1_15') keeps
+unknown rows in the output; picking a taxonomy whose
+``excluded_base_stroke_types`` includes 'unknown' (e.g. 'bst_24', 'une_v1_14')
+drops those rows automatically. No separate drop-unknown flag.
+
 List all classes for the active taxonomy:
 
     python -m pipeline.data_access --list-classes
@@ -41,7 +45,7 @@ Python API
         split='val',
         taxonomy_class='Top_smash',
         split_column='split_bst_baseline',
-        taxonomy_name='une_merge_v1',
+        taxonomy_name='bst_25',
     )
 
     for r in records:
@@ -52,7 +56,7 @@ Python API
     # When mmpose data exists, pass its flat root directory.
     paths = DataPaths(
         mmpose_npy_dir=Path(
-            'preparing_data/ShuttleSet_data_une_merge_v1/'
+            'preparing_data/ShuttleSet_data_bst_25/'
             'dataset_npy_between_2_hits_with_max_limits_flat'
         )
     )
@@ -73,8 +77,8 @@ Run from the project root (or any directory with pipeline importable):
     # Switch to the split_v2 ablation column
     python -m pipeline.data_access --split-column split_v2 --summary
 
-    # Drop unknown-type rows before counting (matches collate_npy behaviour)
-    python -m pipeline.data_access --drop-unknown --summary
+    # Pick a taxonomy that drops unknown (excluded_base_stroke_types handles it)
+    python -m pipeline.data_access --taxonomy bst_24 --summary
 
     # TSV of all file paths (clip, shuttle, mmpose) -- redirect to file
     python -m pipeline.data_access --split train > train_paths.tsv
@@ -90,7 +94,7 @@ Run from the project root (or any directory with pipeline importable):
 
     # Include mmpose paths once pose estimation has been run
     python -m pipeline.data_access \\
-        --mmpose-npy-dir /scratch/comp320a/ShuttleSet_data_merged_25/\\
+        --mmpose-npy-dir /scratch/comp320a/ShuttleSet_data_bst_25/\\
 dataset_npy_between_2_hits_with_max_limits_flat \\
         --summary
 
@@ -101,7 +105,7 @@ root (copy .env.example and fill in your values):
 
     BST_CLIPS_DIR=/scratch/comp320a/ShuttleSet/clips
     BST_SHUTTLE_NPY_DIR=/scratch/comp320a/ShuttleSet/shuttle_npy_flat
-    BST_MMPOSE_NPY_DIR=/scratch/comp320a/ShuttleSet_data_merged_25/dataset_npy_between_2_hits_with_max_limits_flat
+    BST_MMPOSE_NPY_DIR=/scratch/comp320a/ShuttleSet_data_bst_25/dataset_npy_between_2_hits_with_max_limits_flat
     BST_CLIPS_CSV=/home/username/badminton_stroke_classifier/notebooks/clips_master.csv
 
 Then just run with no flags:
@@ -135,16 +139,24 @@ import pandas as pd
 from pipeline.clip_index import build_clip_path_index
 from pipeline.config import (
     CLIPS_OUTPUT_DIR,
-    DEFAULT_TAXONOMY,
     SHUTTLE_OUTPUT_DIR,
     TAXONOMIES,
     Taxonomy,
+    label_for_row,
+    resolve_taxonomy,
 )
 
 
 SPLITS = ('train', 'val', 'test')
 
 DEFAULT_SPLIT_COLUMN = 'split_bst_baseline'
+
+# Default taxonomy for data_access CLI / library calls when no explicit one is
+# passed. Picks the most permissive registered taxonomy (bst_25 keeps every
+# raw type and produces sided folder names) so exploring the data doesn't
+# silently drop rows. Training uses a narrower default (une_v1_14) in
+# bst_train.py's Hyp tuple; that's a separate concern from data exploration.
+DEFAULT_TAXONOMY_NAME = 'bst_25'
 
 # .env is searched for in the project root. data_access.py lives at
 # src/bst_refactor/pipeline/, so four .parent hops land at the repo root.
@@ -179,13 +191,13 @@ def load_repo_dotenv(path: Path = _DOTENV_PATH) -> None:
                 os.environ[key] = value
 
 
-def _env_path(var: str, default: Path) -> Path:
+def env_path(var: str, default: Path) -> Path:
     """Return Path from env var if set, otherwise the default."""
     val = os.environ.get(var, '').strip()
     return Path(val) if val else default
 
 
-def _env_path_or_none(var: str) -> Path | None:
+def env_path_or_none(var: str) -> Path | None:
     """Return Path from env var if set and non-empty, otherwise None."""
     val = os.environ.get(var, '').strip()
     return Path(val) if val else None
@@ -221,16 +233,16 @@ class DataPaths:
     """
 
     clips_dir: Path = field(
-        default_factory=lambda: _env_path('BST_CLIPS_DIR', CLIPS_OUTPUT_DIR)
+        default_factory=lambda: env_path('BST_CLIPS_DIR', CLIPS_OUTPUT_DIR)
     )
     shuttle_npy_dir: Path = field(
-        default_factory=lambda: _env_path('BST_SHUTTLE_NPY_DIR', SHUTTLE_OUTPUT_DIR)
+        default_factory=lambda: env_path('BST_SHUTTLE_NPY_DIR', SHUTTLE_OUTPUT_DIR)
     )
     mmpose_npy_dir: Path | None = field(
-        default_factory=lambda: _env_path_or_none('BST_MMPOSE_NPY_DIR')
+        default_factory=lambda: env_path_or_none('BST_MMPOSE_NPY_DIR')
     )
     clips_csv: Path = field(
-        default_factory=lambda: _env_path('BST_CLIPS_CSV', _DEFAULT_CLIPS_CSV)
+        default_factory=lambda: env_path('BST_CLIPS_CSV', _DEFAULT_CLIPS_CSV)
     )
 
 
@@ -264,19 +276,28 @@ class ClipRecord:
 
 def _derive_class_label(
     raw_type_en: str, player_side: str, taxonomy: Taxonomy,
-) -> str:
-    """Apply the taxonomy's merge_map + standalone_set to produce a folder-style label.
+) -> str | None:
+    """Resolve a folder-style class label, or None if the row is filtered out.
 
-    Standalone types (e.g. 'unknown') come through unprefixed; everything else
-    gets a ``Top_`` / ``Bottom_`` prefix. Matches ``collate_npy`` and
-    ``validate_zeroed_frames._derive_stroke_player`` so all three backends
-    label a given CSV row identically.
+    Thin wrapper around ``pipeline.config.label_for_row``: that function is the
+    single source of truth for the merge_map + side-prefixing + side-agnostic
+    rules. This adapter just looks up the resulting class string from
+    ``taxonomy.classes`` so callers that work in label-name space (the CSV-row
+    loop, the validation scripts) don't have to.
+
+    Returns None when ``raw_type_en`` is in
+    ``taxonomy.excluded_base_stroke_types`` (the post-refactor replacement for
+    the historical drop_unknown flag).
+
+    :param raw_type_en: ``raw_type_en`` value from clips_master.csv.
+    :param player_side: ``'Top'`` or ``'Bottom'``. Ignored when the taxonomy
+        is sideless or the merged type is side-agnostic.
+    :param taxonomy: target Taxonomy.
+    :return: folder-style label string (e.g. ``'Top_smash'``, ``'unknown'``)
+        or None if the row should be dropped.
     """
-    merge_map = taxonomy.merge_map or {}
-    merged = merge_map.get(raw_type_en, raw_type_en)
-    if merged in taxonomy.standalone_set:
-        return merged
-    return f'{player_side}_{merged}'
+    idx = label_for_row(taxonomy, raw_type_en, player_side)
+    return None if idx is None else taxonomy.classes[idx]
 
 
 def get_clip_records(
@@ -284,16 +305,20 @@ def get_clip_records(
     split: str | None = None,
     taxonomy_class: str | None = None,
     split_column: str = DEFAULT_SPLIT_COLUMN,
-    taxonomy_name: str = DEFAULT_TAXONOMY,
-    drop_unknown: bool = False,
+    taxonomy_name: str = DEFAULT_TAXONOMY_NAME,
 ) -> list[ClipRecord]:
     """Return ClipRecords read from ``clips_master.csv`` under the active taxonomy.
 
-    Reads the master CSV, filters by ``split`` / ``taxonomy_class`` /
-    ``drop_unknown``, derives the folder-style class label via the active
-    taxonomy, and resolves each row's paired files on disk: clip from the
-    still-nested clips tree (via ``clip_index.build_clip_path_index``),
-    shuttle and mmpose files from the flat post-Phase-2 dirs.
+    Reads the master CSV, filters by ``split`` / ``taxonomy_class``, derives
+    the folder-style class label via the active taxonomy, and resolves each
+    row's paired files on disk: clip from the still-nested clips tree (via
+    ``clip_index.build_clip_path_index``), shuttle and mmpose files from the
+    flat post-Phase-2 dirs.
+
+    Rows whose ``raw_type_en`` is in
+    ``taxonomy.excluded_base_stroke_types`` are dropped automatically; pick a
+    taxonomy that retains unknown (``'bst_25'``, ``'une_v1_15'``) to keep
+    those rows in.
 
     Files missing on disk resolve to None on the record rather than dropping
     the row. That keeps the result aligned with the CSV and lets callers
@@ -303,32 +328,26 @@ def get_clip_records(
     :param paths: Root directories for each data type plus the master CSV.
     :param split: One of 'train', 'val', 'test', or None for all splits.
     :param taxonomy_class: Derived class label (e.g. 'Top_smash', 'unknown'),
-        or None for all classes. Use ``TAXONOMIES[taxonomy_name].class_list()``
+        or None for all classes. Use ``resolve_taxonomy(taxonomy_name).classes``
         to enumerate valid names.
     :param split_column: Column in clips_csv giving the train/val/test
         assignment, e.g. 'split_bst_baseline' (default) or 'split_v2'.
-    :param taxonomy_name: Key into ``TAXONOMIES`` picking the merge_map +
-        standalone_set used for label derivation and class validation.
-    :param drop_unknown: If True, drop rows where ``raw_type_en == 'unknown'``
-        before label derivation. Matches collate_npy semantics.
+    :param taxonomy_name: Name (or legacy alias) of the Taxonomy whose
+        merge_map + side rule + excluded_base_stroke_types drive label
+        derivation. Resolved via ``pipeline.config.resolve_taxonomy``.
     :raises ValueError: If ``split`` or ``taxonomy_class`` are not valid under
         the chosen taxonomy.
     :raises KeyError: If ``split_column`` is not a column in clips_csv or
-        ``taxonomy_name`` is not in TAXONOMIES.
+        ``taxonomy_name`` is not in TAXONOMIES (and not a registered alias).
     :return: List of ClipRecord in CSV row order.
     """
     if split is not None and split not in SPLITS:
         raise ValueError(f'split must be one of {SPLITS}, got {split!r}')
 
-    if taxonomy_name not in TAXONOMIES:
-        raise KeyError(
-            f'taxonomy_name {taxonomy_name!r} not in TAXONOMIES: '
-            f'{sorted(TAXONOMIES)}'
-        )
-    taxonomy = TAXONOMIES[taxonomy_name]
+    taxonomy = resolve_taxonomy(taxonomy_name)
 
     if taxonomy_class is not None:
-        valid_classes = set(taxonomy.class_list())
+        valid_classes = set(taxonomy.classes)
         if taxonomy_class not in valid_classes:
             raise ValueError(
                 f'{taxonomy_class!r} is not a class in taxonomy '
@@ -342,8 +361,6 @@ def get_clip_records(
             f'{list(df.columns)}'
         )
     df = df[df[split_column].isin(SPLITS)].copy()
-    if drop_unknown:
-        df = df[df['raw_type_en'] != 'unknown'].copy()
     if split is not None:
         df = df[df[split_column] == split].copy()
 
@@ -363,6 +380,10 @@ def get_clip_records(
         label = _derive_class_label(
             row.raw_type_en, row.player_side, taxonomy,
         )
+        # excluded_base_stroke_types drops rows (e.g. unknown rows under
+        # bst_24); the old drop_unknown flag is folded in here.
+        if label is None:
+            continue
         if taxonomy_class is not None and label != taxonomy_class:
             continue
 
@@ -397,8 +418,7 @@ def summarise(
     split: str | None = None,
     taxonomy_class: str | None = None,
     split_column: str = DEFAULT_SPLIT_COLUMN,
-    taxonomy_name: str = DEFAULT_TAXONOMY,
-    drop_unknown: bool = False,
+    taxonomy_name: str = DEFAULT_TAXONOMY_NAME,
 ) -> None:
     """Print a per-split, per-class count table for the filtered selection.
 
@@ -406,8 +426,8 @@ def summarise(
     :param split: Split filter, or None for all.
     :param taxonomy_class: Class filter, or None for all.
     :param split_column: CSV column giving the split assignment.
-    :param taxonomy_name: Key into TAXONOMIES for label derivation.
-    :param drop_unknown: Pass-through to ``get_clip_records``.
+    :param taxonomy_name: Name (or legacy alias) of the Taxonomy for label
+        derivation.
     """
     records = get_clip_records(
         paths,
@@ -415,7 +435,6 @@ def summarise(
         taxonomy_class=taxonomy_class,
         split_column=split_column,
         taxonomy_name=taxonomy_name,
-        drop_unknown=drop_unknown,
     )
 
     counts: dict[str, dict[str, dict[str, int]]] = defaultdict(
@@ -472,7 +491,7 @@ def _menu(prompt: str, options: list[str]) -> str:
 def interactive(
     paths: DataPaths,
     split_column: str = DEFAULT_SPLIT_COLUMN,
-    taxonomy_name: str = DEFAULT_TAXONOMY,
+    taxonomy_name: str = DEFAULT_TAXONOMY_NAME,
 ) -> None:
     """Step-through TUI: pick split, class, and output type interactively.
 
@@ -498,15 +517,12 @@ def interactive(
     split = None if split_choice == 'all' else split_choice
 
     # Step 3: taxonomy class (drawn from the active taxonomy).
-    class_options = ['all'] + TAXONOMIES[taxonomy_name].class_list()
+    class_options = ['all'] + list(TAXONOMIES[taxonomy_name].classes)
     class_choice = _menu('Select taxonomy class:', class_options)
     taxonomy_class = None if class_choice == 'all' else class_choice
 
-    # Step 4: drop_unknown flag.
-    drop_choice = _menu('Drop raw_type_en == "unknown"?', ['no', 'yes'])
-    drop_unknown = drop_choice == 'yes'
-
-    # Step 5: output.
+    # Step 4: output. (No drop-unknown prompt; the taxonomy carries the rule
+    # via excluded_base_stroke_types -- pick bst_24 to drop, bst_25 to keep.)
     output_choice = _menu('Show:', ['summary table', 'file paths'])
 
     print()
@@ -517,7 +533,6 @@ def interactive(
             taxonomy_class=taxonomy_class,
             split_column=split_column,
             taxonomy_name=taxonomy_name,
-            drop_unknown=drop_unknown,
         )
     else:
         records = get_clip_records(
@@ -526,7 +541,6 @@ def interactive(
             taxonomy_class=taxonomy_class,
             split_column=split_column,
             taxonomy_name=taxonomy_name,
-            drop_unknown=drop_unknown,
         )
         for r in records:
             clip_str = str(r.clip) if r.clip else 'MISSING_CLIP'
@@ -557,13 +571,11 @@ def _build_cli() -> argparse.ArgumentParser:
         help=f'CSV column giving train/val/test (default: {DEFAULT_SPLIT_COLUMN}).',
     )
     parser.add_argument(
-        '--taxonomy', choices=list(TAXONOMIES), default=DEFAULT_TAXONOMY,
-        help=f'Taxonomy for label derivation and class validation '
-             f'(default: {DEFAULT_TAXONOMY}).',
-    )
-    parser.add_argument(
-        '--drop-unknown', action='store_true',
-        help='Drop rows with raw_type_en == "unknown" before label derivation.',
+        '--taxonomy', choices=list(TAXONOMIES), default=DEFAULT_TAXONOMY_NAME,
+        help=f'Taxonomy for label derivation and class validation. The chosen '
+             f"taxonomy's excluded_base_stroke_types drives row filtering "
+             f'(no separate drop-unknown flag any more). '
+             f'(default: {DEFAULT_TAXONOMY_NAME}).',
     )
     parser.add_argument(
         '--clips-dir', type=Path, default=None,
@@ -622,7 +634,7 @@ def main(argv: list[str] | None = None) -> None:
             taxonomy_name=args.taxonomy,
         )
     elif args.list_classes:
-        for name in TAXONOMIES[args.taxonomy].class_list():
+        for name in TAXONOMIES[args.taxonomy].classes:
             print(name)
     elif args.summary:
         summarise(
@@ -631,7 +643,6 @@ def main(argv: list[str] | None = None) -> None:
             taxonomy_class=args.taxonomy_class,
             split_column=args.split_column,
             taxonomy_name=args.taxonomy,
-            drop_unknown=args.drop_unknown,
         )
     else:
         records = get_clip_records(
@@ -640,7 +651,6 @@ def main(argv: list[str] | None = None) -> None:
             taxonomy_class=args.taxonomy_class,
             split_column=args.split_column,
             taxonomy_name=args.taxonomy,
-            drop_unknown=args.drop_unknown,
         )
         for r in records:
             clip_str = str(r.clip) if r.clip else 'MISSING_CLIP'
