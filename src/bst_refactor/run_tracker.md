@@ -10,7 +10,7 @@ Optional Aim UI on top if you want it; works fine without.
 |---|---|
 | `src/bst_refactor/run_tracker.py` | `track_run(config, run_id, log_path=...)` and `track_serial(run_dir, serial_no, weights_path, tb_dir, metrics)`. Writes `manifest.yaml` and (optionally) mirrors into `.aim/`. |
 | `src/bst_refactor/run_overview.py` | Aggregator. `python run_overview.py` prints a table across all runs under `experiments/` (mean/stdev/max per metric). |
-| `src/bst_refactor/aim_backfill.py` | One-shot script that walks every manifest + its test log, and mirrors each serial into Aim with description/tags/name. Idempotent, so re-run it any time Aim was missing when training finished, or after editing manifests. |
+| `src/bst_refactor/aim_backfill.py` | Rebuilds Aim from every manifest + its TB event files: per-epoch curves, hparams, tags (incl `best` on the kept-checkpoint serial), each run dated to its `started_at`. Re-run with `--wipe` for a clean rebuild (see Aim UI below). |
 | `src/bst_refactor/stroke_classification/main_on_shuttleset/bst_train.py` | Integrated: two calls to the tracker, test methods now return metric dicts, TB directory is threaded through to `train_network`. |
 
 ## How it's wired into bst_train.py
@@ -38,7 +38,7 @@ What each call configures:
 - **`run_id`**: names the `experiments/<run_id>/` subfolder. `run_{timestamp}` is the convention for regular runs; pass any string for a named/legacy run (e.g. `bst_cg_ap_base_17_04_2026`), or pass `None` to let `track_run` auto-generate a `run_YYYYMMDD_HHMMSS` id.
 - **`weights_path` / `tb_dir` / `metrics`**: the per-serial payload on `track_serial`; lands in the manifest's `serials:` list. No layout is enforced, but by convention weights live at `run_dir/weights/` and TB events at `run_dir/tb/serial_N/`. `track_serial` is keyed by `serial_no`, so re-running a test updates the entry in place.
 - **`log_path=<path>`** (optional, on `track_run`): stored on the manifest so `aim_backfill.py` can slice per-serial blocks out of the test log later. Not needed during the live run; only matters if you want the backfill to enrich Aim descriptions.
-- **Aim mirror**: auto-activates if `aim` is pip-installed and `track_serial` has metrics. Silently skips otherwise; nothing in the training loop breaks either way.
+- **Aim mirror**: if `aim` is pip-installed (it isn't on the HPC train venv, so usually a no-op), `track_serial` also writes the serial into Aim as a fresh run and force-indexes it. Re-running a serial adds another Aim run rather than overwriting it; the clean rebuild is `aim_backfill.py --wipe` (see Aim UI below). Skips silently when aim is absent; nothing in the training loop breaks either way.
 
 That's the whole integration. Any other train script (Arch 2 3D CNN, or
 any future extension) can do the same two calls.
@@ -93,7 +93,7 @@ serials:
       top2_accuracy: 0.963
       num_strokes: 3486
     recorded_at: 2026-04-18T17:48:12
-best_serials: [1, 4]                           # optional; serial_nos tagged 'best' in Aim
+best_serials: [1, 4]                           # optional; 'best'-tag fallback when weights aren't pruned (kept serial wins)
 notes: ...                                     # optional; shown as Aim 'run_notes' param
 tags: [arch1_baseline]                         # optional; extra Aim tags
 ```
@@ -113,41 +113,53 @@ Prints one row per run with mean/stdev/max across serials.
 
 ## Aim UI (optional)
 
-If `aim` is pip-installed in the venv, each call to `track_serial` also
-opens a lightweight `aim.Run(run_hash='<run_id>_s<N>')` and logs hparams
-+ metrics. Browse with:
+If `aim` is pip-installed, each `track_serial` call also writes the serial
+into Aim (hparams + metrics), force-indexed so it appears without waiting
+for the next `aim up`. aim >=3.x can't reopen a chosen run hash, so each
+call mints a fresh run (auto hash) named `<run_id>_s<N>` and dates it to
+the run's `started_at`. Re-running a serial therefore adds another Aim run
+rather than overwriting; the clean rebuild is the backfill below. Browse
+(point `--repo` at your Aim repo, or omit for a `.aim` in cwd):
 
 ```bash
 pip install aim
-aim up                                      # local UI at http://localhost:43800
+aim up --repo /path/to/.aim_repos/bst        # local UI at http://localhost:43800
 ```
 
-If aim is not installed, the tracker silently skips the mirror step.
-Nothing in the training loop breaks either way.
+If aim is not installed, the tracker silently skips the mirror. Nothing in
+the training loop breaks either way.
 
-### Backfill (also: recover from "forgot to install aim")
+### Backfill (the canonical way to populate Aim)
 
-`aim_backfill.py` regenerates every Aim run from scratch by reading
-`experiments/*/manifest.yaml` + the test log each manifest points to.
-It enriches each serial's Aim run with:
+`aim_backfill.py` rebuilds Aim from every `experiments/*/manifest.yaml`
+plus the run's TB event files. Each serial becomes a run `<run_id>_s<N>`
+carrying:
 
-- the serial's full test-log block as the run description,
-- auto-derived tags (`legacy`, `no_aux_anneal` / `anneal_gentle` /
-  `anneal_aggressive` / `cg_ap_off_from_start`, and `best` when the
-  serial appears in `best_serials`),
-- a human-readable name `<run_id>_s<N>`.
+- per-epoch curves from `run_dir/tb/serial_N` (`Loss/*`, `F1/*`,
+  `F1_train/*`, `F1_val/*`, `Alpha/*`, `Aug/*`, `Schedule/*`, `best/*`)
+  tracked at their real epoch step,
+- per-class final F1 (`per_class_f1/<class>`) plus the scalar test metrics,
+- hparams, and the test-log block as the description when the log is local,
+- tags: `legacy` / anneal-regime, plus `best` on the serial whose
+  checkpoint was kept (falls back to manifest `best_serials`, then top
+  `macro_f1`),
+- the run dated to its `started_at`, not the backfill-import time.
+
+Re-running needs `--wipe`: it removes `.aim` and rebuilds from scratch. An
+in-place update can't be made clean because aim's `delete_run` leaves
+tag<->run links behind and recycled run-ids inherit them, bleeding tags
+between runs. Run it in a venv with aim + tensorboard (locally, tb-viewer):
 
 ```bash
-pip install aim
-cd src/bst_refactor/stroke_classification/main_on_shuttleset
-python ../../aim_backfill.py
-aim up
+~/.venvs/tb-viewer/bin/python aim_backfill.py \
+    --repo /path/to/.aim_repos/bst --wipe \
+    src/bst_refactor/stroke_classification/main_on_shuttleset/experiments
+~/.venvs/tb-viewer/bin/aim up --repo /path/to/.aim_repos/bst
 ```
 
-Idempotent. Aim keys each run by the hash `<run_id>_s<N>`, so re-running
-the backfill overwrites the existing entries rather than duplicating.
-Run it after any training batch where aim wasn't installed, or after
-editing tags / notes in a manifest.
+Filter to the kept-checkpoint runs in the UI search bar with
+`'best' in run.tags`. Re-run after pulling new runs, or after editing
+manifest tags / notes.
 
 ## Other loggers
 
@@ -164,4 +176,6 @@ regardless of which logger produced them.
 - `pyyaml>=6.0,<7` (required) — add to
   `src/bst_refactor/stroke_classification/requirements.txt` if not
   already there.
-- `aim` (optional) — only needed if you want the UI.
+- `aim` (optional) — only needed for the Aim UI / `aim_backfill.py`.
+- `tensorboard` (optional) — `aim_backfill.py` reads the TB event files
+  through it to mirror curves; the tb-viewer venv has both.
