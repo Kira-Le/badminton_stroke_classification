@@ -112,3 +112,21 @@ main_on_shuttleset/.aim/
 
 # run_20260506_032632_652587: Aug-sweep cell `p_flip_25_x_p_jitter_30` from sweep_20260505_211814_aug_v1_round_1. Cell config p_flip=0.25, p_jitter=0.3 — the p_jitter override matched the base, so the effective config is identical to `p_flip_25`. Two 5-serial cells with same aug, different seeds: macro spread 0.13%, min spread 2.14%, acc spread 0.14%, top-2 spread 0.02%. That seed-noise envelope is the most useful finding from the cell. S1 best (top macro 0.7447 = prior ref, top min 0.5231 ws — single-serial joint best of the round on macro x min, new project-wide single-serial min F1 high). Mean 0.7389/0.4569/0.7588/0.9385. Vs prior best: macro -0.6, min -2.1, acc -0.7, top-2 -0.1. Verdict LOSE — but the same-config replicate p_flip_25 came in at TIE, so this cell's LOSE is the unlucky tail of a noise-sized cell-to-cell swing.
 !main_on_shuttleset/experiments/run_20260506_032632_652587/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides.pt
+
+# run_20260530_161525_131279: shuttleset_18, v2 split (the finest cut, 18 classes). Best S1. Taxon-pinned prediction cell.
+!main_on_shuttleset/experiments/run_20260530_161525_131279/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_shuttleset_18.pt
+
+# run_20260530_174818_410060: bst_24, v2 split, unknown dropped (our v2 split). Best S3. Taxon-pinned prediction cell.
+!main_on_shuttleset/experiments/run_20260530_174818_410060/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_bst_24_3.pt
+
+# run_20260530_192738_970644: bst_12, v2 split (the 12 base BST strokes, side-agnostic). Best S4. Taxon-pinned prediction cell.
+!main_on_shuttleset/experiments/run_20260530_192738_970644/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_bst_12_4.pt
+
+# run_20260530_210600_435552: bst_25, baseline split, unknown kept (original bst split w/ unknown). Best S1. Taxon-pinned prediction cell.
+!main_on_shuttleset/experiments/run_20260530_210600_435552/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_bst_25.pt
+
+# run_20260530_225714_593038: bst_24, baseline split, unknown dropped (original bst split w/o unknown). Best S5. Taxon-pinned prediction cell.
+!main_on_shuttleset/experiments/run_20260530_225714_593038/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_bst_24_5.pt
+
+# run_20260531_005535_005154: une_v1_14, v2 split (bst_12 + wrist_smash + passive_drop). Best S3. Taxon-pinned prediction cell.
+!main_on_shuttleset/experiments/run_20260531_005535_005154/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_v1_14_3.pt

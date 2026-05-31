@@ -53,6 +53,11 @@ def invoke_bst_train(*, serial_no: int, run_id: str, log_path: Path, cell: dict)
     # Optional training-time ablation tag (manifest-only); most cells omit it.
     if cell.get('ablation_id'):
         cmd += ['--ablation-id', cell['ablation_id']]
+    # Optional val-improvability gate toggle. Present-and-True turns it on,
+    # present-and-False forces it off; absent leaves the bst_train Hyp default.
+    if cell.get('use_val_improvability_gate') is not None:
+        cmd += ['--val-improvability-gate' if cell['use_val_improvability_gate']
+                else '--no-val-improvability-gate']
     return subprocess.run(cmd, env=env).returncode
 
 

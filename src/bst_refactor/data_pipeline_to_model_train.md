@@ -439,13 +439,13 @@ Cross-run comparison and the optional Aim UI are handled by the YAML-based track
   python ../../run_overview.py                              # default: experiments/
   python ../../run_overview.py -c n_epochs,use_aux_schedule -m macro_f1,min_f1
   ```
-- **`aim_backfill.py`** mirrors every manifest into the Aim UI with per-serial test-log blocks as descriptions, auto-derived tags (`legacy`, `no_aux_anneal` / `anneal_gentle` / `anneal_aggressive` / `cg_ap_off_from_start`, `best`), and readable names. Idempotent via stable `run_hash`, so it is safe to re-run any time Aim wasn't installed during training, or after editing manifest notes / tags:
+- **`aim_backfill.py`** rebuilds the Aim UI from every manifest + its TB event files: per-epoch curves, per-class final F1, hparams, auto-derived tags (`legacy`, the anneal-regime label, and `best` on the serial whose checkpoint was kept), and each run dated to its `started_at` rather than backfill-import time. Re-running needs `--wipe` (it removes `.aim` and rebuilds from scratch): aim 3.29 can't reopen a stable run hash, and an in-place update bleeds tags between runs. Runs in the tb-viewer venv (aim + tensorboard); `--repo` points at the Aim repo. Filter the kept-checkpoint runs in the UI search bar with `'best' in run.tags`.
   ```bash
-  pip install aim
-  cd main_on_shuttleset
-  python ../../aim_backfill.py
-  aim up                                                    # UI at http://localhost:43800
+  ~/.venvs/tb-viewer/bin/python ../../aim_backfill.py \
+      --repo /path/to/.aim_repos/bst --wipe experiments
+  ~/.venvs/tb-viewer/bin/aim up --repo /path/to/.aim_repos/bst   # UI at http://localhost:43800
   ```
+  The live `track_serial` mirror (above) also writes to Aim when aim is importable, creating a fresh run per call; `aim_backfill.py --wipe` is the canonical, idempotent population.
 
 ---
 

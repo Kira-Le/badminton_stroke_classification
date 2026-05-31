@@ -74,6 +74,7 @@ Hyp = namedtuple('Hyp', [
     'use_aux_schedule', 'aux_fade_end_epoch',
     'clips_csv', 'split_column', 'collation_id', 'ablation_id',
     'label_smoothing', 'class_weights', 'adaptive_focal',
+    'use_val_improvability_gate', 'val_improvability_gate',
     'augmentation',
 ])
 hyp = Hyp(
@@ -126,6 +127,26 @@ hyp = Hyp(
         'momentum': 0.9,
         'warm_up_epochs': 5,
         'f1_floor': 0.0,
+    },
+    # Val-improvability gate over the adaptive-focal alpha. Off by default;
+    # flip on with use_val_improvability_gate=True or --val-improvability-gate.
+    # Once a class stops improving on val it decays that class's alpha back
+    # toward the renorm mean of 1.0, freeing the over-allocated budget for
+    # classes still climbing (the adaptive_focal alpha is driven by train F1,
+    # which keeps rising on plateaued classes via overfitting; this reads val to
+    # catch that). Requires adaptive_focal (it modulates that alpha). The dict
+    # stays visible here even when disabled so the knobs are easy to find/tune.
+    # Defaults are the ones derived in
+    # scratch/architecture_notes/alpha_arc_analysis/ (macro plateaus ~e26-31,
+    # cross_court_net_shot needs a patience >= its ~15-epoch new-high interval).
+    use_val_improvability_gate=False,
+    val_improvability_gate={
+        'val_f1_smoothing_factor': 0.9,    # EMA retention on val F1 (~6.6-epoch half-life)
+        'improvement_margin': 0.015,       # smoothed val must beat its best by this to count
+        'patience_epochs': 15,             # epochs with no new high before decay starts
+        'min_epochs_before_gating': 10,    # no decay before this epoch (keep the early boost)
+        'revert_step_per_epoch': 0.2,      # fraction of the gap to the mean reverted per epoch
+        'stop_gating_after_fraction': 0.75,  # freeze past 0.75*n_epochs (protect anneal blooms)
     },
     # Train-time augmentations. Replaces the inherited (broken) joints-only
     # RandomTranslation_batch. Flip is the literature-norm dataset-doubler;
@@ -455,6 +476,15 @@ def train_network(
     # weight that re-prioritises classes whose train F1 stays low. Mutually
     # exclusive with class_weights and forces label_smoothing=0 (LS softens
     # targets, contaminating focal's per-sample hardness estimate).
+    # The val-improvability gate modulates the adaptive-focal alpha, so it can
+    # only run when adaptive_focal is engaged. Fail loud rather than silently
+    # ignoring the flag (the gate config would otherwise be dropped on the floor).
+    if hyp.use_val_improvability_gate and hyp.adaptive_focal is None:
+        raise ValueError(
+            'use_val_improvability_gate=True requires adaptive_focal (the gate '
+            'decays the adaptive-focal alpha; with plain CE there is no alpha to '
+            'modulate). Set adaptive_focal to a config dict or disable the gate.'
+        )
     if hyp.adaptive_focal is not None:
         if hyp.class_weights:
             raise ValueError(
@@ -478,6 +508,12 @@ def train_network(
             warm_up_epochs=af_cfg.get('warm_up_epochs', 5),
             f1_floor=af_cfg.get('f1_floor', 0.0),
             pair_caps=af_cfg.get('pair_caps'),
+            # Gate config only when the flag is on; None leaves the gate off.
+            # n_epochs lets the gate resolve stop_gating_after_fraction.
+            val_improvability_gate=(
+                hyp.val_improvability_gate if hyp.use_val_improvability_gate else None
+            ),
+            n_epochs=hyp.n_epochs,
             device=device,
         )
         # Print resolved pair_caps as triples (rather than the dict spec) so the
@@ -497,6 +533,18 @@ def train_network(
             f"f1_floor={loss_fn.f1_floor}, "
             f"pair_caps=[{pair_cap_str}]"
         )
+        if loss_fn.val_gate_enabled:
+            print(
+                f"[loss] val-improvability gate ON: "
+                f"smoothing={loss_fn.gate_val_f1_smoothing_factor}, "
+                f"margin={loss_fn.gate_improvement_margin}, "
+                f"patience={loss_fn.gate_patience_epochs}, "
+                f"min_epochs_before_gating={loss_fn.gate_min_epochs_before_gating}, "
+                f"revert_step={loss_fn.gate_revert_step_per_epoch}, "
+                f"freeze_epoch={loss_fn.gate_freeze_epoch} "
+                f"(gating window epochs "
+                f"{loss_fn.gate_min_epochs_before_gating + 1}-{loss_fn.gate_freeze_epoch - 1})"
+            )
     elif hyp.class_weights:
         weights = torch.ones(n_classes, device=device)
         for cls_name, multiplier in hyp.class_weights.items():
@@ -577,6 +625,12 @@ def train_network(
             device=device,
             n_classes=n_classes,
         )
+        # Val-improvability gate: decay plateaued classes' alpha toward the mean
+        # using this epoch's val F1. Must run after validate (needs the val F1)
+        # and after update_alpha above (which refreshed the base alpha from train
+        # F1); the gated alpha then drives next epoch's training. No-op when off.
+        if isinstance(loss_fn, AdaptiveFocalLoss) and loss_fn.val_gate_enabled:
+            loss_fn.apply_val_gate(f1_per_class, present)
         t1 = time.time()
         print(f'Epoch({epoch}/{hyp.n_epochs}): train_loss={train_loss:.3f}, '
               f'val_loss={val_loss:.3f}, macro_f1={f1_score_avg:.3f}, min_f1={f1_score_min:.3f} '
@@ -632,6 +686,12 @@ def train_network(
                 writer.add_scalar(f'F1_val/{c}', f1_per_class[i].item(), epoch)
             if isinstance(loss_fn, AdaptiveFocalLoss):
                 writer.add_scalar(f'Alpha/{c}', loss_fn.alpha[i].item(), epoch)
+                # Per-class revert fraction (0 = full adaptive alpha, 1 = pulled
+                # all the way to the renorm mean) so the gate's action is visible.
+                if loss_fn.val_gate_enabled:
+                    writer.add_scalar(
+                        f'Revert/{c}', loss_fn.gate_revert_fraction[i].item(), epoch
+                    )
 
         curr_macro, curr_min = f1_score_avg.item(), f1_score_min.item()
 
@@ -1089,6 +1149,14 @@ if __name__ == '__main__':
     parser.add_argument('--split-column', default=None)
     parser.add_argument('--collation-id', default=None)
     parser.add_argument('--ablation-id', default=None)
+    # Enable/disable the val-improvability alpha gate, overriding the Hyp default.
+    # --val-improvability-gate turns it on, --no-val-improvability-gate off;
+    # absent leaves the module default (off). Requires adaptive_focal.
+    parser.add_argument(
+        '--val-improvability-gate',
+        action=argparse.BooleanOptionalAction,
+        default=None,
+    )
     args = parser.parse_args()
 
     # Per-serial invocation contract: pass all three sharing-flags together so
@@ -1135,6 +1203,8 @@ if __name__ == '__main__':
         cell_overrides['collation_id'] = args.collation_id
     if args.ablation_id is not None:
         cell_overrides['ablation_id'] = args.ablation_id
+    if args.val_improvability_gate is not None:
+        cell_overrides['use_val_improvability_gate'] = args.val_improvability_gate
     if cell_overrides:
         hyp = hyp._replace(**cell_overrides)
 
@@ -1272,6 +1342,11 @@ if __name__ == '__main__':
             # every serial; non-best are pruned manually after the runner finishes.
             task.dump_predictions(run_dir=run_dir, serial_no=serial_no, k=5)
 
+            # Writes the manifest entry, and if aim is installed (it isn't on
+            # the HPC train venv, so usually a no-op) mirrors this serial into
+            # Aim as a fresh run each call (aim 3.29 can't reopen a stable
+            # hash). Re-running a serial adds another Aim run rather than
+            # overwriting; the clean, idempotent rebuild is aim_backfill.py --wipe.
             track_serial(
                 run_dir=run_dir,
                 serial_no=serial_no,
