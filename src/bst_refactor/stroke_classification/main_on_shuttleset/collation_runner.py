@@ -58,6 +58,10 @@ def invoke_bst_train(*, serial_no: int, run_id: str, log_path: Path, cell: dict)
     if cell.get('use_val_improvability_gate') is not None:
         cmd += ['--val-improvability-gate' if cell['use_val_improvability_gate']
                 else '--no-val-improvability-gate']
+    # Optional per-cell weight decay (the WD sweep dimension); cells without it
+    # fall back to the bst_train Hyp default.
+    if cell.get('weight_decay') is not None:
+        cmd += ['--weight-decay', str(cell['weight_decay'])]
     return subprocess.run(cmd, env=env).returncode
 
 
