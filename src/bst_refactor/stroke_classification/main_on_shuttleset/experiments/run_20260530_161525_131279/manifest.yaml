@@ -329,6 +329,14 @@ serials:
         cross_court_net_shot: 0.769784152507782
         short_service: 0.9896193146705627
         long_service: 0.9538460969924927
+notes: |-
+  shuttleset_18, v2 split (the finest cut, 18 classes)
+
+  Best S1 0.665 / 0.000 / 0.766, mean 0.654 / 0.000 / 0.754 (macro / min / acc; val macro 0.696).
+
+  The 0.000 min is driven_flight, and with a single test clip its test F1 is a dice-roll: 0 if that one clip is missed (as here), ~100% if hit, so the min carries no real signal. The class is data-starved (42 train / 9 val / 1 test): it memorises train (F1 0.857) but never holds on val (per-epoch F1 blips to 0.25-0.43 in four serials, then falls back; ~0.15 at the best-macro epochs). Oversampling likely can't save it, it just repeats the same ~40 clips: more memorising, not more signal.
+
+  Otherwise the lowest macro of the batch, with the same heavy smash/wrist_smash confusion (0.62 / 0.45) as une_v1_14 (run_20260531_005535_005154), plus weak fine splits (defensive_return_drive 0.38, defensive_return_lob 0.48). Services and clear still top 0.96-0.98.
 log_path: src/bst_refactor/stroke_classification/main_on_shuttleset/test_logs/test_20260530_161525_131279.log
 extra:
   data_provenance:
