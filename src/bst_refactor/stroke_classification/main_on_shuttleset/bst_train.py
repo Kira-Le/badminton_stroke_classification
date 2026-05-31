@@ -68,12 +68,13 @@ DEFAULT_CLIPS_CSV = REPO_ROOT / 'notebooks' / 'clips_master.csv'
 # loss / wiring on a fixed collation): manifest-only, never in the path. See
 # pipeline.config.derive_npy_collated_dir_basename for the disentanglement.
 Hyp = namedtuple('Hyp', [
-    'n_epochs', 'batch_size', 'lr', 'warm_up_step',
+    'n_epochs', 'batch_size', 'lr', 'weight_decay', 'warm_up_step',
     'taxonomy', 'seq_len', 'early_stop_n_epochs',
     'pose_style', 'use_3d_pose', 'train_partial',
     'use_aux_schedule', 'aux_fade_end_epoch',
     'clips_csv', 'split_column', 'collation_id', 'ablation_id',
     'label_smoothing', 'class_weights', 'adaptive_focal',
+    'use_val_improvability_gate', 'val_improvability_gate',
     'augmentation',
 ])
 hyp = Hyp(
@@ -81,6 +82,13 @@ hyp = Hyp(
     early_stop_n_epochs=40,
     batch_size=128,
     lr=5e-4,
+    # AdamW decoupled weight decay. 0.01 is PyTorch's AdamW default and what
+    # every prior run used implicitly; kept as the default so non-sweep runs
+    # barely move (norm/bias/embeddings now excluded from decay, but 0.01 on
+    # them was near-inert anyway). The sweep overrides this per cell. Optimal
+    # lambda for this dataset/LR/run-length is likely 0.1-0.3; see
+    # scratch/architecture_notes/hp_and_aug_speculations_30_05_2026.md (Q2).
+    weight_decay=0.01,
     warm_up_step=100,
     taxonomy='une_v1_14',
     seq_len=100,
@@ -126,6 +134,26 @@ hyp = Hyp(
         'momentum': 0.9,
         'warm_up_epochs': 5,
         'f1_floor': 0.0,
+    },
+    # Val-improvability gate over the adaptive-focal alpha. Off by default;
+    # flip on with use_val_improvability_gate=True or --val-improvability-gate.
+    # Once a class stops improving on val it decays that class's alpha back
+    # toward the renorm mean of 1.0, freeing the over-allocated budget for
+    # classes still climbing (the adaptive_focal alpha is driven by train F1,
+    # which keeps rising on plateaued classes via overfitting; this reads val to
+    # catch that). Requires adaptive_focal (it modulates that alpha). The dict
+    # stays visible here even when disabled so the knobs are easy to find/tune.
+    # Defaults are the ones derived in
+    # scratch/architecture_notes/alpha_arc_analysis/ (macro plateaus ~e26-31,
+    # cross_court_net_shot needs a patience >= its ~15-epoch new-high interval).
+    use_val_improvability_gate=False,
+    val_improvability_gate={
+        'val_f1_smoothing_factor': 0.9,    # EMA retention on val F1 (~6.6-epoch half-life)
+        'improvement_margin': 0.015,       # smoothed val must beat its best by this to count
+        'patience_epochs': 15,             # epochs with no new high before decay starts
+        'min_epochs_before_gating': 10,    # no decay before this epoch (keep the early boost)
+        'revert_step_per_epoch': 0.2,      # fraction of the gap to the mean reverted per epoch
+        'stop_gating_after_fraction': 0.75,  # freeze past 0.75*n_epochs (protect anneal blooms)
     },
     # Train-time augmentations. Replaces the inherited (broken) joints-only
     # RandomTranslation_batch. Flip is the literature-norm dataset-doubler;
@@ -455,6 +483,15 @@ def train_network(
     # weight that re-prioritises classes whose train F1 stays low. Mutually
     # exclusive with class_weights and forces label_smoothing=0 (LS softens
     # targets, contaminating focal's per-sample hardness estimate).
+    # The val-improvability gate modulates the adaptive-focal alpha, so it can
+    # only run when adaptive_focal is engaged. Fail loud rather than silently
+    # ignoring the flag (the gate config would otherwise be dropped on the floor).
+    if hyp.use_val_improvability_gate and hyp.adaptive_focal is None:
+        raise ValueError(
+            'use_val_improvability_gate=True requires adaptive_focal (the gate '
+            'decays the adaptive-focal alpha; with plain CE there is no alpha to '
+            'modulate). Set adaptive_focal to a config dict or disable the gate.'
+        )
     if hyp.adaptive_focal is not None:
         if hyp.class_weights:
             raise ValueError(
@@ -478,6 +515,12 @@ def train_network(
             warm_up_epochs=af_cfg.get('warm_up_epochs', 5),
             f1_floor=af_cfg.get('f1_floor', 0.0),
             pair_caps=af_cfg.get('pair_caps'),
+            # Gate config only when the flag is on; None leaves the gate off.
+            # n_epochs lets the gate resolve stop_gating_after_fraction.
+            val_improvability_gate=(
+                hyp.val_improvability_gate if hyp.use_val_improvability_gate else None
+            ),
+            n_epochs=hyp.n_epochs,
             device=device,
         )
         # Print resolved pair_caps as triples (rather than the dict spec) so the
@@ -497,6 +540,18 @@ def train_network(
             f"f1_floor={loss_fn.f1_floor}, "
             f"pair_caps=[{pair_cap_str}]"
         )
+        if loss_fn.val_gate_enabled:
+            print(
+                f"[loss] val-improvability gate ON: "
+                f"smoothing={loss_fn.gate_val_f1_smoothing_factor}, "
+                f"margin={loss_fn.gate_improvement_margin}, "
+                f"patience={loss_fn.gate_patience_epochs}, "
+                f"min_epochs_before_gating={loss_fn.gate_min_epochs_before_gating}, "
+                f"revert_step={loss_fn.gate_revert_step_per_epoch}, "
+                f"freeze_epoch={loss_fn.gate_freeze_epoch} "
+                f"(gating window epochs "
+                f"{loss_fn.gate_min_epochs_before_gating + 1}-{loss_fn.gate_freeze_epoch - 1})"
+            )
     elif hyp.class_weights:
         weights = torch.ones(n_classes, device=device)
         for cls_name, multiplier in hyp.class_weights.items():
@@ -514,9 +569,29 @@ def train_network(
         loss_fn = nn.CrossEntropyLoss(weight=weights, label_smoothing=hyp.label_smoothing)
     else:
         loss_fn = nn.CrossEntropyLoss(label_smoothing=hyp.label_smoothing)
-    # AdamW = Adam with decoupled weight decay (standard for transformers)
-    # model.parameters() returns all learnable weights (TF equivalent: model.trainable_variables)
-    optimizer = optim.AdamW(model.parameters(), lr=hyp.lr)
+    # AdamW with decoupled weight decay. Exclude norm gains, biases, and the
+    # learned tokens / positional embeddings from decay: decaying an LN/BN gain
+    # pulls its scale toward zero, and decaying a sinusoidally-seeded positional
+    # embedding erodes the positional signal. Matters at the lambda 0.1-0.4 the
+    # sweep covers; standard transformer recipe (Wang & Aitchison don't decay
+    # normalisation layers). ndim<=1 catches every norm gain/beta and bias; the
+    # two name hints catch the five ndim>=2 BST-owned params a shape rule misses.
+    # Verified split for BST_CG_AP: 27 decay / 55 no-decay tensors.
+    no_decay_name_hints = ('embedding_', 'learned_token_')
+    decay, no_decay = [], []
+    for name, param in model.named_parameters():
+        if not param.requires_grad:
+            continue
+        norm_or_bias = param.ndim <= 1
+        token_or_posemb = any(hint in name for hint in no_decay_name_hints)
+        (no_decay if norm_or_bias or token_or_posemb else decay).append(param)
+    print(f'[optim] AdamW lr={hyp.lr} weight_decay={hyp.weight_decay} '
+          f'(decay={len(decay)} tensors, no_decay={len(no_decay)})')
+    optimizer = optim.AdamW(
+        [{'params': decay, 'weight_decay': hyp.weight_decay},
+         {'params': no_decay, 'weight_decay': 0.0}],
+        lr=hyp.lr,
+    )
     # Cosine schedule: LR ramps up during warmup, then decays following a cosine curve.
     # HF formula: lr_factor = 0.5 * (1 + cos(pi * 2 * num_cycles * progress))
     #   num_cycles=0.5 -> LR ends at 0 (full standard cosine descent)
@@ -577,6 +652,12 @@ def train_network(
             device=device,
             n_classes=n_classes,
         )
+        # Val-improvability gate: decay plateaued classes' alpha toward the mean
+        # using this epoch's val F1. Must run after validate (needs the val F1)
+        # and after update_alpha above (which refreshed the base alpha from train
+        # F1); the gated alpha then drives next epoch's training. No-op when off.
+        if isinstance(loss_fn, AdaptiveFocalLoss) and loss_fn.val_gate_enabled:
+            loss_fn.apply_val_gate(f1_per_class, present)
         t1 = time.time()
         print(f'Epoch({epoch}/{hyp.n_epochs}): train_loss={train_loss:.3f}, '
               f'val_loss={val_loss:.3f}, macro_f1={f1_score_avg:.3f}, min_f1={f1_score_min:.3f} '
@@ -605,6 +686,10 @@ def train_network(
         writer.add_scalar('F1_train/macro', train_per_class_f1.mean().item(), epoch)
         writer.add_scalar('F1_train/min', train_per_class_f1.min().item(), epoch)
         writer.add_scalar('Schedule/aux_factor', aux_factor, epoch)
+        # Cosine LR per epoch. Deterministic from the schedule, but logging it
+        # saves the reconstruction and overlays cleanly with the per-class F1 /
+        # alpha arcs. get_last_lr()[0] = LR after this epoch's final step.
+        writer.add_scalar('Schedule/learning_rate', scheduler.get_last_lr()[0], epoch)
         # Jitter effective rate: fraction of clips that rolled yes AND had at
         # least one non-degenerate axis. Watching this scalar shows whether the
         # case-1 (fully-degenerate envelope) skip rate is eating into the
@@ -632,6 +717,12 @@ def train_network(
                 writer.add_scalar(f'F1_val/{c}', f1_per_class[i].item(), epoch)
             if isinstance(loss_fn, AdaptiveFocalLoss):
                 writer.add_scalar(f'Alpha/{c}', loss_fn.alpha[i].item(), epoch)
+                # Per-class revert fraction (0 = full adaptive alpha, 1 = pulled
+                # all the way to the renorm mean) so the gate's action is visible.
+                if loss_fn.val_gate_enabled:
+                    writer.add_scalar(
+                        f'Revert/{c}', loss_fn.gate_revert_fraction[i].item(), epoch
+                    )
 
         curr_macro, curr_min = f1_score_avg.item(), f1_score_min.item()
 
@@ -1089,6 +1180,18 @@ if __name__ == '__main__':
     parser.add_argument('--split-column', default=None)
     parser.add_argument('--collation-id', default=None)
     parser.add_argument('--ablation-id', default=None)
+    # Swept AdamW weight decay (the WD-sweep dimension), overriding the Hyp
+    # default. Absent leaves the module default (0.01). Applies to the decay
+    # param group only; the no-decay group stays at 0.0 regardless.
+    parser.add_argument('--weight-decay', type=float, default=None)
+    # Enable/disable the val-improvability alpha gate, overriding the Hyp default.
+    # --val-improvability-gate turns it on, --no-val-improvability-gate off;
+    # absent leaves the module default (off). Requires adaptive_focal.
+    parser.add_argument(
+        '--val-improvability-gate',
+        action=argparse.BooleanOptionalAction,
+        default=None,
+    )
     args = parser.parse_args()
 
     # Per-serial invocation contract: pass all three sharing-flags together so
@@ -1135,6 +1238,10 @@ if __name__ == '__main__':
         cell_overrides['collation_id'] = args.collation_id
     if args.ablation_id is not None:
         cell_overrides['ablation_id'] = args.ablation_id
+    if args.val_improvability_gate is not None:
+        cell_overrides['use_val_improvability_gate'] = args.val_improvability_gate
+    if args.weight_decay is not None:
+        cell_overrides['weight_decay'] = args.weight_decay
     if cell_overrides:
         hyp = hyp._replace(**cell_overrides)
 
@@ -1272,6 +1379,11 @@ if __name__ == '__main__':
             # every serial; non-best are pruned manually after the runner finishes.
             task.dump_predictions(run_dir=run_dir, serial_no=serial_no, k=5)
 
+            # Writes the manifest entry, and if aim is installed (it isn't on
+            # the HPC train venv, so usually a no-op) mirrors this serial into
+            # Aim as a fresh run each call (aim 3.29 can't reopen a stable
+            # hash). Re-running a serial adds another Aim run rather than
+            # overwriting; the clean, idempotent rebuild is aim_backfill.py --wipe.
             track_serial(
                 run_dir=run_dir,
                 serial_no=serial_no,
