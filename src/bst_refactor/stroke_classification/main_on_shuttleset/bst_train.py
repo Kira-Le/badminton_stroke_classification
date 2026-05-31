@@ -68,7 +68,7 @@ DEFAULT_CLIPS_CSV = REPO_ROOT / 'notebooks' / 'clips_master.csv'
 # loss / wiring on a fixed collation): manifest-only, never in the path. See
 # pipeline.config.derive_npy_collated_dir_basename for the disentanglement.
 Hyp = namedtuple('Hyp', [
-    'n_epochs', 'batch_size', 'lr', 'warm_up_step',
+    'n_epochs', 'batch_size', 'lr', 'weight_decay', 'warm_up_step',
     'taxonomy', 'seq_len', 'early_stop_n_epochs',
     'pose_style', 'use_3d_pose', 'train_partial',
     'use_aux_schedule', 'aux_fade_end_epoch',
@@ -82,6 +82,13 @@ hyp = Hyp(
     early_stop_n_epochs=40,
     batch_size=128,
     lr=5e-4,
+    # AdamW decoupled weight decay. 0.01 is PyTorch's AdamW default and what
+    # every prior run used implicitly; kept as the default so non-sweep runs
+    # barely move (norm/bias/embeddings now excluded from decay, but 0.01 on
+    # them was near-inert anyway). The sweep overrides this per cell. Optimal
+    # lambda for this dataset/LR/run-length is likely 0.1-0.3; see
+    # scratch/architecture_notes/hp_and_aug_speculations_30_05_2026.md (Q2).
+    weight_decay=0.01,
     warm_up_step=100,
     taxonomy='une_v1_14',
     seq_len=100,
@@ -562,9 +569,29 @@ def train_network(
         loss_fn = nn.CrossEntropyLoss(weight=weights, label_smoothing=hyp.label_smoothing)
     else:
         loss_fn = nn.CrossEntropyLoss(label_smoothing=hyp.label_smoothing)
-    # AdamW = Adam with decoupled weight decay (standard for transformers)
-    # model.parameters() returns all learnable weights (TF equivalent: model.trainable_variables)
-    optimizer = optim.AdamW(model.parameters(), lr=hyp.lr)
+    # AdamW with decoupled weight decay. Exclude norm gains, biases, and the
+    # learned tokens / positional embeddings from decay: decaying an LN/BN gain
+    # pulls its scale toward zero, and decaying a sinusoidally-seeded positional
+    # embedding erodes the positional signal. Matters at the lambda 0.1-0.4 the
+    # sweep covers; standard transformer recipe (Wang & Aitchison don't decay
+    # normalisation layers). ndim<=1 catches every norm gain/beta and bias; the
+    # two name hints catch the five ndim>=2 BST-owned params a shape rule misses.
+    # Verified split for BST_CG_AP: 27 decay / 55 no-decay tensors.
+    no_decay_name_hints = ('embedding_', 'learned_token_')
+    decay, no_decay = [], []
+    for name, param in model.named_parameters():
+        if not param.requires_grad:
+            continue
+        norm_or_bias = param.ndim <= 1
+        token_or_posemb = any(hint in name for hint in no_decay_name_hints)
+        (no_decay if norm_or_bias or token_or_posemb else decay).append(param)
+    print(f'[optim] AdamW lr={hyp.lr} weight_decay={hyp.weight_decay} '
+          f'(decay={len(decay)} tensors, no_decay={len(no_decay)})')
+    optimizer = optim.AdamW(
+        [{'params': decay, 'weight_decay': hyp.weight_decay},
+         {'params': no_decay, 'weight_decay': 0.0}],
+        lr=hyp.lr,
+    )
     # Cosine schedule: LR ramps up during warmup, then decays following a cosine curve.
     # HF formula: lr_factor = 0.5 * (1 + cos(pi * 2 * num_cycles * progress))
     #   num_cycles=0.5 -> LR ends at 0 (full standard cosine descent)
@@ -659,6 +686,10 @@ def train_network(
         writer.add_scalar('F1_train/macro', train_per_class_f1.mean().item(), epoch)
         writer.add_scalar('F1_train/min', train_per_class_f1.min().item(), epoch)
         writer.add_scalar('Schedule/aux_factor', aux_factor, epoch)
+        # Cosine LR per epoch. Deterministic from the schedule, but logging it
+        # saves the reconstruction and overlays cleanly with the per-class F1 /
+        # alpha arcs. get_last_lr()[0] = LR after this epoch's final step.
+        writer.add_scalar('Schedule/learning_rate', scheduler.get_last_lr()[0], epoch)
         # Jitter effective rate: fraction of clips that rolled yes AND had at
         # least one non-degenerate axis. Watching this scalar shows whether the
         # case-1 (fully-degenerate envelope) skip rate is eating into the
@@ -1149,6 +1180,10 @@ if __name__ == '__main__':
     parser.add_argument('--split-column', default=None)
     parser.add_argument('--collation-id', default=None)
     parser.add_argument('--ablation-id', default=None)
+    # Swept AdamW weight decay (the WD-sweep dimension), overriding the Hyp
+    # default. Absent leaves the module default (0.01). Applies to the decay
+    # param group only; the no-decay group stays at 0.0 regardless.
+    parser.add_argument('--weight-decay', type=float, default=None)
     # Enable/disable the val-improvability alpha gate, overriding the Hyp default.
     # --val-improvability-gate turns it on, --no-val-improvability-gate off;
     # absent leaves the module default (off). Requires adaptive_focal.
@@ -1205,6 +1240,8 @@ if __name__ == '__main__':
         cell_overrides['ablation_id'] = args.ablation_id
     if args.val_improvability_gate is not None:
         cell_overrides['use_val_improvability_gate'] = args.val_improvability_gate
+    if args.weight_decay is not None:
+        cell_overrides['weight_decay'] = args.weight_decay
     if cell_overrides:
         hyp = hyp._replace(**cell_overrides)
 
