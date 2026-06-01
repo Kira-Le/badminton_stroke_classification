@@ -130,3 +130,44 @@ main_on_shuttleset/.aim/
 
 # run_20260531_005535_005154: une_v1_14, v2 split (bst_12 + wrist_smash + passive_drop). Best S3. Taxon-pinned prediction cell.
 !main_on_shuttleset/experiments/run_20260531_005535_005154/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_v1_14_3.pt
+
+# focal_alpha_revert_overallocated ablation across six taxonomy/split cells (adaptive_focal
+# alpha reverted to unsaturate the smash classes). Barely earns its keep: only +0.016 mean
+# min-F1 on its une_v1_14 target, mild pull-down on best macro/min elsewhere. Best serial per cell.
+
+# run_20260531_163906_107348: shuttleset_18, v2 split. Best S4 (test macro/min 0.667/0.000).
+!main_on_shuttleset/experiments/run_20260531_163906_107348/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_shuttleset_18_4.pt
+
+# run_20260531_193021_308927: bst_24, v2 split. Best S2 (test macro/min 0.811/0.564).
+!main_on_shuttleset/experiments/run_20260531_193021_308927/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_bst_24_2.pt
+
+# run_20260531_211838_567072: bst_12, v2 split. Best S4 (test macro/min 0.814/0.601).
+!main_on_shuttleset/experiments/run_20260531_211838_567072/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_bst_12_4.pt
+
+# run_20260531_225619_826430: bst_25, baseline split (unknown kept). Best S3 (test macro/min 0.826/0.652).
+!main_on_shuttleset/experiments/run_20260531_225619_826430/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_bst_25_3.pt
+
+# run_20260601_005010_962006: bst_24, baseline split (unknown dropped). Best S1 (test macro/min 0.834/0.565).
+!main_on_shuttleset/experiments/run_20260601_005010_962006/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_bst_24.pt
+
+# run_20260601_023543_278210: une_v1_14, v2 split. Best S1 (test macro/min 0.750/0.445).
+!main_on_shuttleset/experiments/run_20260601_023543_278210/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_v1_14.pt
+
+# AdamW weight-decay sweep on une_v1_14 / v2 split, norms, bias and embeddings held out of
+# decay throughout, wd stepped 1e-2 -> 4e-1. Macro near-inert; min-F1 climbs with wd. wd 4e-1
+# best, min 0.525, first une_v1_14 serial to clear 0.5 on wrist_smash. Best serial per cell.
+
+# run_20260531_201350_026614: wd 1e-2 (no-decay-norm/bias/emb baseline). Best S1 (test macro/min 0.752/0.501).
+!main_on_shuttleset/experiments/run_20260531_201350_026614/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_v1_14.pt
+
+# run_20260531_214009_170864: wd 5e-2. Best S4 (test macro/min 0.745/0.487).
+!main_on_shuttleset/experiments/run_20260531_214009_170864/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_v1_14_4.pt
+
+# run_20260531_231403_971803: wd 1e-1. Best S3 (test macro/min 0.733/0.492).
+!main_on_shuttleset/experiments/run_20260531_231403_971803/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_v1_14_3.pt
+
+# run_20260601_003918_078077: wd 2e-1. Best S2 (test macro/min 0.749/0.483).
+!main_on_shuttleset/experiments/run_20260601_003918_078077/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_v1_14_2.pt
+
+# run_20260601_021234_940276: wd 4e-1. Best S5 (test macro/min 0.748/0.525); min clears 0.5 on wrist_smash.
+!main_on_shuttleset/experiments/run_20260601_021234_940276/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_v1_14_5.pt

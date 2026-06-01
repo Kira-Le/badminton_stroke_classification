@@ -4,9 +4,9 @@ Reads the self-contained per-stroke npz that ``bst_train`` / ``bst_infer --fe`` 
 for the chosen serial (under ``<run_dir>/predictions/``) and writes the five files the
 API serves, all under ``<run_dir>/fe_jsons/``:
 
-    fe_jsons/{val,test}.json                  per-clip preds + raw softmax
-    fe_jsons/perclass_stats_{val,test}.json   confusion-matrix views
-    fe_jsons/clip_index.json                  stem -> clip metadata + mp4 path
+    fe_jsons/{val,test}.json.gz                  per-clip preds + raw softmax
+    fe_jsons/perclass_stats_{val,test}.json.gz   confusion-matrix views
+    fe_jsons/clip_index.json.gz                  stem -> clip metadata + mp4 path
 
 Confidence is raw softmax, no temperature (DL-027): the field is ``softmax``, there is
 no ``temperature`` key, and the served confidence is ``softmax(logits)``.
@@ -27,6 +27,7 @@ Invocation matches the rest of this package (PYTHONPATH =
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
 from pathlib import Path
 
@@ -35,6 +36,22 @@ import pandas as pd
 
 from pipeline.clip_index import build_clip_path_index
 from pipeline.data_access import DataPaths, load_repo_dotenv
+
+
+def write_json_gz(path: Path, obj: dict) -> None:
+    """Write ``obj`` as gzipped JSON (FE okayed the move off plain ``.json``).
+
+    JSON is the most gzip-friendly payload going (repeated keys, number arrays), and
+    gzip decompresses natively browser-side (a ``Content-Encoding: gzip`` response, or
+    ``DecompressionStream``) as well as via stdlib everywhere else. ``mtime=0`` drops the
+    gzip header timestamp so an unchanged rebuild stays byte-identical (clean git diffs).
+    indent is kept: under gzip the whitespace compresses to near-nothing and ``zcat``
+    stays readable.
+
+    :param path: output path, expected to end in ``.json.gz``.
+    :param obj: any JSON-serialisable object.
+    """
+    path.write_bytes(gzip.compress(json.dumps(obj, indent=2).encode(), mtime=0))
 
 
 def softmax(logits: np.ndarray) -> np.ndarray:
@@ -200,18 +217,21 @@ def main() -> None:
         dump = np.load(pred_dir / f"{split}_serial_{args.serial}.npz", allow_pickle=True)
 
         preds = build_predictions_json(dump, split)
-        (fe_dir / f"{split}.json").write_text(json.dumps(preds, indent=2))
-        print(f"wrote {fe_dir / f'{split}.json'} ({len(preds['clips'])} clips)")
+        preds_path = fe_dir / f"{split}.json.gz"
+        write_json_gz(preds_path, preds)
+        print(f"wrote {preds_path} ({len(preds['clips'])} clips)")
 
         stats = build_perclass_stats(dump, split)
-        (fe_dir / f"perclass_stats_{split}.json").write_text(json.dumps(stats, indent=2))
-        print(f"wrote {fe_dir / f'perclass_stats_{split}.json'}")
+        stats_path = fe_dir / f"perclass_stats_{split}.json.gz"
+        write_json_gz(stats_path, stats)
+        print(f"wrote {stats_path}")
 
         stems_by_split[split] = [str(s) for s in dump["clip_stems"]]
 
     clip_index = build_clip_index(stems_by_split, paths.clips_csv, paths.clips_dir)
-    (fe_dir / "clip_index.json").write_text(json.dumps(clip_index, indent=2))
-    print(f"wrote {fe_dir / 'clip_index.json'} ({len(clip_index['clips'])} entries)")
+    clip_index_path = fe_dir / "clip_index.json.gz"
+    write_json_gz(clip_index_path, clip_index)
+    print(f"wrote {clip_index_path} ({len(clip_index['clips'])} entries)")
 
 
 if __name__ == "__main__":
