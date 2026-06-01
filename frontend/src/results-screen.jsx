@@ -1,6 +1,18 @@
 import { Fragment } from 'react';
 import { useTheme, Btn, Card } from './shared';
 
+// ──── Confidence thresholds ───────────────────────────────────────────────────────────────────────
+// Colour-coded confidence: green ≥ HIGH, yellow ≥ MEDIUM, red below MEDIUM.
+// Adjust thresholds here without touching render logic.
+const CONFIDENCE_HIGH = 0.80;
+const CONFIDENCE_MEDIUM = 0.60;
+
+function confidenceColour(t,confidence) {
+  if (confidence >= CONFIDENCE_HIGH) return t.success;
+  if (confidence >= CONFIDENCE_MEDIUM) return t.warning;
+  return t.danger;
+}
+
 /* ─── Inference echo card (Items 4 + Gaps 1/2: real /api/results payload) ── */
 function UploadedInferenceCard({ task }) {
   const { t } = useTheme();
@@ -133,7 +145,7 @@ function UploadedInferenceCard({ task }) {
                 <span style={{ color: t.text, fontWeight: 500 }}>{s.stroke_type}</span>
                 <span style={{
                   textAlign: 'right', fontFamily: "'JetBrains Mono',monospace",
-                  color: t.blue, fontWeight: 600,
+                  color: confidenceColour(t, s.confidence ?? 0), fontWeight: 600,
                 }}>
                   {((s.confidence ?? 0) * 100).toFixed(0)}%
                 </span>
