@@ -174,7 +174,7 @@ notes: |
   pair-sum 1.104). S3 has higher min 0.504 but weaker head; S2
   picked on the pair-sum.
 
-  Full writeup: arch_1_directions.md (shuttle-unzeroing section).
+  Full writeup: bst_x_overview.md (shuttle-unzeroing section).
 extra:
   data_provenance:
     clips_csv_path: /home/ahalperi/badminton_stroke_classifier/notebooks/clips_master.csv

@@ -56,7 +56,7 @@ S1 picked: top macro/acc/top-2 of the round (all run-of-the-round
 highs across the sweep), solid min. State.json's default S3 had
 top min but at a macro cost outside the seed envelope.
 
-Full sweep round writeup: arch_1_directions.md "Aug v1 round 1
+Full sweep round writeup: bst_x_overview.md "Aug v1 round 1
 hparam sweep" section.
 
 === Serial 1 (BST_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides) ===

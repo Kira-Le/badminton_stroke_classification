@@ -1,6 +1,22 @@
 # pipeline/
 
-Shared data pipeline for the ShuttleSet badminton stroke classification project. Produces labeled video clips and shuttle trajectory files consumed by both team architectures.
+Shared data pipeline for the ShuttleSet badminton stroke classification project. Produces labelled video clips and shuttle trajectory files consumed by both team architectures.
+
+New here? [`data_pipeline_and_model_train_overview.md`](../data_pipeline_and_model_train_overview.md) gives the 5-minute picture; come back here for the `pipeline/` folder specifics, or see [`data_pipeline_to_model_train.md`](../data_pipeline_to_model_train.md) for the end-to-end run (pose, collation, training).
+
+## Contents
+
+- [Quick Start](#quick-start)
+- [Prerequisites](#prerequisites)
+- [Pipeline Steps](#pipeline-steps)
+- [CLI Flags](#cli-flags)
+- [Resuming after a crash](#resuming-after-a-crash)
+- [Output Structure](#output-structure)
+- [Pre-existing Input Data](#pre-existing-input-data)
+- [Configuration](#configuration)
+- [Module Reference](#module-reference)
+- [Running Individual Steps](#running-individual-steps)
+- [For Downstream Consumers](#for-downstream-consumers)
 
 ## Quick Start
 
@@ -61,7 +77,7 @@ Output: `ShuttleSet/clips/{train,val,test}/{Player}_{stroke_type}/{vid}_{set}_{r
 
 ### Step 4: Class Merge
 
-Merges rare stroke subtypes into their parent types according to the active taxonomy's `merge_map`. The default taxonomy (`une_merge_v1`) merges 4 subtypes:
+Merges rare stroke subtypes into their parent types according to the active taxonomy's `merge_map`. The default taxonomy (`une_v1_14`) applies `UNE_MERGE_V1_MAP`, folding 4 subtypes into existing types:
 
 | Subtype | Merged into |
 |---|---|
@@ -70,7 +86,7 @@ Merges rare stroke subtypes into their parent types according to the active taxo
 | back_court_drive | drive |
 | defensive_return_drive | drive |
 
-This reduces 19 raw types to 14 merged types (29 classes with Top/Bottom prefixes + unknown). The `une_merge_v1_nosides` variant uses the same merge map but collapses the Top/Bottom side prefixes into a single set of 14 + unknown = 15 classes; this is the active Architecture 1 phase-1/2 taxonomy. The legacy `merged_25` taxonomy applies 6 merges (19 -> 12 types, 25 classes).
+This reduces the 19 raw types to 14 (no sides, `unknown` excluded). `une_v1_15` is the same 14 plus `unknown`. The BST-paper family uses `MERGE_MAP_25` (6 merges, 19 -> 12 base types): `bst_25` (12 x Top/Bottom + `unknown` = 25), `bst_24` (no unknown = 24), `bst_12` (nosides = 12). `shuttleset_18` keeps all 18 raw types with no merge. Whether a taxonomy carries sides or keeps `unknown` is fixed per taxonomy (`has_sides`, `excluded_base_stroke_types`), not a runtime flag; legacy names (`une_merge_v1`, `merged_25`, `raw_35`) resolve via `resolve_taxonomy()`.
 
 ### Step 5: Verify
 
@@ -83,7 +99,7 @@ Checks that:
 
 ### Step 6: Shuttle Extraction (Optional)
 
-Runs TrackNetV3 on each clip to extract shuttle trajectories, then normalizes to `(t, 3)` numpy arrays: `[x_norm, y_norm, visibility]`.
+Runs TrackNetV3 on each clip to extract shuttle trajectories, then normalises to `(t, 3)` numpy arrays: `[x_norm, y_norm, visibility]`.
 
 TrackNetV3 shares the BST training venv (`stroke_classification/requirements.txt`) rather than maintaining a separate environment. The original repo's dependencies (torch 1.10, numpy 1.22) are incompatible with Python 3.11 and CUDA 12.1; the code has been verified to work with torch 2.3.1. See `TrackNetV3/requirements.txt` for the full version rationale and standalone setup instructions.
 
@@ -162,7 +178,7 @@ python -m pipeline.build_dataset [OPTIONS]
 --skip-verify          Skip verification checks (step 5)
 --skip-shuttle         Skip TrackNetV3 shuttle extraction
 --no-merge             Keep all 19 stroke types (skip class merging)
---taxonomy NAME        Stroke type taxonomy: 'une_merge_v1' (default), 'une_merge_v1_nosides', 'merged_25', or 'raw_35'
+--taxonomy NAME        Taxonomy (default une_v1_14): bst_25, bst_24, bst_12, une_v1_14, une_v1_15, shuttleset_18. Legacy aliases resolve via resolve_taxonomy().
 --dry-run              Preview what the pipeline would do without executing
 --force                Continue past verification failures
 ```
@@ -173,7 +189,7 @@ python -m pipeline.shuttle_extractor [OPTIONS]
 --tracknet-dir PATH    Path to TrackNetV3 directory (required)
 --clips-dir PATH       Directory containing generated clips
 --csv-dir PATH         Directory for TrackNetV3 CSV outputs
---npy-dir PATH         Output directory for normalized .npy files
+--npy-dir PATH         Output directory for normalised .npy files
 --resolution-csv PATH  Path to video resolution CSV
 --model-path PATH      Path to TrackNet weights
 --inpaintnet-path PATH Path to InpaintNet weights
@@ -232,7 +248,7 @@ These files ship with the ShuttleSet dataset and are required by the pipeline. D
 |---|---|---|
 | `ShuttleSet/set/match.csv` | `download_videos.py`, `clip_generator.py` | Match metadata: video IDs, YouTube URLs, player court orientation (`downcourt` flag). 44 matches. |
 | `ShuttleSet/set/{match_folder}/set[1-3].csv` | `clip_generator.py`, `player_mapping.py` | Per-set stroke annotations: stroke type (Chinese), rally/ball_round numbers, frame timestamps, player A/B labels. One folder per match, up to 3 CSVs per folder. |
-| `ShuttleSet/set/homography.csv` | `court_utils.py`, `prepare_train_on_shuttleset.py` | Homography matrices and court corner coordinates for camera-to-court projection. Computed at 1280x720 resolution. Optional for basic pipeline; required for court-normalized features. |
+| `ShuttleSet/set/homography.csv` | `court_utils.py`, `prepare_train_on_shuttleset.py` | Homography matrices and court corner coordinates for camera-to-court projection. Computed at 1280x720 resolution. Optional for basic pipeline; required for court-normalised features. |
 | `ShuttleSet/flaw_shot_records.csv` | `pipeline/config.py` (parsed at import) | Data quality records: 4 whole-video exclusions and 25 individual shot removals. Drives `EXCLUDED_VIDEOS` and `REMOVED_SHOTS` constants. |
 | `ShuttleSet/my_raw_video_resolution.csv` | `court_utils.py`, `prepare_train_on_shuttleset.py` | Video dimensions (id, width, height). Auto-regenerated by Step 2, but the pre-existing copy is useful as a reference before videos are downloaded. |
 
@@ -244,14 +260,15 @@ All configuration lives in `pipeline/config.py`. Key constants:
 
 | Constant | Description |
 |---|---|
-| `TAXONOMIES` | Dict of named `Taxonomy` instances (`'une_merge_v1'`, `'une_merge_v1_nosides'`, `'merged_25'`, `'raw_35'`). Each taxonomy defines `merge_map`, `base_types`, `n_classes`, and `class_list()`. |
-| `DEFAULT_TAXONOMY` | Name of the default taxonomy (`'une_merge_v1'`). Used by all CLI defaults and fallback code paths. |
+| `TAXONOMIES` | Dict of pinned `Taxonomy` instances: `'bst_25'`, `'bst_24'`, `'bst_12'`, `'une_v1_14'`, `'une_v1_15'`, `'shuttleset_18'`. Each pins its full ordered `classes` tuple plus `merge_map`, `has_sides`, and `excluded_base_stroke_types`; `n_classes` / `has_unknown` are properties. |
+| `TAXONOMY_ALIASES` / `resolve_taxonomy()` | Map legacy names (`'une_merge_v1'`, `'merged_25'`, `'raw_35'`) onto current taxonomies, so old runs and manifests still resolve. New code passes the canonical names. |
+| `label_for_row()` | The single per-row label decision: `excluded_base_stroke_types` (drop), then `merge_map`, then side-prefixing. Shared by the collator and `data_access`. |
 | `UNPREFIXED_TYPES` | Frozenset of raw types that never get `Top_`/`Bottom_` prefixed folders (`{'unknown', 'driven_flight'}`). Used only by clip generation. |
 | `SPLITS` | Train/val/test video ID lists (excluded videos auto-stripped) |
 | `EXCLUDED_VIDEOS` | Parsed from `flaw_shot_records.csv` at import time |
 | `REMOVED_SHOTS` | Individual bad shots, also from `flaw_shot_records.csv` |
-| `UNE_MERGE_V1_MAP` | Default merge map (19 -> 14 types). Used by `TAXONOMY_UNE_MERGE_V1`. |
-| `MERGE_MAP` | Legacy merge map (19 -> 12 types). Used by `TAXONOMY_MERGED_25`. |
+| `UNE_MERGE_V1_MAP` | The `une_v1_14`/`une_v1_15` merge map (4 subtypes folded, 19 -> 14). |
+| `MERGE_MAP_25` | The BST-paper merge map (6 merges, 19 -> 12 base types). Used by `bst_25` / `bst_24` / `bst_12`. |
 | `CLIP_WINDOW` | Default temporal clipping strategy |
 | `EN_TO_ZH` / `ZH_TO_EN` | English-Chinese stroke name translation (used at CSV I/O boundary only) |
 | `HOMOGRAPHY_RESOLUTION` | Resolution (1280, 720) at which homography matrices were computed. Coordinates must be scaled before applying homography. Used by `court_utils.py`. |
@@ -280,12 +297,12 @@ Update `ShuttleSet/flaw_shot_records.csv`. The pipeline reads it at import time 
 | `player_mapping.py` | A/B to Top/Bottom mapping with set 3 court-switch handling |
 | `download_videos.py` | yt-dlp downloader + resolution CSV builder |
 | `clip_generator.py` | Clip extraction, flaw filtering, class merging |
-| `shuttle_extractor.py` | TrackNetV3 wrapper + CSV-to-NPY normalization |
+| `shuttle_extractor.py` | TrackNetV3 wrapper + CSV-to-NPY normalisation |
 | `court_utils.py` | Optional homography-based court projection utilities |
 | `verify.py` | Post-generation sanity checks |
 | `build_dataset.py` | One-command orchestrator |
 | `clip_index.py` | `build_clip_path_index(clips_dir)` helper: one-time rglob to build a `{clip_stem -> mp4 Path}` lookup for CSV-driven video-loading Datasets. Used by downstream arch code (Arch 2 3D CNN, Arch 1 wrist crop). |
-| `data_access.py` | CSV-aware access layer on top of `clip_index.py`. `get_clip_records(paths, split=..., taxonomy_class=..., split_column=..., taxonomy_name=..., drop_unknown=...)` reads `clips_master.csv`, derives the folder-style class label under the active taxonomy, and returns `ClipRecord`s pairing clip / flat shuttle / flat mmpose paths. Also exposes a CLI + TUI (`python -m pipeline.data_access`) and a `.env` mechanism for per-environment path config. |
+| `data_access.py` | CSV-aware access layer on top of `clip_index.py`. `get_clip_records(paths, split=..., taxonomy_class=..., split_column=..., taxonomy_name=...)` reads `clips_master.csv`, derives the folder-style class label under the active taxonomy, and returns `ClipRecord`s pairing clip / flat shuttle / flat mmpose paths. Also exposes a CLI + TUI (`python -m pipeline.data_access`) and a `.env` mechanism for per-environment path config. |
 
 ## Running Individual Steps
 
@@ -303,7 +320,7 @@ python -m pipeline.verify --clips-dir ShuttleSet/clips
 
 Both architectures read from the same `clips/` and `shuttle_npy/` directories. The pipeline doesn't care what you do with the output.
 
-**Next step for BST:** Run `stroke_classification/preparing_data/prepare_train_on_shuttleset.py` to extract poses (MMPose) and collate into batch-ready arrays. See `data_pipeline_to_model_train.md` at the project root for the full pipeline-to-training walkthrough. For the COCO 17-keypoint joint index map, bone pairs, and JnB representations, see [`keypoints_schema.md`](../stroke_classification/preparing_data/keypoints_schema.md).
+**Next step for BST-X:** Run `stroke_classification/preparing_data/prepare_train_on_shuttleset.py` to extract poses (MMPose) and collate into batch-ready arrays. See `data_pipeline_to_model_train.md` at the project root for the full pipeline-to-training walkthrough. For the COCO 17-keypoint joint index map, bone pairs, and JnB representations, see [`keypoints_schema.md`](../stroke_classification/preparing_data/keypoints_schema.md).
 
 ### Split + label source
 
@@ -315,14 +332,15 @@ Split (train/val/test) and class label for every clip come from `notebooks/clips
 # Loading shuttle trajectories (flat: one file per clip, named after clip stem)
 import numpy as np
 shuttle = np.load('ShuttleSet/shuttle_npy/1_1_3_2.npy')
-xy = shuttle[:, :2]           # (t, 2) normalized coordinates
+xy = shuttle[:, :2]           # (t, 2) normalised coordinates
 visibility = shuttle[:, 2]    # (t,) detection confidence
 
-# Getting class labels
-from pipeline.config import TAXONOMIES, DEFAULT_TAXONOMY
-labels_29 = TAXONOMIES[DEFAULT_TAXONOMY].class_list()  # 29 classes (une_merge_v1)
-labels_25 = TAXONOMIES['merged_25'].class_list()       # 25 classes
-labels_35 = TAXONOMIES['raw_35'].class_list()          # 35 classes
+# Getting class labels: each Taxonomy pins its full ordered class list in .classes
+from pipeline.config import TAXONOMIES, resolve_taxonomy
+labels_14 = TAXONOMIES['une_v1_14'].classes       # 14 classes (current default)
+labels_25 = TAXONOMIES['bst_25'].classes          # 25 classes (BST-paper family)
+labels_18 = TAXONOMIES['shuttleset_18'].classes   # 18 raw types
+legacy    = resolve_taxonomy('merged_25').classes # legacy alias -> bst_25
 ```
 
 ### Loading clip frames (video-Dataset pattern)
@@ -356,9 +374,9 @@ class ClipVideoDataset(Dataset):
         return load_video(self._path_by_stem[stem]), label
 ```
 
-`_derive_label` applies `taxonomy.merge_map` + `standalone_set` to `(row.raw_type_en, row.player_side)`, matching what `collate_npy` does for the pose/shuttle npys (see `stroke_classification/preparing_data/prepare_train_on_shuttleset.py`). Pick your own video backend (cv2, decord, torchvision.io) for `load_video`.
+`label_for_row(taxonomy, row.raw_type_en, row.player_side)` produces the int label (or `None` to skip a filtered row), applying exclusion + merge + side in one place, matching what `collate_npy` does for the pose/shuttle npys (see `stroke_classification/preparing_data/prepare_train_on_shuttleset.py`). Pick your own video backend (cv2, decord, torchvision.io) for `load_video`.
 
-This pattern means the nested clips layout is transparent: the same `ClipVideoDataset` works for any `split_column` in `clips_master.csv` without needing to flatten or reorganize `clips/`.
+This pattern means the nested clips layout is transparent: the same `ClipVideoDataset` works for any `split_column` in `clips_master.csv` without needing to flatten or reorganise `clips/`.
 
 ### Higher-level access (`pipeline/data_access.py`)
 
@@ -370,10 +388,9 @@ from pipeline.data_access import DataPaths, get_clip_records
 records = get_clip_records(
     DataPaths(),
     split='train',
-    taxonomy_class='Top_smash',
+    taxonomy_class='smash',
     split_column='split_v2',
-    taxonomy_name='une_merge_v1',
-    drop_unknown=True,
+    taxonomy_name='une_v1_14',
 )
 for r in records:
     print(r.clip_stem, r.clip, r.shuttle_npy, r.mmpose_joints)
@@ -385,7 +402,7 @@ CLI + TUI for quick inspection:
 
 ```bash
 python -m pipeline.data_access --summary                        # counts per split+class
-python -m pipeline.data_access --split val --class Top_smash    # list paths
+python -m pipeline.data_access --split val --class smash    # list paths
 python -m pipeline.data_access --split-column split_v2 --summary
 python -m pipeline.data_access --list-classes                   # active taxonomy's classes
 python -m pipeline.data_access                                   # interactive TUI

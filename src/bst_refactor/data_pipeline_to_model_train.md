@@ -1,6 +1,23 @@
 # Data Pipeline to Model Training: Module Reference
 
-End-to-end walkthrough of the modules needed to go from raw ShuttleSet data to a trained BST model, with notes on where a custom (non-BST) architecture would diverge.
+End-to-end walkthrough of the modules needed to go from raw ShuttleSet data to a trained BST-X model, with notes on where a custom (non-BST-X) architecture would diverge.
+
+New here? [`data_pipeline_and_model_train_overview.md`](data_pipeline_and_model_train_overview.md) is the 5-minute narrative; this doc is the module-by-module detail. For the `pipeline/` folder on its own, see [`pipeline/README.md`](pipeline/README.md).
+
+## Contents
+
+- [Quick Start: End-to-End Execution](#quick-start-end-to-end-execution)
+- [Part 1: BST-X on ShuttleSet](#part-1-bst-x-on-shuttleset)
+  - [Stage 1: Build the Dataset](#stage-1----build-the-dataset-pipeline)
+  - [Stage 2: Prepare Training Data](#stage-2----prepare-training-data-stroke_classificationpreparing_data)
+  - [Between Stages 2 and 3: Data Quality Validation](#between-stages-2-and-3----data-quality-validation-validation_scripts)
+  - [Stage 3: Dataset Loading](#stage-3----dataset-loading-stroke_classificationpreparing_datashuttleset_datasetpy)
+  - [Stage 4: Model](#stage-4----model-stroke_classificationmodel)
+  - [Stage 5: Training](#stage-5----training-stroke_classificationmain_on_shuttleset)
+  - [Stage 6: Inference](#stage-6----inference-stroke_classificationmain_on_shuttlesetbst_inferpy)
+  - [Stage 7: Results](#stage-7----results-stroke_classificationresult_utilspy)
+  - [Full dependency chain](#full-dependency-chain-bst-x-on-shuttleset)
+- [Part 2: Adapting for a Custom (Non-BST-X) Model](#part-2-adapting-for-a-custom-non-bst-x-model)
 
 ---
 
@@ -81,7 +98,7 @@ Each stage's output feeds the next. Stages are independently re-runnable — use
 
 ---
 
-## Part 1: BST on ShuttleSet
+## Part 1: BST-X on ShuttleSet
 
 ### Stage 1 -- Build the Dataset (`pipeline/`)
 
@@ -91,7 +108,7 @@ The pipeline downloads match videos, cuts them into labeled stroke clips, option
 
 | Module | Role | Key functions / concepts |
 |--------|------|--------------------------|
-| `config.py` | Single source of truth for paths, stroke types, splits, flaw records, and merge rules. Every other pipeline module imports from here. | `Taxonomy` (frozen dataclass: `classes` (the authoritative ordered class list), `n_classes`, `has_unknown`, `merge_map`, `has_sides`, `excluded_base_stroke_types`), `TAXONOMIES` (dict of pinned taxonomies: `'bst_25'`, `'bst_24'`, `'bst_12'`, `'une_v1_14'`, `'une_v1_15'`, `'shuttleset_18'`), `TAXONOMY_ALIASES` + `resolve_taxonomy()` (legacy names like `'une_merge_v1_nosides'`/`'merged_25'` resolve to their current equivalent), `label_for_row()` (the single merge + side + exclusion decision point, used by the collator), `UNPREFIXED_TYPES` (frozenset of raw types that never get Top_/Bottom_ prefixed folders during clip generation), `SPLITS` (train/val/test video ID lists, auto-stripped of excluded videos), `UNE_MERGE_V1_MAP` (19 -> 14 class reduction) + `MERGE_MAP_25` (19 -> 12, paper-faithful `driven_flight -> drive`), `EN_TO_ZH` / `ZH_TO_EN` (English-Chinese name mapping for CSV I/O only), `parse_flaw_records()` (reads `flaw_shot_records.csv` to populate `EXCLUDED_VIDEOS` and `REMOVED_SHOTS`). |
+| `config.py` | Single source of truth for paths, stroke types, splits, flaw records, and merge rules. Every other pipeline module imports from here. | • `Taxonomy`: frozen dataclass pinning `classes` (the ordered class list), `merge_map`, `has_sides`, `excluded_base_stroke_types`; `n_classes`/`has_unknown` are properties.<br>• `TAXONOMIES`: the six pinned taxonomies (`bst_25`, `bst_24`, `bst_12`, `une_v1_14`, `une_v1_15`, `shuttleset_18`).<br>• `TAXONOMY_ALIASES` + `resolve_taxonomy()`: map legacy names (`une_merge_v1`, `merged_25`, ...) to current ones.<br>• `label_for_row()`: the single merge + side + exclusion decision, used by the collator.<br>• `UNE_MERGE_V1_MAP` (19 -> 14) + `MERGE_MAP_25` (19 -> 12, paper-faithful `driven_flight -> drive`).<br>• `SPLITS` (excluded videos auto-stripped), `parse_flaw_records()` -> `EXCLUDED_VIDEOS`/`REMOVED_SHOTS`, `EN_TO_ZH`/`ZH_TO_EN` (CSV I/O only), `UNPREFIXED_TYPES`. |
 | `build_dataset.py` | One-command orchestrator. Runs steps 1-6 in order with CLI flags to skip individual steps (`--skip-download`, `--skip-resolution`, `--skip-clips`, `--skip-verify`, `--skip-shuttle`). `--skip-clips` skips both clip generation (step 3) and class merge (step 4) since they are tightly coupled: the merge moves clips out of their original folders, so re-running step 3 after a merge would re-generate them from video. | `run_pipeline()` (main entry point), `dry_run()` (preview without side effects), `_validate_inputs()` (fail-fast checks before long work). |
 | `download_videos.py` | Downloads 40 ShuttleSet match videos from YouTube via yt-dlp. Also builds a resolution CSV by scanning each video with OpenCV. | `download_all_videos(max_workers)`, `build_resolution_csv()`. Output: `ShuttleSet/raw_video/{id} {match_name}.mp4` and `ShuttleSet/my_raw_video_resolution.csv`. |
 | `clip_generator.py` | Extracts individual stroke clips from full match videos. Reads ShuttleSet CSV annotations (Chinese column names), maps A/B players to Top/Bottom, filters excluded videos and removed shots, and organizes clips into `{split}/{Player}_{stroke_type}/` folders. | `generate_all_clips()`, `apply_class_merge()` (moves clips from rare subtype folders into their parent type folders per the active taxonomy's merge map). Three clip window modes: `middle_in_a_sec`, `between_2_hits`, `between_2_hits_with_max_limits` (default, clamps to 1.5s each side). |
@@ -130,7 +147,7 @@ Split and label assignment for `shuttle_npy/` (and downstream pose npys) come fr
 
 ### Stage 2 -- Prepare Training Data (`stroke_classification/preparing_data/`)
 
-The pipeline produces **video clips** and **shuttle .npy files**. BST does not operate on raw video -- it needs pre-extracted skeletal pose, court position, and shuttle trajectory arrays. This stage bridges the gap.
+The pipeline produces **video clips** and **shuttle .npy files**. BST-X does not operate on raw video -- it needs pre-extracted skeletal pose, court position, and shuttle trajectory arrays. This stage bridges the gap.
 
 #### Module
 
@@ -191,7 +208,7 @@ Key flags: `--seq-len` (30 or 100), `--taxonomy` (`bst_25`, `bst_24`, `bst_12`, 
 4. **Padding and augmentation** (`pad_and_augment_one_npy_video`): Each sample is padded (or strided) to a fixed `seq_len` (30 or 100 frames). Four pose representations are supported; only those passed in `--pose-styles` (default `JnB_bone`) are computed and saved:
    - `J_only`: raw joints `(t, 2, 17, 2)`
    - `JnB_interp`: joints + bone midpoints `(t, 2, 36, 2)`
-   - `JnB_bone`: joints + bone vectors `(t, 2, 36, 2)` — **default**, what BST training loads
+   - `JnB_bone`: joints + bone vectors `(t, 2, 36, 2)` — **default**, what BST-X training loads
    - `Jn2B`: interpolated joints + bone vectors `(t, 2, 55, 2)`
 
 5. **Collation** (`collate_npy`): All samples in a split are stacked into single arrays and saved:
@@ -220,7 +237,7 @@ For example, `ShuttleSet_data_une_v1_14/`, `ShuttleSet_data_bst_25/`, or `Shuttl
 
 Before training, run the validation scripts to assess detection quality. Two independent failure modes are invisible at training time and worth quantifying:
 
-1. **MMPose failures** (`_failed.npy`): frames where MMPose couldn't detect exactly 2 players. Joints, court positions, and shuttle coordinates are all zeroed on these frames at collation. The BST transformer does **not** mask them -- they participate in attention as zero vectors.
+1. **MMPose failures** (`_failed.npy`): frames where MMPose couldn't detect exactly 2 players. Joints, court positions, and shuttle coordinates are all zeroed on these frames at collation. The BST-X transformer does **not** mask them -- they participate in attention as zero vectors.
 
 2. **Shuttle detection failures** (shuttle NPY visibility column): frames where TrackNetV3 reported visibility=0. The visibility column is dropped during collation, so these failures become silent (0, 0) shuttle coordinates with no way for the model to distinguish them from a shuttle at the origin.
 
@@ -231,16 +248,18 @@ Run from `src/bst_refactor/` (MMPose or BST venv -- only needs numpy, matplotlib
 ```bash
 # Minimal (MMPose failure stats only):
 python validation_scripts/validate_zeroed_frames.py \
-    --data-root /scratch/comp320a/ShuttleSet_data_merged_25
+    --data-root /scratch/comp320a/ShuttleSet_data_une_v1_14 \
+    --taxonomy une_v1_14
 
 # Full (adds flaw cross-reference, hit-frame proximity, shuttle analysis):
 python validation_scripts/validate_zeroed_frames.py \
-    --data-root /scratch/comp320a/ShuttleSet_data_merged_25 \
+    --data-root /scratch/comp320a/ShuttleSet_data_une_v1_14 \
+    --taxonomy une_v1_14 \
     --set-dir ShuttleSet/set \
     --shuttle-npy-dir ShuttleSet/shuttle_npy
 ```
 
-Optional flags: `--threshold` (flagged-clip cutoff, default 0.5), `--hit-window` (frames either side of hit, default 10), `--taxonomy` (for output filenames, default `merged_25`).
+Optional flags: `--threshold` (flagged-clip cutoff, default 0.5), `--hit-window` (frames either side of hit, default 10), `--taxonomy` (for label derivation and output filenames, default `une_v1_14`).
 
 #### Output
 
@@ -261,7 +280,7 @@ Bridges collated `.npy` files to PyTorch `DataLoader`s. Imports `Taxonomy` from 
 
 | Name | Role |
 |------|------|
-| `Dataset_npy_collated` | Primary Dataset class for BST. Loads pre-collated arrays from disk. Supports `train_partial` to use a fraction of training data. Returns `(human_pose, pos, shuttle), video_len, label` per sample. **Filters out zero-length clips at load time** (see known divergence below). |
+| `Dataset_npy_collated` | Primary Dataset class for BST-X. Loads pre-collated arrays from disk. Supports `train_partial` to use a fraction of training data. Returns `(human_pose, pos, shuttle), video_len, label` per sample. **Filters out zero-length clips at load time** (see known divergence below). |
 | `prepare_npy_collated_loaders()` | Convenience function: creates train/val/test `DataLoader`s from a collated directory. |
 | `make_seq_len_same()` | Pads or strides a sample to match `seq_len`. Used by `collate_npy`. |
 | `create_bones()` / `interpolate_joints()` | Bone vector and midpoint computation from joint arrays. |
@@ -271,15 +290,9 @@ Bridges collated `.npy` files to PyTorch `DataLoader`s. Imports `Taxonomy` from 
 
 #### Known divergence: zero-length clip filtering
 
-`Dataset_npy_collated` drops clips with `videos_len == 0` at load time. This is a **divergence from the original BST code**, which has no such filter.
+`Dataset_npy_collated` drops clips with `videos_len == 0` at load time.
 
 **Background:** Our automated pipeline processes all clips from ShuttleSet, including degenerate ones where MMPose fails to detect 2 players on every single frame. These clips end up with `videos_len=0` after collation — the entire sample is zero-padded with no real frames. When the transformer builds its padding mask, all positions are masked out, causing `softmax(all -inf) = NaN`, which poisons the loss and the entire training run.
-
-The original BST author hand-curated his clip set (manually running `gen_my_dataset.py` 6 times, verifying counts against `class_total.xlsx`, and removing flawed shots by hand — see `scratch/project_history/bst_refactor_deprecated/historical_README_bst_original.md`). He also published pre-extracted `.npy` files on Google Drive rather than re-running extraction. His dataset likely never contained zero-frame clips. Both `gen_my_dataset.py` and `class_total.xlsx` were archived to `scratch/project_history/shuttleset_deprecated/` by step 3 of the pre-phase-2 tidy.
-
-**Affected clips (merged_25 taxonomy):** 47 train, 5 val, 13 test (65 total out of ~33k).
-
-**Investigation TODO:** Download the original BST `dataset_npy` files from the Google Drive links in `scratch/project_history/bst_refactor_deprecated/historical_README_bst_original.md` and check whether they contain any `videos_len == 0` entries. If they do, this is a latent bug in the original; if not, the difference is in clip generation (our automated extraction vs his manual process).
 
 #### Tensor shapes at model input
 
@@ -337,10 +350,10 @@ For ad-hoc queries or when a Dataset wants a higher-level "give me clip + shuttl
 
 | Module | Role |
 |--------|------|
-| `tempose.py` | Building blocks reused by BST: `TCN` (dilated 1D temporal convolutions), `MLP`, `MLP_Head` (LayerNorm + MLP), `FeedForward` (MLP + Dropout), `MultiHeadAttention`, `TransformerLayer`, `TransformerEncoder`. The four standalone TemPose variants (`TemPose_V`/`PF`/`SF`/`TF`) were excised pre-phase-2 and live verbatim in `scratch/architecture_notes/historical_bst.md` section 1. |
-| `bst.py` | The BST model. Imports `TCN`, `FeedForward`, `MLP`, `MLP_Head`, `TransformerEncoder` from `tempose.py`. Adds `MultiHeadCrossAttention` and `CrossTransformerLayer` for player-shuttle interaction. Also defines pre-configured variant partials (`BST_0`, `BST_PPF`, `BST_CG`, `BST_AP`, `BST_CG_AP`) — these are the single source of truth for variant flag combinations, imported by the train/infer scripts. |
+| `tempose.py` | Building blocks reused by BST-X: `TCN` (dilated 1D temporal convolutions), `MLP`, `MLP_Head` (LayerNorm + MLP), `FeedForward` (MLP + Dropout), `MultiHeadAttention`, `TransformerLayer`, `TransformerEncoder`. The four standalone TemPose variants (`TemPose_V`/`PF`/`SF`/`TF`) were excised pre-phase-2 and live verbatim in `scratch/architecture_notes/historical_bst.md` section 1. |
+| `bst.py` | The BST-X model. Imports `TCN`, `FeedForward`, `MLP`, `MLP_Head`, `TransformerEncoder` from `tempose.py`. Adds `MultiHeadCrossAttention` and `CrossTransformerLayer` for player-shuttle interaction. Also defines pre-configured variant partials (`BST_0`, `BST_PPF`, `BST_CG`, `BST_AP`, `BST_CG_AP`) — these are the single source of truth for variant flag combinations, imported by the train/infer scripts. |
 
-#### BST architecture (forward pass)
+#### BST-X architecture (forward pass)
 
 1. **PPF (Pose Position Fusion)** -- optional: projects court positions to `in_dim` via MLP, multiplies with skeleton features (multiplicative fusion with residual).
 2. **TCN feature extraction**: separate TCNs for pose `(b*n, in_dim, t) -> (b*n, d_model, t)` and shuttle `(b, 2, t) -> (b, d_model, t)`.
@@ -395,7 +408,7 @@ Stage 5 spans two files:
 
 | Name | Lives in | Role |
 |------|----------|------|
-| `Hyp` (namedtuple) | `bst_train.py` | Active config (see the `Hyp`/`hyp` block near the top of `bst_train.py`): `n_epochs=80`, `early_stop_n_epochs=40`, `batch_size=128`, `lr=5e-4`, `warm_up_step=100`, `taxonomy='une_v1_14'`, `seq_len=100`, `pose_style='JnB_bone'`, `use_3d_pose=False`, `train_partial=1.0`, `use_aux_schedule=True`, `aux_fade_end_epoch=15`, `split_column='split_v2'`, `collation_id='taxon_pinned_w_preds'`, `ablation_id=None`. (`drop_unknown` / `expected_active_classes` were dropped in the taxon_pinned_w_preds refactor: the taxonomy's `excluded_base_stroke_types` carries the unknown-drop rule, and labels.npy lands in active class space so there's no runtime head sizing. `ablation_id` is now a nullable training-time tag, separate from the `collation_id` path tag.) Compressed warm-start-then-finetune schedule paired with the CG/AP cosine fade. Original BST-paper defaults (`n_epochs=1600`, `warm_up_step=400`, `early_stop_n_epochs=300`, `taxonomy='merged_25'`, `aux_fade_end_epoch=60`) are recorded verbatim in `scratch/architecture_notes/historical_bst.md` for reproduction. Current LR + aux schedule rationale lives in `scratch/architecture_notes/arch_1_directions.md`. |
+| `Hyp` (namedtuple) | `bst_train.py` | Active training config, in the `Hyp`/`hyp` block near the top of `bst_train.py`.<br>• Schedule: `n_epochs=80`, `early_stop_n_epochs=40`, `warm_up_step=100`, `use_aux_schedule=True`, `aux_fade_end_epoch=15` (compressed warm-start-then-finetune, paired with the CG/AP cosine fade).<br>• Data: `taxonomy='une_v1_14'`, `split_column='split_v2'`, `collation_id='taxon_pinned_w_preds'`, `seq_len=100`, `pose_style='JnB_bone'`, `use_3d_pose=False`, `train_partial=1.0`.<br>• Optim: `batch_size=128`, `lr=5e-4`.<br>• `ablation_id` is a nullable training-time tag, separate from the `collation_id` path tag. `drop_unknown`/`expected_active_classes` were removed in the taxon_pinned_w_preds refactor: `excluded_base_stroke_types` carries the unknown-drop rule and labels.npy lands in active class space.<br>• BST-paper originals (`n_epochs=1600`, `warm_up_step=400`, `early_stop_n_epochs=300`, `taxonomy='merged_25'`, `aux_fade_end_epoch=60`) live verbatim in `historical_bst.md`; current LR + schedule rationale in `bst_x_overview.md`. |
 | `train_one_epoch()` | `bst_train.py` | Standard PyTorch training loop: forward pass, cross-entropy loss (with label smoothing 0.1), backward, optimizer step, scheduler step. Applies `RandomTranslation_batch` to joints (not bones). |
 | `validate()` | `bst_train.py` | Evaluates on val set. Accumulates per-class TP/FP/FN across batches, computes macro F1 and min-class F1. |
 | `test()` | `bst_train.py` (`Task.test`) | Runs inference on test set, returns `(predictions, ground_truth)` tensors. |
@@ -425,7 +438,7 @@ Every invocation writes under `main_on_shuttleset/experiments/<run_id>/`, where 
 
 - **Manifest** (`experiments/<run_id>/manifest.yaml`): source of truth for hparams, git SHA + host, per-serial metrics (`macro_f1`, `min_f1`, `accuracy`, `top2_accuracy`, `num_strokes`), paths to each serial's weight file and TB dir, plus a `log_path:` pointer back to the matching test log. Tracked in git.
 - **Best-model notes** (`experiments/<run_id>/best_model_id.txt`): freeform notes flagging the best-performing serial(s) and the config context, written by hand after eyeballing the test log. Tracked in git alongside the manifest.
-- **Model weights** (`experiments/<run_id>/weights/bst_CG_AP_..._merged_25[_N].pt`): one best-validation-F1 checkpoint per serial. Gitignored by default; `src/bst_refactor/stroke_classification/.gitignore` carries a per-run tactical `!` unignore for the serial(s) flagged in `best_model_id.txt`, so git history stays small while the best checkpoints are still shareable.
+- **Model weights** (`experiments/<run_id>/weights/bst_CG_AP_..._une_v1_14[_N].pt`): one best-validation-F1 checkpoint per serial. Gitignored by default; `src/bst_refactor/stroke_classification/.gitignore` carries a per-run tactical `!` unignore for the serial(s) flagged in `best_model_id.txt`, so git history stays small while the best checkpoints are still shareable.
 - **TensorBoard logs** (`experiments/<run_id>/tb/serial_N/`): per-serial event directories grouped under one run folder. Launch with `tensorboard --logdir experiments/<run_id>/tb` to see all serials of a run in one view. Each subfolder holds **two** event files: a larger one (60-70 KB) with the per-epoch scalar curves (train/val loss, val macro/min F1, `Schedule/aux_factor`) and a tiny one (~1.6 KB) with the end-of-run HParams summary (best/2nd-best macro F1 and min F1, best val loss, their epochs, `stopped_epoch`). Gitignored.
 - **Test logs** (`main_on_shuttleset/test_logs/test_<timestamp>.log`): all serials' test-set output (`=== Serial N (...) ===` headers, macro F1 table, accuracy, top-2 accuracy) auto-captured via the `Tee` class so metrics survive a dropped terminal. One file per script invocation; the run's manifest points at it via `log_path:`. Grep with `grep -E 'Accuracy|macro' test_logs/test_*.log` for a quick summary across runs, or use `run_overview.py` for a proper tabulation.
 
@@ -469,7 +482,7 @@ Lightweight script for loading a trained checkpoint and predicting stroke types.
 
 ---
 
-### Full dependency chain (BST on ShuttleSet)
+### Full dependency chain (BST-X on ShuttleSet)
 
 ```
 pipeline/config.py                     # Taxonomy, stroke types, splits, paths, merge map
@@ -499,7 +512,7 @@ preparing_data/shuttleset_dataset.py  # PyTorch Dataset + DataLoader wrappers
     |
     v
 model/tempose.py                      # TCN, MLP, TransformerEncoder, etc.
-model/bst.py                          # BST model (imports tempose building blocks)
+model/bst.py                          # BST-X model (imports tempose building blocks)
     |
     v
 main_on_shuttleset/bst_common.py      # MODELS dispatch, build_bst_network, Tee, provenance
@@ -512,7 +525,7 @@ result_utils.py                       # F1 scores, confusion matrices
 
 ---
 
-## Part 2: Adapting for a Custom (Non-BST) Model
+## Part 2: Adapting for a Custom (Non-BST-X) Model
 
 ### What stays the same
 
@@ -534,11 +547,11 @@ This is the most likely point of divergence.
 
 #### 2. Dataset class (`shuttleset_dataset.py`)
 
-BST's dataset classes return a specific tuple format: `(human_pose, pos, shuttle), video_len, label`.
+BST-X's dataset classes return a specific tuple format: `(human_pose, pos, shuttle), video_len, label`.
 
 - **If your model expects different inputs**: write a new Dataset class. Key decisions:
-  - Does your model need all 3 input streams (pose, position, shuttle)? BST uses all three. TemPose variants use subsets.
-  - Does your model handle variable-length sequences internally (e.g. via packed sequences or attention masks), or does it need pre-padded fixed-length input? BST uses fixed-length padding + a `video_len` mask.
+  - Does your model need all 3 input streams (pose, position, shuttle)? BST-X uses all three. TemPose variants use subsets.
+  - Does your model handle variable-length sequences internally (e.g. via packed sequences or attention masks), or does it need pre-padded fixed-length input? BST-X uses fixed-length padding + a `video_len` mask.
   - Does your model operate on pre-collated batched arrays, or per-clip files? `Dataset_npy_collated` loads pre-collated arrays into RAM at init; if a future model needs lazy per-clip loading, write a new Dataset (the legacy `Dataset_npy` lazy loader was excised pre-phase-2; the verbatim source is in `scratch/architecture_notes/historical_bst.md` section 4.1).
 
 - **Label list construction**: All class labels are now English. Read `taxonomy.classes` (the authoritative ordered tuple) from any `Taxonomy` in `pipeline.config.TAXONOMIES`, or `resolve_taxonomy(name)` to follow the legacy-alias table. Labels.npy lands in `[0, taxonomy.n_classes)` directly (no runtime active/full remap). Available taxonomies: `'bst_25'`, `'bst_24'`, `'bst_12'`, `'une_v1_14'` (Architecture 1 active), `'une_v1_15'`, `'shuttleset_18'`. To add a custom taxonomy, define it in `pipeline/config.py` (see the `Taxonomy` dataclass and existing instances for the pattern).
@@ -549,21 +562,21 @@ Replace `bst.py` (and optionally `tempose.py`) with your own architecture.
 
 - **Reusable building blocks from `tempose.py`**: `TCN`, `MLP`, `MLP_Head`, `FeedForward`, `TransformerEncoder` are generic components. If your custom model is transformer-based, you can import these directly rather than reimplementing.
 
-- **BST-specific components you'd replace**: `MultiHeadCrossAttention`, `CrossTransformerLayer`, and the BST `forward()` logic (PPF, CG, AP). These encode BST's specific inductive biases about player-shuttle interaction.
+- **BST-X-specific components you'd replace**: `MultiHeadCrossAttention`, `CrossTransformerLayer`, and the BST-X `forward()` logic (PPF, CG, AP). These encode BST-X's specific inductive biases about player-shuttle interaction.
 
-- **Input contract**: BST's `forward()` expects `(JnB, shuttle, pos, video_len)`. Your model defines its own signature. The dataset class and training loop must agree on this contract.
+- **Input contract**: BST-X's `forward()` expects `(JnB, shuttle, pos, video_len)`. Your model defines its own signature. The dataset class and training loop must agree on this contract.
 
 #### 4. Training script (`bst_train.py`)
 
-The training loop is tightly coupled to BST's input format and hyperparameters.
+The training loop is tightly coupled to BST-X's input format and hyperparameters.
 
 - **Reusable patterns**: The overall structure (train/validate/test functions, early stopping, cosine LR schedule, TensorBoard logging, `Task` orchestration pattern) can be adapted.
 
 - **What to change**:
   - The `Hyp` namedtuple values (learning rate, batch size, epochs, etc.)
-  - The model construction in `get_network_architecture()` (replace BST with your model)
+  - The model construction in `get_network_architecture()` (replace BST-X with your model)
   - The data unpacking in `train_one_epoch()` and `validate()` (the `for (human_pose, pos, shuttle), video_len, labels in loader` destructuring must match your Dataset's return format)
-  - The bone-aware augmentation logic (lines 88-95 of `train_one_epoch`) -- this is BST-specific
+  - The bone-aware augmentation logic (lines 88-95 of `train_one_epoch`) -- this is BST-X-specific
 
 #### 5. Inference script (`bst_infer.py`)
 
@@ -571,7 +584,7 @@ Same pattern as training: replace the model construction and data unpacking to m
 
 ### Summary of divergence points
 
-| Stage | BST-specific? | Custom model action |
+| Stage | BST-X-specific? | Custom model action |
 |-------|--------------|---------------------|
 | Pipeline (`pipeline/`) | No | Reuse as-is |
 | Pose extraction (`prepare_train_on_shuttleset.py`) | Partially | Replace if your model uses different features (raw video, optical flow, etc.) |

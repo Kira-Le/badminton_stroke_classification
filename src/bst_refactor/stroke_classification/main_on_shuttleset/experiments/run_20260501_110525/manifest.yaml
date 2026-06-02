@@ -182,7 +182,7 @@ notes: |
   distribution; one seed (S2) found a wrist_smash basin that no
   prior nosides serial accessed. Adaptive class weighting
   candidate strengthened, not weakened, by this evidence. Full
-  writeup in arch_1_directions.md.
+  writeup in bst_x_overview.md.
 extra:
   data_provenance:
     clips_csv_path: /home/ahalperi/badminton_stroke_classifier/notebooks/clips_master.csv

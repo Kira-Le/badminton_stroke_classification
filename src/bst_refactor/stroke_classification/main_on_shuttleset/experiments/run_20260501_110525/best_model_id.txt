@@ -99,7 +99,7 @@ stronger candidate than before, since its theoretical
 justification (escalate gradient on persistently-low-F1 classes
 to push bad seeds toward better basins) maps onto the bimodal
 distribution this run produced. Full writeup in
-arch_1_directions.md.
+bst_x_overview.md.
 
 TensorBoard run folders (in tb/):
   S1: serial_1

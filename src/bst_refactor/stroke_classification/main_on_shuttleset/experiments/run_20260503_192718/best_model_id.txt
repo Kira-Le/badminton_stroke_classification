@@ -55,7 +55,7 @@ the mask is mostly redundant), and the new shuttle_fuse layer
 absorbs some learning budget for a near-identity solution on the
 original 100 dims. Shuttle-unzeroing is the keeper.
 
-Full writeup: arch_1_directions.md (shuttle-mask section).
+Full writeup: bst_x_overview.md (shuttle-mask section).
 
 === Serial 4 (BST_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_4) ===
 Test (num_strokes: 4202) =>

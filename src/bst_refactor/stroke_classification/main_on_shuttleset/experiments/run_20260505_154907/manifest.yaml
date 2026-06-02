@@ -188,7 +188,7 @@ notes: |
   on the exposure axis. Likely flip-mediated; p_flip ablation flagged
   for follow-up.
 
-  Full writeup: arch_1_directions.md (augmentation framework v1 section).
+  Full writeup: bst_x_overview.md (augmentation framework v1 section).
 extra:
   data_provenance:
     clips_csv_path: /home/ahalperi/badminton_stroke_classifier/notebooks/clips_master.csv

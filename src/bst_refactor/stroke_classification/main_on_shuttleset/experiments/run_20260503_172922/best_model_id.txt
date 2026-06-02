@@ -45,7 +45,7 @@ Per-class shifts vs first CDB-F1 run, 5-serial mean (% absolute):
   long_service +0.1, net_shot +0.2, drop +0.2, return_net -0.2,
   drive ~0, push -0.6, clear -0.5.
 
-Full writeup: arch_1_directions.md (shuttle-unzeroing-on-keypoint-fail section).
+Full writeup: bst_x_overview.md (shuttle-unzeroing-on-keypoint-fail section).
 
 === Serial 2 (BST_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_2) ===
 Test (num_strokes: 4202) =>

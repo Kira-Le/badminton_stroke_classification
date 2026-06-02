@@ -189,7 +189,7 @@ notes: |
   deployable weights of the four runs, even though it sits inside
   the worst-mean run.
 
-  Full sweep round writeup: arch_1_directions.md "Aug v1 round 1
+  Full sweep round writeup: bst_x_overview.md "Aug v1 round 1
   hparam sweep" section.
 extra:
   data_provenance:

@@ -62,7 +62,7 @@ RandomTranslation_batch defaults restored at bst_train.py:375;
 corrected pos+shuttle jitter from augmentation_framework.md is the
 eventual replacement.
 
-Full writeup: arch_1_directions.md (jitter-off ablation section).
+Full writeup: bst_x_overview.md (jitter-off ablation section).
 
 === Serial 2 (BST_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_2) ===
 Test (num_strokes: 4202) =>

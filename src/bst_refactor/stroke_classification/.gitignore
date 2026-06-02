@@ -171,3 +171,58 @@ main_on_shuttleset/.aim/
 
 # run_20260601_021234_940276: wd 4e-1. Best S5 (test macro/min 0.748/0.525); min clears 0.5 on wrist_smash.
 !main_on_shuttleset/experiments/run_20260601_021234_940276/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_v1_14_5.pt
+
+# Series J SET 1: wd endpoints (1e-2, 4e-1), gate off, norms/bias/embeddings held out of decay,
+# across the five non-une taxon/splits. wd 4e-1 lifts the floor where it started lowest (bst_24
+# both splits, +5 to +6% mean min); adopted as the default optimiser setting. Best serial per cell.
+
+# run_20260601_141054_760522: shuttleset_18, v2 split, wd 1e-2, gate off. Best S5 (test macro/min 0.663/0.000).
+!main_on_shuttleset/experiments/run_20260601_141054_760522/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_shuttleset_18_5.pt
+
+# run_20260601_153738_936523: shuttleset_18, v2 split, wd 4e-1, gate off. Best S5 (test macro/min 0.672/0.000).
+!main_on_shuttleset/experiments/run_20260601_153738_936523/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_shuttleset_18_5.pt
+
+# run_20260601_171005_492538: bst_24, v2 split, wd 1e-2, gate off. Best S3 (test macro/min 0.818/0.626).
+!main_on_shuttleset/experiments/run_20260601_171005_492538/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_bst_24_3.pt
+
+# run_20260601_184437_030823: bst_24, v2 split, wd 4e-1, gate off. Best S3 (test macro/min 0.822/0.641). New bst_24/v2 best; FE serve candidate.
+!main_on_shuttleset/experiments/run_20260601_184437_030823/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_bst_24_3.pt
+
+# run_20260601_202022_522780: bst_12, v2 split, wd 1e-2, gate off. Best S3 (test macro/min 0.818/0.623). bst_12 keeper.
+!main_on_shuttleset/experiments/run_20260601_202022_522780/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_bst_12_3.pt
+
+# run_20260601_215358_806530: bst_12, v2 split, wd 4e-1, gate off. Best S5 (test macro/min 0.815/0.636).
+!main_on_shuttleset/experiments/run_20260601_215358_806530/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_bst_12_5.pt
+
+# run_20260601_232557_387981: bst_25, baseline split, wd 1e-2, gate off. Best S1 (test macro/min 0.827/0.625).
+!main_on_shuttleset/experiments/run_20260601_232557_387981/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_bst_25.pt
+
+# run_20260602_011036_539898: bst_25, baseline split, wd 4e-1, gate off. Best S1 (test macro/min 0.829/0.653).
+!main_on_shuttleset/experiments/run_20260602_011036_539898/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_bst_25.pt
+
+# run_20260602_025726_461760: bst_24, baseline split, wd 1e-2, gate off. Best S1 (test macro/min 0.834/0.636).
+!main_on_shuttleset/experiments/run_20260602_025726_461760/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_bst_24.pt
+
+# run_20260602_044754_361908: bst_24, baseline split, wd 4e-1, gate off. Best S3 (test macro/min 0.835/0.656). New bst_24/baseline best (mean macro + all min).
+!main_on_shuttleset/experiments/run_20260602_044754_361908/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_bst_24_3.pt
+
+# Series J SET 2: same wd endpoints crossed with focal_alpha_revert (gate on), on three taxa.
+# Never the best config; alpha-revert retired. Kept for the record. Best serial per cell.
+
+# run_20260602_063203_601676: shuttleset_18, v2 split, wd 1e-2, gate on (focal_alpha_revert). Best S2 (test macro/min 0.652/0.000).
+!main_on_shuttleset/experiments/run_20260602_063203_601676/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_shuttleset_18_2.pt
+
+# run_20260602_075831_129574: shuttleset_18, v2 split, wd 4e-1, gate on (focal_alpha_revert). Best S1 (test macro/min 0.658/0.000).
+!main_on_shuttleset/experiments/run_20260602_075831_129574/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_shuttleset_18.pt
+
+# run_20260602_092522_446222: bst_25, baseline split, wd 1e-2, gate on (focal_alpha_revert). Best S5 (test macro/min 0.826/0.609).
+!main_on_shuttleset/experiments/run_20260602_092522_446222/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_bst_25_5.pt
+
+# run_20260602_111410_233326: bst_25, baseline split, wd 4e-1, gate on (focal_alpha_revert). Best S2 (test macro/min 0.829/0.630).
+!main_on_shuttleset/experiments/run_20260602_111410_233326/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_bst_25_2.pt
+
+# run_20260602_130421_390854: une_v1_14, v2 split, wd 1e-2, gate on (focal_alpha_revert). Best S3 (test macro/min 0.755/0.482).
+!main_on_shuttleset/experiments/run_20260602_130421_390854/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_v1_14_3.pt
+
+# run_20260602_143618_156220: une_v1_14, v2 split, wd 4e-1, gate on (focal_alpha_revert). Best S2 (test macro/min 0.753/0.503); 4 serials.
+!main_on_shuttleset/experiments/run_20260602_143618_156220/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_v1_14_2.pt

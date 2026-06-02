@@ -177,7 +177,7 @@ notes: |
   picked it up as a second bottleneck the static config didn't
   weight), smash -5.5 (pair-confusion with ws), rush -2.7,
   drive -1.4, passive_drop -1.4, drop -1.1, lob -1.0, services
-  -0.9 to -1.4. Full discussion in arch_1_directions.md.
+  -0.9 to -1.4. Full discussion in bst_x_overview.md.
 extra:
   data_provenance:
     clips_csv_path: /home/ahalperi/badminton_stroke_classifier/notebooks/clips_master.csv

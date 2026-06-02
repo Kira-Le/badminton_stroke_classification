@@ -25,9 +25,9 @@ and ``{shuttle_npy_dir}/{clip_stem}.npy``.
 
 Usage:
     python validate_zeroed_frames.py \
-        --data-root /path/to/ShuttleSet_data_une_merge_v1 \
+        --data-root /path/to/ShuttleSet_data_une_v1_14 \
         --clips-csv /path/to/notebooks/clips_master.csv \
-        --taxonomy une_merge_v1 \
+        --taxonomy une_v1_14 \
         --split-column split_bst_baseline \
         --threshold 0.5 \
         --set-dir /path/to/ShuttleSet/set \
@@ -52,7 +52,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 BST_REFACTOR_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BST_REFACTOR_ROOT))
 
-from pipeline.config import TAXONOMIES, Taxonomy  # noqa: E402
+from pipeline.config import TAXONOMIES, Taxonomy, resolve_taxonomy, SIDE_AGNOSTIC_TYPES  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -175,16 +175,17 @@ def _load_shuttle_vis(
 def _derive_stroke_player(
     raw_type_en: str, player_side: str, taxonomy: Taxonomy,
 ) -> tuple[str, str]:
-    """Apply the taxonomy's merge_map and standalone_set to a clips_master row.
+    """Apply the taxonomy's merge_map + side rule to a clips_master row.
 
-    Returns (player, stroke_type) where player is 'Top' / 'Bottom' for prefixed
-    classes or '' for unprefixed standalone classes (e.g. 'unknown').
+    Returns (player, stroke_type) where player is 'Top' / 'Bottom' for sided
+    classes or '' for nosides taxonomies and side-agnostic types (e.g.
+    'unknown'). Mirrors label_for_row's side decision: a nosides taxonomy
+    (has_sides=False, e.g. une_v1_14) never gets a Top_/Bottom_ prefix.
     """
-    merge_map = taxonomy.merge_map or {}
-    merged = merge_map.get(raw_type_en, raw_type_en)
-    if merged in taxonomy.standalone_set:
-        return "", merged
-    return player_side, merged
+    merged = (taxonomy.merge_map or {}).get(raw_type_en, raw_type_en)
+    if taxonomy.has_sides and merged not in SIDE_AGNOSTIC_TYPES:
+        return player_side, merged
+    return "", merged
 
 
 def scan_clips(
@@ -206,7 +207,7 @@ def scan_clips(
     :param dataset_npy_dir: Flat per-clip npy directory.
     :param clips_csv: Master clips CSV (one row per clip).
     :param split_column: Column in clips_csv giving train/val/test assignment.
-    :param taxonomy: Taxonomy for merge_map + standalone_set label derivation.
+    :param taxonomy: Taxonomy for merge_map + side-rule label derivation.
     :param flaw_lookup: Optional dict from build_flaw_lookup(). If provided,
                         each clip's is_flaw field is populated from it.
     :param shuttle_npy_dir: Optional path to flat shuttle NPY dir.
@@ -1251,10 +1252,10 @@ def main():
              "(default: split_bst_baseline).",
     )
     parser.add_argument(
-        "--taxonomy", type=str, default="une_merge_v1",
+        "--taxonomy", type=str, default="une_v1_14",
         choices=list(TAXONOMIES.keys()),
         help="Taxonomy for label derivation, filenames, and display headers "
-             "(default: une_merge_v1).",
+             "(default: une_v1_14).",
     )
     parser.add_argument(
         "--threshold", type=float, default=0.5,
@@ -1286,7 +1287,7 @@ def main():
             args.set_dir = repo_set_dir
             print(f"Auto-detected --set-dir: {args.set_dir}")
 
-    taxonomy = TAXONOMIES[args.taxonomy]
+    taxonomy = resolve_taxonomy(args.taxonomy)
 
     # Resolve the flat per-clip npy directory. Prefer explicit --dataset-npy-dir,
     # else auto-discover under --data-root: first *_flat/ subdir that isn't the
@@ -1322,7 +1323,7 @@ def main():
     # Sydney timestamp for output filenames.
     syd_now = datetime.now(ZoneInfo("Australia/Sydney"))
     ts = syd_now.strftime("%Y%m%d_%H%M")
-    tax_short = args.taxonomy.replace("_", "")  # "merged_25" -> "merged25"
+    tax_short = args.taxonomy.replace("_", "")  # "une_v1_14" -> "unev114"
     split_short = args.split_column.replace("split_", "").replace("_", "")
 
     # Output dir is always a sibling folder to this script.

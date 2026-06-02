@@ -60,7 +60,7 @@ S3 picked: macro within 0.24% of run-top S1, best min in that
 close-macro band. State.json's default S2 had top min but at a
 macro cost outside the seed envelope.
 
-Full sweep round writeup: arch_1_directions.md "Aug v1 round 1
+Full sweep round writeup: bst_x_overview.md "Aug v1 round 1
 hparam sweep" section.
 
 === Serial 3 (BST_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_3) ===

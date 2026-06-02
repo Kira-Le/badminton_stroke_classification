@@ -172,7 +172,7 @@ notes: |
   regularisation weight: turn it off and min F1 falls below the CDB-F1
   baseline too, not just below wipe_drop. Defaults restored.
 
-  Full writeup: arch_1_directions.md (jitter-off ablation section).
+  Full writeup: bst_x_overview.md (jitter-off ablation section).
 extra:
   data_provenance:
     clips_csv_path: /home/ahalperi/badminton_stroke_classifier/notebooks/clips_master.csv
