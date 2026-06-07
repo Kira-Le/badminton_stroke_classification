@@ -30,7 +30,7 @@ Vs y1t1 run_20260501_164658 mean (0.7432 / 0.4621 / 0.7617 / 0.9351):
   macro -0.2, min -4.8, acc -0.1, top-2 -0.3.
 
 Head metrics flat, ws drops 4.8 pp on the mean. S1 ws sits below
-y1t1 mean ws. Full read in arch_1_directions.md 2026-05-03 block.
+y1t1 mean ws. Full read in bst_x_overview.md 2026-05-03 block.
 
 === Serial 1 (BST_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides) ===
 Test (num_strokes: 4202) =>

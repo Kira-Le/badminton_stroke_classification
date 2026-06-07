@@ -161,7 +161,7 @@ notes: |
   min +0.042, acc +0.002, top-2 ~0. Wrist_smash range tightens
   0.159 -> 0.066; all five serials at or above the LS=0.1 mean,
   the 0.30 floor is gone. First run where the wrist_smash floor
-  moves in the right direction. Full writeup in arch_1_directions.md.
+  moves in the right direction. Full writeup in bst_x_overview.md.
 extra:
   data_provenance:
     clips_csv_path: /home/ahalperi/badminton_stroke_classifier/notebooks/clips_master.csv

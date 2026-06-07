@@ -63,7 +63,7 @@ will be the cleanest test of whether collapsing the side prefix
 recovers the wrist_smash floor on Phase-2 data, the same way the
 Phase-1 collapsed-classes ablation (run_20260425_185421) recovered
 it from run_20260425_150548. Augmentation + focal loss / class
-weighting (per arch_1_directions.md "next steps") remains the
+weighting (per bst_x_overview.md "next steps") remains the
 expected fix.
 
 TensorBoard run folders (in tb/):

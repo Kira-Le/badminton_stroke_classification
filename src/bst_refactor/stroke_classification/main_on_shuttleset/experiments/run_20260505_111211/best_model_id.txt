@@ -62,7 +62,7 @@ to measure it, offline estimator script in scripts/ for a number
 before the next training run. If subsequent runs don't flag this
 further, it was empirically tolerable.
 
-Full writeup: arch_1_directions.md (augmentation framework v1 section).
+Full writeup: bst_x_overview.md (augmentation framework v1 section).
 
 === Serial 5 (BST_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_5) ===
 Test (num_strokes: 4202) =>

@@ -69,7 +69,7 @@ run. Best deployable weights of the four runs, even though it
 sits inside the worst-mean run. Matches state.json's max-min
 default.
 
-Full sweep round writeup: arch_1_directions.md "Aug v1 round 1
+Full sweep round writeup: bst_x_overview.md "Aug v1 round 1
 hparam sweep" section.
 
 === Serial 1 (BST_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides) ===

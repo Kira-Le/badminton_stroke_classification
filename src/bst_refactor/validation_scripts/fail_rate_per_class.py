@@ -2,7 +2,7 @@
 """Per-class MMPose fail-rate stats joined on clips_master.csv.
 
 Reads the flat per-clip *_failed.npy files, joins them to clips_master.csv,
-applies the requested taxonomy (+ optional drop_unknown), and prints per-class
+applies the requested taxonomy and prints per-class
 totals. Labels stratify by player_side (Top_smash is separate from Bottom_smash),
 which complements validate_zeroed_frames.py's per-stroke-type view that pools
 Top and Bottom together.
@@ -10,18 +10,16 @@ Top and Bottom together.
 Usage on engelbart (from repo root) — explicit --dataset-npy-dir:
   python src/bst_refactor/validation_scripts/fail_rate_per_class.py \\
       --clips-csv notebooks/clips_master.csv \\
-      --dataset-npy-dir /scratch/comp320a/ShuttleSet_data_merged_25/dataset_npy_between_2_hits_with_max_limits_flat \\
+      --dataset-npy-dir /scratch/comp320a/ShuttleSet_data_une_v1_14/dataset_npy_between_2_hits_with_max_limits_flat \\
       --split-column split_bst_baseline \\
-      --taxonomy une_merge_v1 \\
-      --drop-unknown
+      --taxonomy une_v1_14
 
 Or with --data-root auto-discovery (picks the *_flat subdir):
   python src/bst_refactor/validation_scripts/fail_rate_per_class.py \\
       --clips-csv notebooks/clips_master.csv \\
-      --data-root /scratch/comp320a/ShuttleSet_data_merged_25 \\
+      --data-root /scratch/comp320a/ShuttleSet_data_une_v1_14 \\
       --split-column split_bst_baseline \\
-      --taxonomy une_merge_v1 \\
-      --drop-unknown \\
+      --taxonomy une_v1_14 \\
       --save-txt
 """
 
@@ -40,17 +38,20 @@ import pandas as pd
 BST_REFACTOR_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BST_REFACTOR_ROOT))
 
-from pipeline.config import TAXONOMIES, Taxonomy  # noqa: E402
+from pipeline.config import TAXONOMIES, Taxonomy, label_for_row, resolve_taxonomy  # noqa: E402
 
 
 def derive_labels(df: pd.DataFrame, taxonomy: Taxonomy) -> pd.Series:
-    merge_map = taxonomy.merge_map or {}
-    standalone_set = taxonomy.standalone_set
-    merged = df['raw_type_en'].map(lambda s: merge_map.get(s, s))
-    return merged.where(
-        merged.isin(standalone_set),
-        df['player_side'] + '_' + merged,
-    )
+    """Class label per row via the taxonomy's single decision point.
+
+    Routes through label_for_row, so excluded types (e.g. 'unknown' under a
+    drop-unknown taxonomy) come back as None and nosides taxonomies never get a
+    Top_/Bottom_ prefix. The caller drops the None rows.
+    """
+    def _label(row) -> str | None:
+        idx = label_for_row(taxonomy, row['raw_type_en'], row['player_side'])
+        return None if idx is None else taxonomy.classes[idx]
+    return df.apply(_label, axis=1)
 
 
 class _Tee:
@@ -108,11 +109,12 @@ def _resolve_dataset_npy_dir(
 def _run(args, dataset_npy_dir: Path) -> None:
     """Core per-class fail-rate computation and printing. Wrapped so --save-txt
     can tee stdout around it without duplicating the body."""
-    taxonomy = TAXONOMIES[args.taxonomy]
+    taxonomy = resolve_taxonomy(args.taxonomy)
     df = pd.read_csv(args.clips_csv)
-    if args.drop_unknown:
-        df = df[df['raw_type_en'] != 'unknown'].copy()
     df['label'] = derive_labels(df, taxonomy)
+    # Rows the taxonomy excludes (e.g. 'unknown' under a drop-unknown taxonomy)
+    # come back as None from label_for_row; drop them before counting.
+    df = df[df['label'].notna()].copy()
 
     # Per-clip fail stats.
     totals, faileds, missing = [], [], 0
@@ -142,8 +144,7 @@ def _run(args, dataset_npy_dir: Path) -> None:
     )
     agg['fail_rate'] = agg['failed_frames'] / agg['total_frames']
 
-    print(f'Taxonomy: {taxonomy.name}   Split: {args.split_column}   '
-          f"drop_unknown={args.drop_unknown}")
+    print(f'Taxonomy: {taxonomy.name}   Split: {args.split_column}')
     for split in ('train', 'val', 'test'):
         sub = agg[agg[args.split_column] == split].sort_values(
             'fail_rate', ascending=False,
@@ -176,9 +177,8 @@ def main() -> int:
              'Required if --data-root is not given.',
     )
     parser.add_argument('--split-column', default='split_bst_baseline')
-    parser.add_argument('--taxonomy', default='une_merge_v1',
+    parser.add_argument('--taxonomy', default='une_v1_14',
                         choices=list(TAXONOMIES.keys()))
-    parser.add_argument('--drop-unknown', action='store_true')
     parser.add_argument(
         '--save-txt', action='store_true',
         help='Tee stdout to zeroed_frames_analysis_outputs/'

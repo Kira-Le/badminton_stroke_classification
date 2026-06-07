@@ -58,7 +58,7 @@ looks done.
 S3 picked: top min in the run, macro within 0.30% of run-top S4.
 Matches state.json's max-min default in this case.
 
-Full sweep round writeup: arch_1_directions.md "Aug v1 round 1
+Full sweep round writeup: bst_x_overview.md "Aug v1 round 1
 hparam sweep" section.
 
 === Serial 3 (BST_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_3) ===

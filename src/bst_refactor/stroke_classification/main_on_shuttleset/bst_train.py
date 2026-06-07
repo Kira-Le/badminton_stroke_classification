@@ -59,7 +59,7 @@ DEFAULT_CLIPS_CSV = REPO_ROOT / 'notebooks' / 'clips_master.csv'
 
 # ==========================================================================
 # Hyperparameters — edit these to change experiment configuration.
-# Active LR + aux schedule rationale: scratch/architecture_notes/arch_1_directions.md.
+# Active LR + aux schedule rationale: scratch/architecture_notes/bst_x_overview.md.
 # Dated retune history: scratch/architecture_notes/historical_bst.md section 3.
 # ==========================================================================
 # collation_id picks which on-disk collation generation to read (path + manifest
@@ -304,6 +304,8 @@ def validate(
     cum_tn = torch.zeros(n_classes)
     cum_fp = torch.zeros(n_classes)
     cum_fn = torch.zeros(n_classes)
+    cum_top2 = 0  # ground truth among the two highest logits, summed over samples
+    cum_n = 0     # total samples seen
 
     for (human_pose, pos, shuttle), video_len, labels in loader:
         human_pose: Tensor = human_pose.to(device)
@@ -333,6 +335,12 @@ def validate(
         cum_fp += fp.cpu()
         cum_fn += fn.cpu()
 
+        # Top-2 accuracy needs the two highest logits, so it's the one metric
+        # not already in the confusion counts; accumulate it here.
+        cum_n += labels.size(0)
+        top2_idx = logits.topk(2, dim=1).indices
+        cum_top2 += int((top2_idx == labels.unsqueeze(1)).any(dim=1).sum())
+
     val_loss = total_loss / len(loader)
 
     # Per-class F1, then macro average (mean across classes)
@@ -353,7 +361,12 @@ def validate(
     else:
         f1_score_avg = torch.tensor(0.0)
         f1_score_min = torch.tensor(0.0)
-    return val_loss, f1_score_avg, f1_score_min, f1_score, present
+
+    # Accuracy is exactly correct/total: every sample is a TP for its class (if
+    # right) or an FN for it (if wrong), so the correct count is sum(cum_tp).
+    accuracy = float(cum_tp.sum() / cum_n) if cum_n else 0.0
+    top2_accuracy = cum_top2 / cum_n if cum_n else 0.0
+    return val_loss, f1_score_avg, f1_score_min, f1_score, present, accuracy, top2_accuracy
 
 
 @torch.no_grad()
@@ -615,6 +628,8 @@ def train_network(
     # checkpoint that actually gets saved. Surfaced to the serial manifest.
     best_val_f1_per_class = None
     best_val_present = None
+    best_val_accuracy = None
+    best_val_top2 = None
     best_macro_epoch_snap = None
 
     for epoch in range(1, hyp.n_epochs+1):
@@ -645,7 +660,7 @@ def train_network(
         if isinstance(loss_fn, AdaptiveFocalLoss):
             loss_fn.update_alpha(train_per_class_f1)
 
-        val_loss, f1_score_avg, f1_score_min, f1_per_class, present = validate(
+        val_loss, f1_score_avg, f1_score_min, f1_per_class, present, val_accuracy, val_top2 = validate(
             model=model,
             loss_fn=loss_fn,
             loader=val_loader,
@@ -738,6 +753,8 @@ def train_network(
             # recorded breakdown matches the saved checkpoint.
             best_val_f1_per_class = f1_per_class.detach().cpu().numpy()
             best_val_present = present.detach().cpu().numpy()
+            best_val_accuracy = val_accuracy
+            best_val_top2 = val_top2
             best_macro_epoch_snap = epoch
             print(f'Picked! => Best value {curr_macro:.3f}')
             # Compact per-class snapshot on new-best epochs: top-5 and bot-5
@@ -807,17 +824,28 @@ def train_network(
     )
     writer.close()
 
-    # Per-class val F1 at the best-macro epoch, present classes only, for the
-    # serial manifest (extra.val_at_best_macro_epoch). None if no epoch ever
-    # beat the macro=0.0 init (degenerate run).
-    val_at_best = {
-        'epoch': best_macro_epoch_snap,
-        'per_class_f1': {
+    # Val metrics at the best-macro epoch (the checkpoint that gets saved):
+    # macro/min/accuracy/top-2 + the present-class per-class F1, for the serial
+    # manifest (extra.val_at_best_macro_epoch). macro/min are the mean/min of the
+    # snapshot per-class, so they stay exactly consistent with the breakdown.
+    # None if no epoch ever beat the macro=0.0 init (degenerate run).
+    if best_val_f1_per_class is not None:
+        per_class = {
             class_ls[i]: float(best_val_f1_per_class[i])
             for i in range(len(class_ls))
             if best_val_present[i]
-        },
-    } if best_val_f1_per_class is not None else None
+        }
+        f1s = list(per_class.values())
+        val_at_best = {
+            'epoch': best_macro_epoch_snap,
+            'macro_f1': sum(f1s) / len(f1s),
+            'min_f1': min(f1s),
+            'accuracy': best_val_accuracy,
+            'top2_accuracy': best_val_top2,
+            'per_class_f1': per_class,
+        }
+    else:
+        val_at_best = None
     return model, val_at_best
 
 

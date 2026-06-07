@@ -182,7 +182,7 @@ notes: |
   Shuttle-unzeroing is the keeper. Branch tagged + dropped, design
   captured in scratch/architecture_notes/.
 
-  Full writeup: arch_1_directions.md (shuttle-mask section).
+  Full writeup: bst_x_overview.md (shuttle-mask section).
 extra:
   data_provenance:
     clips_csv_path: /home/ahalperi/badminton_stroke_classifier/notebooks/clips_master.csv

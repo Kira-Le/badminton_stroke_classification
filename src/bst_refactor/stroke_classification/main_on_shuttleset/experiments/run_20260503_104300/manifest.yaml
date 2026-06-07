@@ -169,7 +169,7 @@ notes: |
 
   Vs y1t1 mean (0.7432 / 0.4621 / 0.7617 / 0.9351):
   macro -0.2, min -4.8, acc -0.1, top-2 -0.3. Head metrics flat,
-  ws cost 4.8 pp. Full read in arch_1_directions.md 2026-05-03 block.
+  ws cost 4.8 pp. Full read in bst_x_overview.md 2026-05-03 block.
 extra:
   data_provenance:
     clips_csv_path: /home/ahalperi/badminton_stroke_classifier/notebooks/clips_master.csv

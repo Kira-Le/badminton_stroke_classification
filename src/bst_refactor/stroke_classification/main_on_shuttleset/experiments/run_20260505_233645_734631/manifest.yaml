@@ -162,7 +162,7 @@ notes: |
   0.30% of run-top S4 (0.7379). Matches state.json's max-min
   default in this case.
 
-  Full sweep round writeup: arch_1_directions.md "Aug v1 round 1
+  Full sweep round writeup: bst_x_overview.md "Aug v1 round 1
   hparam sweep" section.
 extra:
   data_provenance:

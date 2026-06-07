@@ -191,7 +191,7 @@ notes: |
   min (0.5097) but macro 0.7346 sat 1.0% below S1, outside the seed
   envelope.
 
-  Full sweep round writeup: arch_1_directions.md "Aug v1 round 1
+  Full sweep round writeup: bst_x_overview.md "Aug v1 round 1
   hparam sweep" section.
 extra:
   data_provenance:
