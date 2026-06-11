@@ -939,7 +939,7 @@ class Task:
                     f'the data shape.'
                 )
 
-    def get_network_architecture(self, model_name='BST_CG_AP', in_channels=2):
+    def get_network_architecture(self, model_name='BST_X', in_channels=2):
         """Create the model at the taxonomy head dim and ground its inputs.
 
         :param in_channels: 2 for 2D (xy) keypoints, 3 for 3D (xyz).
@@ -962,7 +962,7 @@ class Task:
     def seek_network_weights(self, model_info='', serial_no=1, tb_dir: Path | None = None):
         """Load existing weights if found, otherwise train from scratch.
         Weight filenames encode the full experiment config, e.g.:
-        'bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_bst_24_2.pt'
+        'bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_bst_24_2.pt'
 
         :return: ``(weight_existed, val_at_best)``. ``weight_existed`` is True
             when a checkpoint was loaded (no training ran), False when freshly
@@ -976,12 +976,7 @@ class Task:
         model_postfix = '_' + self.pose_style \
             + model_info + taxonomy_info + serial_str
 
-        # Weight filename: 'BST_CG_AP' -> 'bst_CG_AP', 'BST_0' -> 'bst_0', 'BST' -> 'bst'
-        if '_' in self.model_name:
-            first, rest = self.model_name.split('_', 1)
-            save_name = first.lower() + '_' + rest
-        else:
-            save_name = self.model_name.lower()
+        save_name = self.model_name.lower()
         save_name += model_postfix
 
         self.model_name += model_postfix
@@ -1391,7 +1386,7 @@ if __name__ == '__main__':
                 train_partial=hyp.train_partial
             )
 
-            task.get_network_architecture(model_name='BST_CG_AP', in_channels=(3 if hyp.use_3d_pose else 2))
+            task.get_network_architecture(model_name='BST_X', in_channels=(3 if hyp.use_3d_pose else 2))
 
             tb_dir = run_dir / 'tb' / f'serial_{serial_no}'
             weight_exists, val_at_best = task.seek_network_weights(

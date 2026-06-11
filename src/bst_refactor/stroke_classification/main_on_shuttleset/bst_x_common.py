@@ -19,12 +19,19 @@ from model.bst import BST_0, BST_PPF, BST_CG, BST_AP, BST_CG_AP
 
 # BST variant name -> pre-configured constructor (partials defined in bst.py).
 # Both bst_x_train and bst_x_infer dispatch through this single mapping.
+#
+# 'BST_X' is the project name for the adapted BST_CG_AP network.
+# It uses the same modules with different hyperparameters around
+# things like scheduling, augmentation, loss, player tracking and
+# input frame validation.
 MODELS = {
     'BST_0':     BST_0,
     'BST':       BST_PPF,
     'BST_CG':    BST_CG,
     'BST_AP':    BST_AP,
     'BST_CG_AP': BST_CG_AP,
+    'BST_X':     BST_CG_AP,
+    # 'BST_X_RGB': BST_X_RGB,  # placeholder for the X3D-S fusion variant
 }
 
 

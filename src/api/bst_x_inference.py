@@ -95,10 +95,10 @@ _stem_to_meta: dict[str, dict] = {}                # stem -> {row_index, split, 
 
 # ─── Initialisation ─────────────────────────────────────────────────
 def _build_model() -> torch.nn.Module:
-    """Instantiate BST_CG_AP at the right shape and load serial-5 weights."""
+    """Instantiate BST_X at the right shape and load serial-5 weights."""
     from main_on_shuttleset.bst_x_common import build_bst_x_network
     net, _n_bones = build_bst_x_network(
-        "BST_CG_AP",
+        "BST_X",
         n_joints=17,
         pose_style=POSE_STYLE,
         in_channels=2,

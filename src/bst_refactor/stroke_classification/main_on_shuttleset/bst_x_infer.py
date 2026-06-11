@@ -96,7 +96,7 @@ class Task:
         self,
         *,
         taxonomy: Taxonomy,
-        model_name: str = 'BST_CG_AP',
+        model_name: str = 'BST_X',
         seq_len: int = 100,
         in_channels: int = 2,
     ):
@@ -172,7 +172,7 @@ def dump_run_predictions(
     fe_output_dir: Path | None = None,
     splits: tuple[str, ...] = ('val', 'test'),
     collated_data_root: Path | None = None,
-    model_name: str = 'BST_CG_AP',
+    model_name: str = 'BST_X',
     n_joints: int = 17,
     batch_size: int = 128,
 ) -> Path:
@@ -314,8 +314,10 @@ if __name__ == '__main__':
         help='Root holding ShuttleSet_data_<tax>/. Defaults to '
              'BST_X_COLLATED_DATA_ROOT, then the in-repo preparing_data/.',
     )
-    parser.add_argument('--model-name', default='BST_CG_AP',
-                        help='BST variant; matches the partial used at train time.')
+    parser.add_argument('--model-name', default='BST_X',
+                        help='BST variant; defaults to BST_X (the project name for BST_CG_AP). '
+                             'Pass --model-name BST_CG_AP for a Chang-configuration build; '
+                             'saves and resumes lowercase bst_cg_ap_*.pt.')
     args = parser.parse_args()
 
     # --fe-output-dir is an optional override that only makes sense in --fe mode.
