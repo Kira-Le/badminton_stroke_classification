@@ -21,14 +21,15 @@ from __future__ import annotations
 import gzip
 import importlib
 import importlib.util
+import inspect
 import json
 import os
 import re
 import subprocess
+import typing
 from functools import partial
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import pytest
 import torch
@@ -174,9 +175,6 @@ def test_t1_alias_forward_matches_cg_ap():
 # T2: default model-name flip
 # ---------------------------------------------------------------------------
 
-import inspect
-
-
 @pytest.mark.skipif(not _switchover_landed(), reason='Step 6b.1 not landed')
 def test_t2_train_default_model_name_is_bst_x():
     sig = inspect.signature(_train_module().Task.get_network_architecture)
@@ -260,9 +258,6 @@ def test_t3_save_name_round_trip(tmp_path):
 # T5: architecture wire format (lands in the Step 1 commit; the step IS the contract)
 # ---------------------------------------------------------------------------
 
-import typing
-
-
 def _architecture_literal_values(model_cls) -> set[str]:
     """Pull the Literal values from the architecture Optional[Literal[...]]
     annotation on a Pydantic model. Optional[X] expands to Union[X, None]; the
@@ -321,9 +316,6 @@ def test_t5_library_predict_endpoint_accepts_bst_x_and_422s_legacy():
 # parametrises over each module's ENV_VAR_RENAMES so each new var added to the
 # mapping picks up a four-case test row for free)
 # ---------------------------------------------------------------------------
-
-import sys
-
 
 def _modules_with_renames():
     out = []
@@ -865,7 +857,7 @@ def test_t11_stage1_bst_refactor():
         re.compile(r'bst_refactor'), _tracked_text_files(),
         allow_path=lambda rel: str(rel) in allowed,
     )
-    assert hits == [], '\n'.join(f'{r}:{n}: {l}' for r, n, l in hits)
+    assert hits == [], '\n'.join(f'{r}:{n}: {line}' for r, n, line in hits)
 
 
 def test_t11_stage2_module_paths():
@@ -882,7 +874,7 @@ def test_t11_stage2_module_paths():
         pattern, _tracked_text_files(),
         allow_path=lambda rel: str(rel) in allowed,
     )
-    assert hits == [], '\n'.join(f'{r}:{n}: {l}' for r, n, l in hits)
+    assert hits == [], '\n'.join(f'{r}:{n}: {line}' for r, n, line in hits)
 
 
 def test_t11_stage3_bst_inputs_dir():
@@ -898,7 +890,7 @@ def test_t11_stage3_bst_inputs_dir():
         re.compile(r'\bbst_inputs\b'), _tracked_text_files(),
         allow_path=lambda rel: str(rel) in allowed,
     )
-    assert hits == [], '\n'.join(f'{r}:{n}: {l}' for r, n, l in hits)
+    assert hits == [], '\n'.join(f'{r}:{n}: {line}' for r, n, line in hits)
 
 
 def test_t11_stage4_extras_group():
@@ -908,7 +900,7 @@ def test_t11_stage4_extras_group():
         re.compile(r'\bbst-runtime\b'), _tracked_text_files(),
         allow_path=lambda rel: False,
     )
-    assert hits == [], '\n'.join(f'{r}:{n}: {l}' for r, n, l in hits)
+    assert hits == [], '\n'.join(f'{r}:{n}: {line}' for r, n, line in hits)
 
 
 def test_t11_stage5_legacy_env_vars():
@@ -935,7 +927,7 @@ def test_t11_stage5_legacy_env_vars():
         pattern, _tracked_text_files(),
         allow_path=lambda rel: str(rel) in allowed,
     )
-    assert hits == [], '\n'.join(f'{r}:{n}: {l}' for r, n, l in hits)
+    assert hits == [], '\n'.join(f'{r}:{n}: {line}' for r, n, line in hits)
 
 
 def _stage6_in_scope(rel: str) -> bool:
@@ -983,7 +975,7 @@ def test_t11_stage6_bst_cg_ap_filename_prose():
         for i, line in enumerate(lines, 1):
             if pattern.search(line):
                 hits.append((rel, i, line.rstrip()))
-    assert hits == [], '\n'.join(f'{r}:{n}: {l}' for r, n, l in hits)
+    assert hits == [], '\n'.join(f'{r}:{n}: {line}' for r, n, line in hits)
 
 
 def test_t11_stage7_legacy_venv_name():
@@ -993,7 +985,7 @@ def test_t11_stage7_legacy_venv_name():
         re.compile(r'venv-bst(?!-x)'), _tracked_text_files(),
         allow_path=lambda rel: False,
     )
-    assert hits == [], '\n'.join(f'{r}:{n}: {l}' for r, n, l in hits)
+    assert hits == [], '\n'.join(f'{r}:{n}: {line}' for r, n, line in hits)
 
 
 # ---------------------------------------------------------------------------
