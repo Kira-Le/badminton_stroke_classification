@@ -331,6 +331,102 @@ def test_t5_library_predict_endpoint_accepts_bst_x_and_422s_legacy():
 
 
 # ---------------------------------------------------------------------------
+# T4: env-var legacy fallback (lands with the first Step 4 commit; the matrix
+# parametrises over each module's ENV_VAR_RENAMES so each new var added to the
+# mapping picks up a four-case test row for free)
+# ---------------------------------------------------------------------------
+
+import sys
+
+
+def _modules_with_renames():
+    out = []
+    for modname in ('pipeline.data_access', 'src.api.config'):
+        try:
+            mod = importlib.import_module(modname)
+        except ImportError:
+            continue
+        if getattr(mod, 'ENV_VAR_RENAMES', None) is not None:
+            out.append(mod)
+    return out
+
+
+def _rename_pairs():
+    pairs = []
+    for mod in _modules_with_renames():
+        for new, legacy in mod.ENV_VAR_RENAMES.items():
+            pairs.append((mod, new, legacy))
+    return pairs
+
+
+def _pair_id(pair):
+    mod, new, _ = pair
+    short = mod.__name__.rsplit('.', 1)[-1]
+    return f'{short}:{new}'
+
+
+_T4_PAIRS = _rename_pairs()
+_T4_IDS = [_pair_id(p) for p in _T4_PAIRS]
+
+
+@pytest.mark.skipif(not _T4_PAIRS, reason='Step 4 not started: ENV_VAR_RENAMES empty')
+@pytest.mark.parametrize('mod,new,legacy', _T4_PAIRS, ids=_T4_IDS)
+def test_t4_legacy_only_resolves_with_deprecation(mod, new, legacy, monkeypatch):
+    monkeypatch.delenv(new, raising=False)
+    monkeypatch.setenv(legacy, 'value-X')
+    with pytest.warns(DeprecationWarning):
+        assert mod._resolve_env(new) == 'value-X'
+
+
+@pytest.mark.skipif(not _T4_PAIRS, reason='Step 4 not started')
+@pytest.mark.parametrize('mod,new,legacy', _T4_PAIRS, ids=_T4_IDS)
+def test_t4_new_only_resolves_no_deprecation(mod, new, legacy, recwarn, monkeypatch):
+    monkeypatch.setenv(new, 'value-Y')
+    monkeypatch.delenv(legacy, raising=False)
+    assert mod._resolve_env(new) == 'value-Y'
+    deprecations = [w for w in recwarn.list if issubclass(w.category, DeprecationWarning)]
+    assert not deprecations, f'Unexpected DeprecationWarning: {deprecations}'
+
+
+@pytest.mark.skipif(not _T4_PAIRS, reason='Step 4 not started')
+@pytest.mark.parametrize('mod,new,legacy', _T4_PAIRS, ids=_T4_IDS)
+def test_t4_new_wins_when_both_set(mod, new, legacy, monkeypatch):
+    monkeypatch.setenv(new, 'new-val')
+    monkeypatch.setenv(legacy, 'legacy-val')
+    assert mod._resolve_env(new) == 'new-val'
+
+
+@pytest.mark.skipif(not _T4_PAIRS, reason='Step 4 not started')
+@pytest.mark.parametrize('mod,new,legacy', _T4_PAIRS, ids=_T4_IDS)
+def test_t4_neither_set_returns_default(mod, new, legacy, monkeypatch):
+    monkeypatch.delenv(new, raising=False)
+    monkeypatch.delenv(legacy, raising=False)
+    assert mod._resolve_env(new) is None
+
+
+def test_t4_api_config_module_import_respects_legacy_var(monkeypatch, tmp_path):
+    """Module-import-time read: api.config's LOCAL_CLIPS_DIR resolves through
+    the new var name AND its legacy fallback. importlib.reload to observe the
+    actual module binding; reload back to pristine on exit so downstream tests
+    that hold a stale src.api.main reference don't drift."""
+    if 'src.api.config' not in sys.modules:
+        import src.api.config  # noqa: F401
+    cfg = importlib.import_module('src.api.config')
+    if 'BST_X_LOCAL_CLIPS_DIR' not in cfg.ENV_VAR_RENAMES:
+        pytest.skip('BST_X_LOCAL_CLIPS_DIR not in mapping yet')
+    legacy_val = str(tmp_path / 'legacy_local_clips')
+    monkeypatch.delenv('BST_X_LOCAL_CLIPS_DIR', raising=False)
+    monkeypatch.setenv('BST_LOCAL_CLIPS_DIR', legacy_val)
+    try:
+        with pytest.warns(DeprecationWarning):
+            importlib.reload(cfg)
+        assert str(cfg.LOCAL_CLIPS_DIR) == legacy_val
+    finally:
+        monkeypatch.delenv('BST_LOCAL_CLIPS_DIR', raising=False)
+        importlib.reload(cfg)
+
+
+# ---------------------------------------------------------------------------
 # T6: registry lockstep
 # ---------------------------------------------------------------------------
 
