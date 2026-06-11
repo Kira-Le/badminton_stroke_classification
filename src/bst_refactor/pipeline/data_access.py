@@ -106,7 +106,7 @@ root (copy .env.example and fill in your values):
     BST_CLIPS_DIR=/scratch/comp320a/ShuttleSet/clips
     BST_X_SHUTTLE_NPY_DIR=/scratch/comp320a/ShuttleSet/shuttle_npy_flat
     BST_X_MMPOSE_NPY_DIR=/scratch/comp320a/ShuttleSet_data_bst_25/dataset_npy_between_2_hits_with_max_limits_flat
-    BST_CLIPS_CSV=/home/username/badminton_stroke_classifier/notebooks/clips_master.csv
+    BST_X_CLIPS_CSV=/home/username/badminton_stroke_classifier/notebooks/clips_master.csv
 
 Then just run with no flags:
 
@@ -202,6 +202,7 @@ ENV_VAR_RENAMES = {
     'BST_X_SHUTTLE_CSV_DIR': 'BST_SHUTTLE_CSV_DIR',
     'BST_X_SHUTTLE_NPY_DIR': 'BST_SHUTTLE_NPY_DIR',
     'BST_X_MMPOSE_NPY_DIR': 'BST_MMPOSE_NPY_DIR',
+    'BST_X_CLIPS_CSV': 'BST_CLIPS_CSV',
 }
 
 
@@ -250,7 +251,7 @@ class DataPaths:
       BST_X_SHUTTLE_NPY_DIR  -- flat shuttle npy directory.
       BST_X_MMPOSE_NPY_DIR   -- flat mmpose per-clip npy directory (omit if not
                               generated yet).
-      BST_CLIPS_CSV        -- path to clips_master.csv.
+      BST_X_CLIPS_CSV        -- path to clips_master.csv.
 
     These can be set in a .env file at the project root (see .env.example).
 
@@ -275,7 +276,7 @@ class DataPaths:
         default_factory=lambda: env_path_or_none('BST_X_MMPOSE_NPY_DIR')
     )
     clips_csv: Path = field(
-        default_factory=lambda: env_path('BST_CLIPS_CSV', _DEFAULT_CLIPS_CSV)
+        default_factory=lambda: env_path('BST_X_CLIPS_CSV', _DEFAULT_CLIPS_CSV)
     )
 
 
@@ -625,7 +626,7 @@ def _build_cli() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         '--clips-csv', type=Path, default=None,
-        help='Path to clips_master.csv (overrides BST_CLIPS_CSV + repo default).',
+        help='Path to clips_master.csv (overrides BST_X_CLIPS_CSV + repo default).',
     )
     parser.add_argument(
         '--summary', action='store_true',

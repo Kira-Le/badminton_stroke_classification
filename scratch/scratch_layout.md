@@ -89,7 +89,7 @@ Per-clip pose data, taxonomy- and split-agnostic. Lives outside the per-taxonomy
 BST_CLIPS_DIR=/scratch/comp320a/ShuttleSet/clips
 BST_SHUTTLE_NPY_DIR=/scratch/comp320a/ShuttleSet/shuttle_npy_flat
 BST_X_MMPOSE_NPY_DIR=/scratch/comp320a/ShuttleSet_keypoints_clean_sticky_anchor
-BST_CLIPS_CSV=/home/ahalperi/badminton_stroke_classifier/notebooks/clips_master.csv
+BST_X_CLIPS_CSV=/home/ahalperi/badminton_stroke_classifier/notebooks/clips_master.csv
 # Optional: override the TrackNetV3 shuttle CSV directory. If unset, the
 # collator falls back to the repo-rooted SHUTTLE_CSV_DIR from pipeline/config.
 BST_SHUTTLE_CSV_DIR=/scratch/comp320a/ShuttleSet/shuttle_csv

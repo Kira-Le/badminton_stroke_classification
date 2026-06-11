@@ -26,7 +26,7 @@ Inputs (read from environment):
     is shape ``(F,)`` and OR-flags both slots together (see
     sticky_anchor.py:283, :320), so it cannot resolve "Top picked, Bottom
     didn't" frames. Per-slot validity is derived from the joints zero-test.
-  - ``BST_CLIPS_CSV``: ``clips_master.csv``, source of stem -> class +
+  - ``BST_X_CLIPS_CSV``: ``clips_master.csv``, source of stem -> class +
     player_side mapping. Class filter excludes ``raw_type_en == 'unknown'``.
 
 Outputs (under ``--out-dir``, default
@@ -357,7 +357,7 @@ def main() -> None:
         "--clips-csv",
         type=Path,
         default=None,
-        help="Path to clips_master.csv. Defaults to BST_CLIPS_CSV env.",
+        help="Path to clips_master.csv. Defaults to BST_X_CLIPS_CSV env.",
     )
     parser.add_argument(
         "--out-dir",
@@ -406,10 +406,10 @@ def main() -> None:
 
     clips_csv = args.clips_csv
     if clips_csv is None:
-        env_csv = os.environ.get("BST_CLIPS_CSV")
+        env_csv = os.environ.get("BST_X_CLIPS_CSV")
         if not env_csv:
             raise SystemExit(
-                "BST_CLIPS_CSV env var not set and --clips-csv not provided."
+                "BST_X_CLIPS_CSV env var not set and --clips-csv not provided."
             )
         clips_csv = Path(env_csv)
     if not clips_csv.is_file():

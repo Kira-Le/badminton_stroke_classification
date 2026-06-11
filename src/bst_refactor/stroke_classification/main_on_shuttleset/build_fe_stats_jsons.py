@@ -197,7 +197,7 @@ def main() -> None:
     ap.add_argument("--clips-dir", type=Path, default=None, help="override DataPaths clips_dir")
     args = ap.parse_args()
 
-    # .env first so BST_CLIPS_DIR / BST_CLIPS_CSV resolve the same way bst_infer +
+    # .env first so BST_CLIPS_DIR / BST_X_CLIPS_CSV resolve the same way bst_infer +
     # the collator do; DataPaths then picks them up (or the in-repo defaults).
     load_repo_dotenv()
     path_kwargs = {}

@@ -123,7 +123,7 @@ Keep `DataPaths` and `ClipRecord` essentially unchanged. Rewrite
 so that it:
 
 1. Reads `clips_master.csv` once (path from `DataPaths`, defaulting to
-   `notebooks/clips_master.csv` via an env var like `BST_CLIPS_CSV` +
+   `notebooks/clips_master.csv` via an env var like `BST_X_CLIPS_CSV` +
    config default).
 2. Accepts a new `split_column` parameter (defaulting to
    `'split_bst_baseline'` for backward compat with Curtis's intent
@@ -159,7 +159,7 @@ class DataPaths:
     clips_dir: Path = field(default_factory=lambda: _env_path('BST_CLIPS_DIR', CLIPS_OUTPUT_DIR))
     shuttle_npy_dir: Path = field(default_factory=lambda: _env_path('BST_SHUTTLE_NPY_DIR', SHUTTLE_OUTPUT_DIR))
     mmpose_npy_dir: Path | None = field(default_factory=lambda: _env_path_or_none('BST_X_MMPOSE_NPY_DIR'))
-    clips_csv: Path = field(default_factory=lambda: _env_path('BST_CLIPS_CSV', REPO_ROOT / 'notebooks' / 'clips_master.csv'))
+    clips_csv: Path = field(default_factory=lambda: _env_path('BST_X_CLIPS_CSV', REPO_ROOT / 'notebooks' / 'clips_master.csv'))
 
 
 def get_clip_records(
@@ -210,7 +210,7 @@ update the commented HPC paths to reflect post-Phase-2 layout:
 BST_CLIPS_DIR=/scratch/comp320a/ShuttleSet/clips
 BST_SHUTTLE_NPY_DIR=/scratch/comp320a/ShuttleSet/shuttle_npy_flat
 BST_X_MMPOSE_NPY_DIR=/scratch/comp320a/ShuttleSet_data_merged_25/dataset_npy_between_2_hits_with_max_limits_flat
-BST_CLIPS_CSV=/home/ahalperi/badminton_stroke_classifier/notebooks/clips_master.csv
+BST_X_CLIPS_CSV=/home/ahalperi/badminton_stroke_classifier/notebooks/clips_master.csv
 ```
 
 `.env` goes to `.gitignore` (per Curtis's branch). No secrets — just
@@ -238,7 +238,7 @@ changes.
 | Module | Current use | Post-integration |
 |---|---|---|
 | `pipeline/clip_index.py` | Low-level `{stem: Path}` index, used by nothing in-repo yet (designed for upcoming Arch 2 + Arch 1 wrist crop Datasets) | Unchanged. `data_access.py` calls it internally in `get_clip_records` when building the clips-on-disk side of the record. |
-| `pipeline/config.py` | Source of `CLIPS_OUTPUT_DIR`, `SHUTTLE_OUTPUT_DIR`, `TAXONOMIES`, `DEFAULT_TAXONOMY`, `Taxonomy` | No change. `data_access.py` imports these; new `BST_CLIPS_CSV` env var resolves via `data_access` only. |
+| `pipeline/config.py` | Source of `CLIPS_OUTPUT_DIR`, `SHUTTLE_OUTPUT_DIR`, `TAXONOMIES`, `DEFAULT_TAXONOMY`, `Taxonomy` | No change. `data_access.py` imports these; new `BST_X_CLIPS_CSV` env var resolves via `data_access` only. |
 | `preparing_data/prepare_train_on_shuttleset.py::collate_npy` | CSV-driven since Phase 1. Derives labels via `taxonomy.merge_map` + `standalone_set`, resolves flat per-clip files. | Could optionally call `data_access.get_clip_records()` for the clip enumeration step. Not required — it already has its own loop that works. Follow-up simplification, not blocking. |
 | `validation_scripts/validate_zeroed_frames.py::scan_clips` | CSV-driven since Phase 2. Iterates `clips_master.csv` directly. | Candidate for `data_access.get_clip_records()` refactor. Follow-up once `data_access` is ported. |
 | `validation_scripts/fail_rate_per_class.py::main` | CSV-driven since Phase 2. | Same candidate as above. |

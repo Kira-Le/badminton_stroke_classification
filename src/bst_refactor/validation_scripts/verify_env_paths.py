@@ -40,7 +40,7 @@ def main() -> int:
     clips_dir       = os.environ.get('BST_CLIPS_DIR')
     shuttle_dir     = os.environ.get('BST_X_SHUTTLE_NPY_DIR')
     mmpose_dir      = os.environ.get('BST_X_MMPOSE_NPY_DIR')
-    clips_csv       = os.environ.get('BST_CLIPS_CSV')
+    clips_csv       = os.environ.get('BST_X_CLIPS_CSV')
     shuttle_csv_dir = os.environ.get('BST_X_SHUTTLE_CSV_DIR')
 
     print('Env vars (post .env load):')
@@ -51,7 +51,7 @@ def main() -> int:
 
     csv_path = Path(clips_csv) if clips_csv else None
     csv_ok = csv_path is not None and csv_path.is_file()
-    print(f'  BST_CLIPS_CSV         : {clips_csv}  exists={csv_ok}')
+    print(f'  BST_X_CLIPS_CSV         : {clips_csv}  exists={csv_ok}')
 
     print()
     overall_ok = ok_clips and ok_shuttle and ok_mmpose and csv_ok and ok_shuttle_csv

@@ -28,7 +28,7 @@ Memory: ~/.claude/projects/.../memory/MEMORY.md and the entries it points at.
 Stage 2 preflight status:
 - player_handedness.csv landed at stage_2_outputs/. 27 players, 3 lefties.
 - keypoint_lr_interframe_diagnostic.py written, code-reviewed, fixed.
-  Needs running on engelbart with BST_X_MMPOSE_NPY_DIR + BST_CLIPS_CSV set.
+  Needs running on engelbart with BST_X_MMPOSE_NPY_DIR + BST_X_CLIPS_CSV set.
   Single-process, well under a CPU-minute total over 32k clips.
 - Static-bias diagnostic spec'd in the doc but not yet coded; needs
   Method A hit-frame index to centre the ±5-frame velocity window, so it
