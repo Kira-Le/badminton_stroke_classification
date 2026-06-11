@@ -61,9 +61,7 @@ CLIP_INDEX_PATH = RUN_DIR / "clip_index.json"
 #   3. <repo>/scratch/bst_x_inputs — bare local fallback.
 # Expected layout under whatever this resolves to:
 #   {test,val}/{JnB_bone,pos,shuttle,videos_len}.npy
-from .config import _resolve_env as _resolve_api_env
-
-_BST_X_INPUTS_DIR_ENV = _resolve_api_env("BST_X_INPUTS_DIR")
+_BST_X_INPUTS_DIR_ENV = os.getenv("BST_X_INPUTS_DIR")
 if _BST_X_INPUTS_DIR_ENV:
     BST_X_INPUTS_DIR = Path(_BST_X_INPUTS_DIR_ENV)
 elif Path("/app/bst_x_inputs").exists():

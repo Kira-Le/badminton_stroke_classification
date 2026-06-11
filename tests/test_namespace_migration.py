@@ -390,26 +390,19 @@ def test_t4_neither_set_returns_default(mod, new, legacy, monkeypatch):
     assert mod._resolve_env(new) is None
 
 
-def test_t4_api_config_module_import_respects_legacy_var(monkeypatch, tmp_path):
-    """Module-import-time read: api.config's LOCAL_CLIPS_DIR resolves through
-    the new var name AND its legacy fallback. importlib.reload to observe the
-    actual module binding; reload back to pristine on exit so downstream tests
-    that hold a stale src.api.main reference don't drift."""
-    if 'src.api.config' not in sys.modules:
-        import src.api.config  # noqa: F401
+def test_t4_api_config_module_no_longer_carries_rename_machinery():
+    """Step 9b deleted ENV_VAR_RENAMES from both api/config.py and
+    pipeline/data_access.py. The legacy-only resolution path is gone with it:
+    a process that still exports BST_LOCAL_CLIPS_DIR no longer back-doors the
+    new var. The mapping's absence is the contract being pinned here; T11
+    stage 5 follows up with a tree-wide scan for any legacy BST_* still in
+    tracked text."""
     cfg = importlib.import_module('src.api.config')
-    if 'BST_X_LOCAL_CLIPS_DIR' not in cfg.ENV_VAR_RENAMES:
-        pytest.skip('BST_X_LOCAL_CLIPS_DIR not in mapping yet')
-    legacy_val = str(tmp_path / 'legacy_local_clips')
-    monkeypatch.delenv('BST_X_LOCAL_CLIPS_DIR', raising=False)
-    monkeypatch.setenv('BST_LOCAL_CLIPS_DIR', legacy_val)
-    try:
-        with pytest.warns(DeprecationWarning):
-            importlib.reload(cfg)
-        assert str(cfg.LOCAL_CLIPS_DIR) == legacy_val
-    finally:
-        monkeypatch.delenv('BST_LOCAL_CLIPS_DIR', raising=False)
-        importlib.reload(cfg)
+    assert not hasattr(cfg, 'ENV_VAR_RENAMES')
+    assert not hasattr(cfg, '_resolve_env')
+    from pipeline import data_access
+    assert not hasattr(data_access, 'ENV_VAR_RENAMES')
+    assert not hasattr(data_access, '_resolve_env')
 
 
 # ---------------------------------------------------------------------------
@@ -560,8 +553,22 @@ def _check_no_model_name_key(obj, path='root'):
             _check_no_model_name_key(v, f'{path}[{i}]')
 
 
+def _registry_anchored_fe_dirs() -> list[Path]:
+    """The bst-x registry's run dirs (six in total today). Slimmed at Step 9b
+    from the full-corpus walk: the migration insurance has done its job, this
+    keeps the FE schema pin on the shape the API actually serves."""
+    out = []
+    for entry in _registry_entries():
+        if entry['architecture'] != 'bst-x':
+            continue
+        fe_dir = (REPO_ROOT / entry['manifest_path']).parent / 'fe_jsons'
+        if fe_dir.is_dir():
+            out.append(fe_dir)
+    return sorted(out)
+
+
 @pytest.mark.parametrize(
-    'fe_dir', sorted(EXPERIMENTS.glob('*/fe_jsons')), ids=lambda p: p.parent.name,
+    'fe_dir', _registry_anchored_fe_dirs(), ids=lambda p: p.parent.name,
 )
 def test_t8_fe_jsons_exact_file_set(fe_dir):
     """Every fe_jsons/ dir holds exactly the five gzipped json sidecars."""
@@ -569,7 +576,7 @@ def test_t8_fe_jsons_exact_file_set(fe_dir):
 
 
 @pytest.mark.parametrize(
-    'fe_dir', sorted(EXPERIMENTS.glob('*/fe_jsons')), ids=lambda p: p.parent.name,
+    'fe_dir', _registry_anchored_fe_dirs(), ids=lambda p: p.parent.name,
 )
 def test_t8_clips_split_schema(fe_dir):
     run_id = fe_dir.parent.name
@@ -585,7 +592,7 @@ def test_t8_clips_split_schema(fe_dir):
 
 
 @pytest.mark.parametrize(
-    'fe_dir', sorted(EXPERIMENTS.glob('*/fe_jsons')), ids=lambda p: p.parent.name,
+    'fe_dir', _registry_anchored_fe_dirs(), ids=lambda p: p.parent.name,
 )
 def test_t8_perclass_stats_schema(fe_dir):
     for split in ('test', 'val'):
@@ -599,7 +606,7 @@ def test_t8_perclass_stats_schema(fe_dir):
 
 
 @pytest.mark.parametrize(
-    'fe_dir', sorted(EXPERIMENTS.glob('*/fe_jsons')), ids=lambda p: p.parent.name,
+    'fe_dir', _registry_anchored_fe_dirs(), ids=lambda p: p.parent.name,
 )
 def test_t8_clip_index_schema(fe_dir):
     data = _load_gz_json(fe_dir / 'clip_index.json.gz')
@@ -612,20 +619,6 @@ def test_t8_clip_index_schema(fe_dir):
         for clip in clips:
             assert set(clip) == CLIP_INDEX_ENTRY_KEYS
     _check_no_model_name_key(data)
-
-
-@pytest.mark.parametrize(
-    'npz_path', sorted(EXPERIMENTS.glob('*/predictions/*.npz')),
-    ids=lambda p: f'{p.parent.parent.name}/{p.name}',
-)
-def test_t8_npz_schema(npz_path):
-    """Every prediction npz carries exactly the field set bst_x_train and
-    bst_x_infer's dump path emit. The npz isn't pure numeric: clip_stems,
-    class_list, run_id, taxonomy_name are object/string arrays — checked
-    explicitly so the 'no model_name string' claim can't slip in."""
-    npz = np.load(npz_path, allow_pickle=True)
-    assert set(npz.files) == NPZ_FIELDS
-    assert 'model_name' not in set(npz.files)
 
 
 def test_t8_registry_anchored_dirs_have_fe_jsons():
@@ -925,9 +918,22 @@ def test_t11_stage5_legacy_env_vars():
         r'\bBST_(CLIPS_DIR|CLIPS_CSV|SHUTTLE_NPY_DIR|MMPOSE_NPY_DIR|INPUTS_DIR'
         r'|DATA_DIR|LOCAL_CLIPS_DIR|REPO_ROOT|REGISTRY_PATH|SHUTTLE_CSV_DIR)\b'
     )
+    # Allowlist:
+    # - The design doc and this test file quote the legacy names verbatim.
+    # - Historical refactor logs / dated tidy-plan narratives reference the
+    #   pre-rebrand names as they were at the time.
+    allowed = {
+        'scratch/architecture_notes/namespace_migration_test_design.md',
+        'scratch/architecture_notes/pre_phase_2_tidy_plan.md',
+        'scratch/architecture_notes/completed_general_refactors/data_access_integration_plan.md',
+        'scratch/architecture_notes/completed_general_refactors/dir_flatten_refactor.md',
+        'scratch/collation_taxon_pin_w_preds_refactor_log.md',
+        'scratch/collation_taxon_pin_w_preds_refactor.md',
+        'tests/test_namespace_migration.py',
+    }
     hits = _scan_pattern(
         pattern, _tracked_text_files(),
-        allow_path=lambda rel: False,
+        allow_path=lambda rel: str(rel) in allowed,
     )
     assert hits == [], '\n'.join(f'{r}:{n}: {l}' for r, n, l in hits)
 

@@ -191,50 +191,15 @@ def load_repo_dotenv(path: Path = _DOTENV_PATH) -> None:
                 os.environ[key] = value
 
 
-# Branch-lifetime only: removed in the Step 9b cleanup commit before merge.
-# Maps each renamed BST_X_* env var to its pre-rebrand legacy name so HPC
-# .env files keep working through the staged rename. The api/config.py twin
-# carries the API-side vars (REPO_ROOT, REGISTRY_PATH, LOCAL_CLIPS_DIR,
-# CLIPS_DIR, INPUTS_DIR); this mapping is pipeline-only.
-import warnings  # noqa: E402
-
-ENV_VAR_RENAMES = {
-    'BST_X_SHUTTLE_CSV_DIR': 'BST_SHUTTLE_CSV_DIR',
-    'BST_X_SHUTTLE_NPY_DIR': 'BST_SHUTTLE_NPY_DIR',
-    'BST_X_MMPOSE_NPY_DIR': 'BST_MMPOSE_NPY_DIR',
-    'BST_X_CLIPS_CSV': 'BST_CLIPS_CSV',
-    'BST_X_CLIPS_DIR': 'BST_CLIPS_DIR',
-}
-
-
-def _resolve_env(name: str) -> str | None:
-    """Read an env var, falling back to its pre-rebrand name with a
-    deprecation warning. Returns the value or None when neither is set."""
-    val = os.environ.get(name)
-    if val is not None:
-        return val
-    legacy = ENV_VAR_RENAMES.get(name)
-    if legacy is not None:
-        legacy_val = os.environ.get(legacy)
-        if legacy_val is not None:
-            warnings.warn(
-                f'{legacy} is deprecated; use {name}',
-                DeprecationWarning,
-                stacklevel=3,
-            )
-            return legacy_val
-    return None
-
-
 def env_path(var: str, default: Path) -> Path:
     """Return Path from env var if set, otherwise the default."""
-    val = (_resolve_env(var) or '').strip()
+    val = os.environ.get(var, '').strip()
     return Path(val) if val else default
 
 
 def env_path_or_none(var: str) -> Path | None:
     """Return Path from env var if set and non-empty, otherwise None."""
-    val = (_resolve_env(var) or '').strip()
+    val = os.environ.get(var, '').strip()
     return Path(val) if val else None
 
 

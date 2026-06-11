@@ -10,7 +10,7 @@ From `ls -lah /scratch/comp320a/`:
 
 ```
 ahalperi/                                       personal scratch space (node-v20 install for yt-dlp JS runtime)
-ShuttleSet/                                     raw clips + shuttle outputs (entrypoint for BST_X_CLIPS_DIR + BST_SHUTTLE_NPY_DIR)
+ShuttleSet/                                     raw clips + shuttle outputs (entrypoint for BST_X_CLIPS_DIR + BST_X_SHUTTLE_NPY_DIR)
 ShuttleSet_data_merged_25/                      collations on BST original 25-class taxonomy
 ShuttleSet_data_une_merge_v1/                   collations on 14-class with-sides taxonomy
 ShuttleSet_data_une_merge_v1_nosides/           collations on 14-class no-sides taxonomy (current best)
@@ -87,12 +87,12 @@ Per-clip pose data, taxonomy- and split-agnostic. Lives outside the per-taxonomy
 
 ```
 BST_X_CLIPS_DIR=/scratch/comp320a/ShuttleSet/clips
-BST_SHUTTLE_NPY_DIR=/scratch/comp320a/ShuttleSet/shuttle_npy_flat
+BST_X_SHUTTLE_NPY_DIR=/scratch/comp320a/ShuttleSet/shuttle_npy_flat
 BST_X_MMPOSE_NPY_DIR=/scratch/comp320a/ShuttleSet_keypoints_clean_sticky_anchor
 BST_X_CLIPS_CSV=/home/ahalperi/badminton_stroke_classifier/notebooks/clips_master.csv
 # Optional: override the TrackNetV3 shuttle CSV directory. If unset, the
 # collator falls back to the repo-rooted SHUTTLE_CSV_DIR from pipeline/config.
-BST_SHUTTLE_CSV_DIR=/scratch/comp320a/ShuttleSet/shuttle_csv
+BST_X_SHUTTLE_CSV_DIR=/scratch/comp320a/ShuttleSet/shuttle_csv
 ```
 
 New env var for the FE serving contract (introduced in `frontend_integration_guide.md`):
