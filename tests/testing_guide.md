@@ -8,7 +8,7 @@ From the project root:
 pytest
 ```
 
-This runs all tests except the HPC integration test, which auto-skips when `BST_DATA_DIR` is not set.
+This runs all tests except the HPC integration test, which auto-skips when `BST_X_DATA_DIR` is not set.
 
 ## Test files
 
@@ -48,22 +48,22 @@ This runs all tests except the HPC integration test, which auto-skips when `BST_
 
 - **Prerequisites:** Preprocessed npy dataset (output of `prepare_train_on_shuttleset.py`)
 
-To run, point `BST_DATA_DIR` at a collated `npy_[3d_][seq{N}_]{split}_{collation_id}` directory (should contain `train/`, `val/`, `test/` subdirectories). Prefix tags (`3d_`, `seq{N}_`) appear only for non-default configs. Split is folded into the name; `collation_id` is the generation tag, so re-collations of the same taxonomy + split coexist:
+To run, point `BST_X_DATA_DIR` at a collated `npy_[3d_][seq{N}_]{split}_{collation_id}` directory (should contain `train/`, `val/`, `test/` subdirectories). Prefix tags (`3d_`, `seq{N}_`) appear only for non-default configs. Split is folded into the name; `collation_id` is the generation tag, so re-collations of the same taxonomy + split coexist:
 
 ```bash
-BST_DATA_DIR=/scratch/.../npy_v2_taxon_pinned_w_preds \
+BST_X_DATA_DIR=/scratch/.../npy_v2_taxon_pinned_w_preds \
     pytest tests/test_integration.py -v
 ```
 
 Historical note: pre-2026-04-21 collated dirs used a longer prefix (`dataset_npy_collated_between_2_hits_with_max_limits_seq_100_..._{ablation_id}`). V3 and V4 on engelbart still live under the old name; everything going forward uses the shorter `npy_...` form.
 
-Without `BST_DATA_DIR` set, this test auto-skips.
+Without `BST_X_DATA_DIR` set, this test auto-skips.
 
 **Note:** This test validates against `BST_0`, the baseline and parent class for BST-origin architectures. It covers the shared data pipeline (pose, shuttle, position npy files) but will need to evolve as Arch 1 and Arch 2 mature — Arch 1 will additionally ingest 3D CNN latent representations, and Arch 2 will have its own 3D CNN latents, TrackNet npy data, and potentially other input streams.
 
 ## CI
 
-GitHub Actions runs `pytest` on every push and PR (`.github/workflows/ci.yml`). The integration test auto-skips in CI since `BST_DATA_DIR` is not set.
+GitHub Actions runs `pytest` on every push and PR (`.github/workflows/ci.yml`). The integration test auto-skips in CI since `BST_X_DATA_DIR` is not set.
 
 ## conftest.py
 
