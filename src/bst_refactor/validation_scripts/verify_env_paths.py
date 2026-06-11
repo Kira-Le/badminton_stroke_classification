@@ -37,22 +37,24 @@ def _check_dir(label: str, path_str: str | None) -> bool:
 def main() -> int:
     load_repo_dotenv()
 
-    clips_dir   = os.environ.get('BST_CLIPS_DIR')
-    shuttle_dir = os.environ.get('BST_SHUTTLE_NPY_DIR')
-    mmpose_dir  = os.environ.get('BST_MMPOSE_NPY_DIR')
-    clips_csv   = os.environ.get('BST_CLIPS_CSV')
+    clips_dir       = os.environ.get('BST_CLIPS_DIR')
+    shuttle_dir     = os.environ.get('BST_SHUTTLE_NPY_DIR')
+    mmpose_dir      = os.environ.get('BST_MMPOSE_NPY_DIR')
+    clips_csv       = os.environ.get('BST_CLIPS_CSV')
+    shuttle_csv_dir = os.environ.get('BST_X_SHUTTLE_CSV_DIR')
 
     print('Env vars (post .env load):')
-    ok_clips    = _check_dir('BST_CLIPS_DIR       ', clips_dir)
-    ok_shuttle  = _check_dir('BST_SHUTTLE_NPY_DIR ', shuttle_dir)
-    ok_mmpose   = _check_dir('BST_MMPOSE_NPY_DIR  ', mmpose_dir)
+    ok_clips       = _check_dir('BST_CLIPS_DIR         ', clips_dir)
+    ok_shuttle     = _check_dir('BST_SHUTTLE_NPY_DIR   ', shuttle_dir)
+    ok_mmpose      = _check_dir('BST_MMPOSE_NPY_DIR    ', mmpose_dir)
+    ok_shuttle_csv = _check_dir('BST_X_SHUTTLE_CSV_DIR ', shuttle_csv_dir)
 
     csv_path = Path(clips_csv) if clips_csv else None
     csv_ok = csv_path is not None and csv_path.is_file()
-    print(f'  BST_CLIPS_CSV       : {clips_csv}  exists={csv_ok}')
+    print(f'  BST_CLIPS_CSV         : {clips_csv}  exists={csv_ok}')
 
     print()
-    overall_ok = ok_clips and ok_shuttle and ok_mmpose and csv_ok
+    overall_ok = ok_clips and ok_shuttle and ok_mmpose and csv_ok and ok_shuttle_csv
 
     # Spot-check the mmpose dir specifically: should have exactly 32,203
     # _failed.npy and _pos.npy files after the Phase-2 flip.

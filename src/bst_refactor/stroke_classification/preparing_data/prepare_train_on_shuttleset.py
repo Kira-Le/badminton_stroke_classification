@@ -1048,8 +1048,8 @@ def main():
     parser.add_argument(
         "--shuttle-csv-dir",
         type=Path,
-        default=env_path('BST_SHUTTLE_CSV_DIR', SHUTTLE_CSV_DIR),
-        help=f"Directory with TrackNetV3 shuttle CSVs (default: BST_SHUTTLE_CSV_DIR or {SHUTTLE_CSV_DIR})",
+        default=env_path('BST_X_SHUTTLE_CSV_DIR', SHUTTLE_CSV_DIR),
+        help=f"Directory with TrackNetV3 shuttle CSVs (default: BST_X_SHUTTLE_CSV_DIR or {SHUTTLE_CSV_DIR})",
     )
 
     # Step 3 (collation) configuration: drives split + label assignment from
