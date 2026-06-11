@@ -26,7 +26,7 @@ import numpy as np
 from scipy.optimize import minimize_scalar
 
 EXPERIMENTS = Path(
-    '/home/ariel/Documents/COSC594/badminton_stroke_classification/src/bst_refactor/'
+    '/home/ariel/Documents/COSC594/badminton_stroke_classification/src/bst_x/'
     'stroke_classification/main_on_shuttleset/experiments'
 )
 OUT_DIR = Path(__file__).resolve().parent / 'calibration'

@@ -8,7 +8,7 @@ End-to-end audit + remap-based clip wiring, ahead of the browser walkthrough.
 
 Same-class assignment of the 13 local `train/*.mp4` files to mocked test/val
 entries in
-`src/bst_refactor/.../run_20260505_154907/clip_index.json`. Script:
+`src/bst_x/.../run_20260505_154907/clip_index.json`. Script:
 `scratch/inspect_clips/remap.py`. Test split was drained first, val took
 spillover. The 8_3_17_5 swap from earlier today was reverted from git before
 remapping so test/Bottom_smash/8_3_17_5 starts clean and is now rebound to a
@@ -238,7 +238,7 @@ patches Isiah marked LOCAL-ONLY).
    there will play."* Most of the 46 fallback clips will trip this message
    during the walkthrough.
 
-### `src/bst_refactor/.../run_20260505_154907/clip_index.json`
+### `src/bst_x/.../run_20260505_154907/clip_index.json`
 
 Reverted the 8_3_17_5 swap (now back to its original test/Bottom_smash path
 in git, then re-bound by the remap script alongside 9 other entries). Net
@@ -1061,7 +1061,7 @@ key install on turing was sufficient.
 | `~ahalperi/` (run_20260505_154907 + serial_5.pt)                              | n/a | **mode 751, locked.** Real predictions JSON inaccessible — see §10.3 for workaround. |
 
 The active model checkpoint (serial 5) was already in the repo at
-`src/bst_refactor/.../experiments/run_20260505_154907/weights/
+`src/bst_x/.../experiments/run_20260505_154907/weights/
 bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_5.pt`
 (7.2 MB), so no checkpoint SCP was needed.
 
@@ -1126,7 +1126,7 @@ Counts:
 `bst_x_infer.Task` / `bst_x_common.build_bst_x_network`. Key choices:
 
 - **Path bootstrap**: extends `sys.path` with
-  `src/bst_refactor/{,stroke_classification}/` so `bst_refactor`'s
+  `src/bst_x/{,stroke_classification}/` so `bst_x`'s
   bare `from pipeline.config import ...` style imports resolve. Same
   trick the `PYTHONPATH=...` line in `bst_x_infer.py`'s docstring uses.
 - **Lazy globals**: model, mmap'd tensors, stem→row index all load on
@@ -1187,9 +1187,9 @@ docker-compose.yml                          +3 lines (bst_x_inputs bind mount)
 src/api/bst_x_inference.py                    NEW  (~200 LOC)
 src/api/registry.py                         +35 lines (live-or-cached branch)
 src/api/main.py                             +40 lines (live-or-stub in _process_video)
-src/bst_refactor/.../run_20260505_154907/clip_index.json
+src/bst_x/.../run_20260505_154907/clip_index.json
                                             rewritten — 56 real stems with row_index
-src/bst_refactor/.../run_20260505_154907/predictions/{test,val}.json
+src/bst_x/.../run_20260505_154907/predictions/{test,val}.json
                                             rewritten — 28+28 real stems with placeholder predictions
 scratch/inspect_clips/rebuild_real.py       NEW (rebuild helper)
 scratch/inspect_clips/mock_backup/           NEW (backups of original mocks)

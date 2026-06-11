@@ -10,7 +10,7 @@ Two modes:
       JSON. Run TWICE per destructive step (Step 6b.2 + Step 8): once before
       the change, once after.
 
-  --verify baseline.json [--src-map src/bst_refactor=src/bst_x]
+  --verify baseline.json [--src-map src/bst_x=src/bst_x]
       Re-walk and compare against baseline.json under the expected rename
       rules (bst_CG_AP_* -> bst_x_* inside run_*/weights/, and
       bst_CG_AP_* -> bst_cg_ap_* inside the Chang baseline dir;
@@ -54,11 +54,10 @@ def git_sha(root: Path) -> str:
 
 
 def experiments_dir(root: Path) -> Path:
-    for pkg in ('bst_x', 'bst_refactor'):
-        candidate = root / 'src' / pkg / 'stroke_classification' / 'main_on_shuttleset' / 'experiments'
-        if candidate.is_dir():
-            return candidate
-    raise SystemExit(f'No experiments dir under src/bst_x or src/bst_refactor in {root}')
+    candidate = root / 'src' / 'bst_x' / 'stroke_classification' / 'main_on_shuttleset' / 'experiments'
+    if candidate.is_dir():
+        return candidate
+    raise SystemExit(f'No experiments dir under src/bst_x in {root}')
 
 
 def resolve_manifest_weight(root: Path, manifest_path: Path, weights_path_str: str) -> bool:

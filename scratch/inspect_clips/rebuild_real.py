@@ -25,7 +25,7 @@ import pandas as pd
 
 REPO = Path("E:/bsc-tier1")
 CSV = REPO / "notebooks/clips_master.csv"
-RUN_DIR = REPO / "src/bst_refactor/stroke_classification/main_on_shuttleset/experiments/run_20260505_154907"
+RUN_DIR = REPO / "src/bst_x/stroke_classification/main_on_shuttleset/experiments/run_20260505_154907"
 LOCAL_CLIPS = REPO / "scratch/inspect_clips"  # where the 13 train mp4s live
 
 CLASS_LIST = [

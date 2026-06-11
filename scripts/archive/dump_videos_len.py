@@ -9,7 +9,7 @@ Run on bourbaki (or any host that has the npy collated dir present), from the
 repo root, with the same PYTHONPATH bst_x_train uses:
 
     cd ~/badminton_stroke_classifier
-    PYTHONPATH=src/bst_refactor:src/bst_refactor/stroke_classification \\
+    PYTHONPATH=src/bst_x:src/bst_x/stroke_classification \\
       python scratch/research/dump_videos_len.py \\
       --output ~/discard_flags_split_v2_dropunk_nosides.csv
 
@@ -97,7 +97,7 @@ def main() -> int:
     ap.add_argument('--ablation-id', default=None)
     ap.add_argument('--collated-root', type=Path, default=None,
                     help='Override the auto-derived collated dir parent. '
-                         'Default: src/bst_refactor/stroke_classification/'
+                         'Default: src/bst_x/stroke_classification/'
                          'preparing_data/ShuttleSet_data_<taxonomy>/<basename>/.')
     ap.add_argument('--flat-clip-dir', type=Path, default=None,
                     help='Override the flat per-clip dir used for the missing-'
@@ -126,7 +126,7 @@ def main() -> int:
     )
     if args.collated_root is None:
         collated_root = (
-            Path('src/bst_refactor/stroke_classification/preparing_data')
+            Path('src/bst_x/stroke_classification/preparing_data')
             / f'ShuttleSet_data_{args.taxonomy}' / npy_basename
         )
     else:

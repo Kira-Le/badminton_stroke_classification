@@ -1,6 +1,6 @@
 # Namespace migration test suite: design
 
-2026-06-11. Test design for the BST to BST-X rebrand (env vars, module renames, the `src/bst_refactor/` move, and the Step 6b `BST_X` switchover with its weight-file rename). Design only; no test code in this pass.
+2026-06-11. Test design for the BST to BST-X rebrand (env vars, module renames, the `src/bst_x/` move, and the Step 6b `BST_X` switchover with its weight-file rename). Design only; no test code in this pass.
 
 Sources: `/home/ariel/Documents/COSC594/bst_x_rebrand.md` (assessment, bugs #A-#T, safety review, Round 2 lockstep list, the "Updates from chat 2026-06-11" overlay, and the 2026-06-11 consistency-pass section at its tail), `/home/ariel/Documents/COSC594/rebrand_next_session.md` (Steps 0-10), and the decisions locked in the 2026-06-11 planning chat. Updated in the 2026-06-11 consistency pass: decisions 4-5 revised (Chang baseline lowercases in place; `scripts/model_manifest.tsv` joins the lockstep), T6/T10/T11/H1 amended, open questions 3-4 resolved; change log at the tail of this doc.
 
@@ -67,7 +67,7 @@ Numbers the specs below rely on. Re-verify any that look stale at implementation
 | `weights_path` entries across manifests | 312; 137 resolve on disk, 175 pruned (prune-to-best) |
 | Weight `.pt` files on disk under `*/weights/` | 186, all prefixed `bst_CG_AP_`; 64 git-tracked |
 | Chang baseline weights | exactly 3 files; the serial-1 file has NO serial suffix (`..._merged_25.pt`) |
-| Chang baseline manifest path convention | `experiments/bst_cg_ap_base_.../weights/...` (relative to `main_on_shuttleset/`), unlike run manifests which are repo-root-relative `src/bst_refactor/...` |
+| Chang baseline manifest path convention | `experiments/bst_cg_ap_base_.../weights/...` (relative to `main_on_shuttleset/`), unlike run manifests which are repo-root-relative `src/bst_x/...` |
 | `fe_jsons/` dirs | 33; every one holds exactly `clip_index.json.gz`, `test.json.gz`, `val.json.gz`, `perclass_stats_test.json.gz`, `perclass_stats_val.json.gz` |
 | Prediction `.npz` | 111, schema uniform across all |
 | Registry entries | 6 `architecture: bst-x` + 1 `bric` |
@@ -245,7 +245,7 @@ Imports of `pipeline.*` / `main_on_shuttleset.*` / `model.*` resolve through `co
   - Corpus: `git ls-files` filtered to text extensions (`.py .md .yaml .yml .toml .sh .ipynb .txt .tsv .jsx .js .env.example .gitignore` plus the docker-compose files). Tracked-only keeps CI deterministic and skips venvs/caches by construction. Scan `.ipynb` as plain text (cell JSON greps fine). `.tsv` earned its place on 2026-06-11: `scripts/model_manifest.tsv` is where every earlier review pass missed the release pipeline (bug #T).
   - Global allowlist: `scratch/project_history/**`, `local_scratch/**` (paper transcript; mostly untracked anyway). No other standing exclusions: the rebrand docs live outside the repo, so they need no carve-out.
   - STAGES table (sentinel; pattern; extra allowlist; notes):
-    1. Sentinel: `src/bst_refactor` does not exist AND `src/bst_x` (or the chosen name) does. Pattern: `bst_refactor`. Today's baseline is 168 files, so this skips until Step 8 lands.
+    1. Sentinel: `src/bst_x` does not exist AND `src/bst_x` (or the chosen name) does. Pattern: `bst_refactor`. Today's baseline is 168 files, so this skips until Step 8 lands.
     2. Sentinel: `bst_x_common` importable. Patterns: `main_on_shuttleset\.bst_(train|infer|common)\b` and `\bbuild_bst_network\b`.
     3. Sentinel: `docker-compose.dev.yml` mentions `bst_x_inputs`. Pattern: `\bbst_inputs\b` (widened 2026-06-11 from `scratch/bst_inputs\b` — the container target `/app/bst_inputs` and the code fallbacks at `bst_x_inference.py:66-70` rename too, and the narrow pattern would miss stragglers there).
     4. Sentinel: `pyproject.toml` defines `bst-x-runtime`. Pattern: `\bbst-runtime\b`. No allowlist — the alias group was dropped (2026-06-11), so post-Step-5 the pattern should hit nothing.
@@ -285,7 +285,7 @@ Imports of `pipeline.*` / `main_on_shuttleset.*` / `model.*` resolve through `co
     - `docs/models_registry.yaml`: per entry, `(id, manifest_path resolves, weights_path resolves)`.
     - `scripts/model_manifest.tsv`: per non-comment row, `(dest_path, resolves: bool)`. Verify applies the same expected-name map to dest_path (added 2026-06-11, bug #T).
     - Write sorted JSON. Record the git SHA and a timestamp in the header.
-  - `--verify baseline.json [--src-map src/bst_refactor=src/bst_x]`: recompute the walk, then compare against the baseline under the expected-name mapping:
+  - `--verify baseline.json [--src-map src/bst_x=src/bst_x]`: recompute the walk, then compare against the baseline under the expected-name mapping:
     - Weight files: a baseline path under `run_*/weights/` with basename `bst_CG_AP_<rest>.pt` maps to expected basename `bst_x_<rest>.pt`; inside the Chang baseline dir the map is `bst_CG_AP_<rest>.pt` → `bst_cg_ap_<rest>.pt` (lowercase in place, revised decision 4); `--src-map` rewrites the dir prefix when verifying Step 8. Assert a one-to-one match between baseline and current sets under the map, with identical sha256 and size per pair. Report extras and missing by name.
     - Manifests: per `(manifest_relpath under map, serial_no)`, assert `resolves` is unchanged. A resolved entry going missing means the file rename and the manifest edit went out of sync; a missing entry starting to resolve means a stray file appeared.
     - Manifest `weights_path` strings: assert the basename matches the mapped expectation (so a manifest edited to a typo'd filename fails even if some file happens to exist).

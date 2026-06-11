@@ -1107,6 +1107,6 @@ unrecoverable mid-length off-screen gaps).
   `https://github.com/philipperemy/keras-tcn`; Bai et al 2018
   `arxiv:1803.01271`
 - Phase-2 zeroing analysis (real numbers used in the frame-zeroing
-  section): `src/bst_refactor/validation_scripts/zeroed_frames_analysis_outputs/analysis_merged25_bstbaseline_20260429_1906.txt`
+  section): `src/bst_x/validation_scripts/zeroed_frames_analysis_outputs/analysis_merged25_bstbaseline_20260429_1906.txt`
 - Phase-2 raw mmpose ndet baseline:
-  `src/bst_refactor/validation_scripts/raw_ndet_stats_outputs/baseline_2026-04-29.md`
+  `src/bst_x/validation_scripts/raw_ndet_stats_outputs/baseline_2026-04-29.md`

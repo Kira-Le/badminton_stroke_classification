@@ -20,7 +20,7 @@
 # both nodes, copy this dir and trim each side's cells (or run a worktree per the
 # parallel-sweep runbook); leave bst_x_train.py frozen while any batch runs.
 # Launch (repo root; on bourbaki/engelbart use venv-bst + set BST_X_COLLATED_DATA_ROOT):
-#   PYTHONPATH=src/bst_refactor:src/bst_refactor/stroke_classification \
+#   PYTHONPATH=src/bst_x:src/bst_x/stroke_classification \
 #     python -m main_on_shuttleset.collation_runner scratch/runners/wd_endpoints_taxa_x_gate
 session_name: wd_endpoints_taxa_x_gate_2026_06
 cells:

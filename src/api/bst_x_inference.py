@@ -14,7 +14,7 @@ Bind mounts required (set in docker-compose.yml):
         -> /app/bst_x_inputs/{test,val}/...
 
 The checkpoint and clip_index.json live in the repo tree at
-`src/bst_refactor/.../experiments/run_20260505_154907/`.
+`src/bst_x/.../experiments/run_20260505_154907/`.
 
 The clip_index.json carries `row_index` per stem (added by
 scratch/inspect_clips/rebuild_real.py); we use that directly rather than
@@ -36,11 +36,11 @@ log = logging.getLogger(__name__)
 
 
 # ─── Path bootstrap ─────────────────────────────────────────────────
-# bst_refactor's modules use bare imports (`from pipeline.config import ...`)
+# bst_x's modules use bare imports (`from pipeline.config import ...`)
 # rather than fully-qualified paths, so we have to extend sys.path the same
 # way bst_x_infer.py's docstring tells you to via PYTHONPATH.
 REPO_ROOT = Path("/app") if Path("/app").exists() else Path(__file__).resolve().parents[2]
-BST_X_REFACTOR = REPO_ROOT / "src" / "bst_refactor"
+BST_X_REFACTOR = REPO_ROOT / "src" / "bst_x"
 BST_X_CLASSIFICATION = BST_X_REFACTOR / "stroke_classification"
 for p in (BST_X_CLASSIFICATION, BST_X_REFACTOR):
     sp = str(p)
@@ -49,7 +49,7 @@ for p in (BST_X_CLASSIFICATION, BST_X_REFACTOR):
 
 
 # ─── Constants ──────────────────────────────────────────────────────
-RUN_DIR = REPO_ROOT / "src" / "bst_refactor" / "stroke_classification" / "main_on_shuttleset" / "experiments" / "run_20260505_154907"
+RUN_DIR = REPO_ROOT / "src" / "bst_x" / "stroke_classification" / "main_on_shuttleset" / "experiments" / "run_20260505_154907"
 WEIGHTS_PATH = RUN_DIR / "weights" / "bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_5.pt"
 CLIP_INDEX_PATH = RUN_DIR / "clip_index.json"
 

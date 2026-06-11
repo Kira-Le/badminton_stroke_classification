@@ -49,11 +49,11 @@ import torch
 from pathlib import Path
 from torch.utils.data import DataLoader
 
-from src.bst_refactor.stroke_classification.preparing_data.shuttleset_dataset import (
+from src.bst_x.stroke_classification.preparing_data.shuttleset_dataset import (
     Dataset_npy_collated,
 )
-from src.bst_refactor.stroke_classification.model.bst import BST_0
-from src.bst_refactor.pipeline.config import TAXONOMIES, resolve_taxonomy  # noqa: F401
+from src.bst_x.stroke_classification.model.bst import BST_0
+from src.bst_x.pipeline.config import TAXONOMIES, resolve_taxonomy  # noqa: F401
 
 BST_X_DATA_DIR = os.environ.get("BST_X_DATA_DIR")
 

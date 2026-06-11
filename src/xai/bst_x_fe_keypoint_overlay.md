@@ -96,9 +96,9 @@ This needs an actual conversation, not just a writeup. 30-min call before any FE
 
 - Limited time, exams approaching. Minimum viable plus tested, not over-engineered. Ship something that works first, polish second.
 - Static-overlay reference already exists and works. Lift its joint-pair map, colour choices, and drawing logic. Don't reinvent them.
-    - Primary reference: `src/bst_refactor/validation_scripts/mmpose_heuristic_investigation/render_detection_overlays.py`
-    - Sibling variant: `src/bst_refactor/validation_scripts/mmpose_heuristic_investigation/render_sticky_anchor_overlays.py`
-- Don't touch `src/bst_refactor/` modules beyond reading them. That pipeline is stable. Not restructuring it.
+    - Primary reference: `src/bst_x/validation_scripts/mmpose_heuristic_investigation/render_detection_overlays.py`
+    - Sibling variant: `src/bst_x/validation_scripts/mmpose_heuristic_investigation/render_sticky_anchor_overlays.py`
+- Don't touch `src/bst_x/` modules beyond reading them. That pipeline is stable. Not restructuring it.
 - AU spelling. No em-dashes. Project `.claude/CLAUDE.md` and `~/.claude/CLAUDE.md` style applies.
 - I have mild protanopia. If you're proposing colours for the skeleton lines, reference `~/Documents/protan_colour_scheme.md` first.
 

@@ -30,7 +30,7 @@ Out of scope:
 
 ## Architecture
 
-The wrapper is one Python script (`src/bst_refactor/stroke_classification/main_on_shuttleset/hparam_sweep.py`) that:
+The wrapper is one Python script (`src/bst_x/stroke_classification/main_on_shuttleset/hparam_sweep.py`) that:
 1. Loads a cell-config YAML (the search plan).
 2. For each cell in queue order: sets the augmentation hparams,
    invokes bst_x_train one serial at a time, parses the per-serial test
@@ -49,12 +49,12 @@ It does NOT:
   existing pipeline; the wrapper just reads them.
 
 The wrapper lives at
-`src/bst_refactor/stroke_classification/main_on_shuttleset/hparam_sweep.py`,
+`src/bst_x/stroke_classification/main_on_shuttleset/hparam_sweep.py`,
 beside `bst_x_train.py`. Despite being generic in design, it directly
 invokes bst_x_train.py and shares its experiments/ output tree, so
 sitting alongside bst_x_train.py is the natural home rather than the
 top-level `scripts/`. Search-session outputs land in
-`src/bst_refactor/stroke_classification/main_on_shuttleset/experiments/aug_hparam_sweep/`.
+`src/bst_x/stroke_classification/main_on_shuttleset/experiments/aug_hparam_sweep/`.
 
 ## Cell config schema
 
@@ -482,8 +482,8 @@ high_variance_warn_stdev: 0.010
 
 ## What touches existing code
 
-- `src/bst_refactor/stroke_classification/main_on_shuttleset/hparam_sweep.py`: new file.
-- `src/bst_refactor/stroke_classification/main_on_shuttleset/bst_x_train.py`:
+- `src/bst_x/stroke_classification/main_on_shuttleset/hparam_sweep.py`: new file.
+- `src/bst_x/stroke_classification/main_on_shuttleset/bst_x_train.py`:
   add argparse with `--serial-no`, `--run-id`, `--log-path`, and the
   five augmentation overrides (`--p-flip`, `--p-jitter`, `--cap-y`,
   `--cap-x`, `--eps`). Gate the serial loop on `--serial-no` when

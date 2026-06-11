@@ -15,7 +15,7 @@ requires-python = ">=3.11"
 #     TrackNetV3, opencv, fastapi.
 #   - **MMPose is the exception.** Its numpy<2 ceiling forces isolation; the
 #     BST-X pipeline's existing pattern is to call MMPose-using code via
-#     subprocess (see src/bst_refactor/pipeline/shuttle_extractor.py and
+#     subprocess (see src/bst_x/pipeline/shuttle_extractor.py and
 #     stroke_classification/preparing_data/). That subprocess venv is
 #     managed separately from this pyproject.
 #   - Therefore numpy>=2 is fine for everything in this pyproject. Modern
@@ -132,7 +132,7 @@ torchvision = [{ index = "pytorch-cuda", marker = "sys_platform == 'linux'" }]
 exclude = [
     "notebooks/",
     "**/deprecated/",
-    "src/bst_refactor/TrackNetV3/",
+    "src/bst_x/TrackNetV3/",
     "src/bric/perception/_vendor/",   # All vendored upstream code (currently TrackNetV3)
     "scratch/project_history/",
 ]

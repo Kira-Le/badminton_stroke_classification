@@ -17,7 +17,7 @@
 #
 # ~25 min/serial: 6x5 = 30 serials, ~13 h (one overnight), same as the baseline.
 # Launch (repo root; on bourbaki use venv-bst + set BST_X_COLLATED_DATA_ROOT):
-#   PYTHONPATH=src/bst_refactor:src/bst_refactor/stroke_classification \
+#   PYTHONPATH=src/bst_x:src/bst_x/stroke_classification \
 #     python -m main_on_shuttleset.collation_runner scratch/runners/val_improvability_gate
 session_name: val_improvability_gate_2026_05
 cells:

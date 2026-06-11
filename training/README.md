@@ -34,7 +34,7 @@ Each architecture has its own training pipeline. Current state:
 
 - **BRIC** uses this tree — see [BRIC layout](#bric-layout) below.
 - **BST-X** organises its training data and experiments under
-  `src/bst_refactor/`; see that subproject's own documentation.
+  `src/bst_x/`; see that subproject's own documentation.
 
 ### BRIC layout
 
@@ -100,7 +100,7 @@ an architecture that adopts them inherits the hot-deployable variant
 workflow. An architecture that doesn't manages its own conventions.
 
 See `src/bric/` for one implementation that uses this tree;
-`src/bst_refactor/` for one that maintains its own.
+`src/bst_x/` for one that maintains its own.
 
 ## Shared conventions
 

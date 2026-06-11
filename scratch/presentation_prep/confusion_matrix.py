@@ -12,7 +12,7 @@ The 'Blues' colourmap is a single-hue sequential, universally readable
 Usage::
 
     python scratch/presentation_prep/confusion_matrix.py \\
-        --predictions src/bst_refactor/stroke_classification/main_on_shuttleset/experiments/run_<id>/predictions/test_serial_5.npz
+        --predictions src/bst_x/stroke_classification/main_on_shuttleset/experiments/run_<id>/predictions/test_serial_5.npz
 """
 from __future__ import annotations
 

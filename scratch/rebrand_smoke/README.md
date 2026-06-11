@@ -9,7 +9,7 @@ Spec: `scratch/architecture_notes/namespace_migration_test_design.md`, section H
 ## When to run
 
 - **Step 6b.2 (weight file rename):** capture immediately before; verify immediately after.
-- **Step 8 (`src/bst_refactor` -> `src/bst_x`):** capture immediately before; verify immediately after, passing the src-map.
+- **Step 8 (`src/bst_x` -> `src/bst_x`):** capture immediately before; verify immediately after, passing the src-map.
 
 Verifying after non-destructive steps is a free no-op pass; do it any time the inventory file is convenient.
 
@@ -31,7 +31,7 @@ python scratch/rebrand_smoke/artefact_inventory.py --root . \
 # After Step 8 lands, pass the src-map so the verify recognises the dir move:
 python scratch/rebrand_smoke/artefact_inventory.py --root . \
     verify scratch/rebrand_smoke/baselines/pre_step8.json \
-    --src-map src/bst_refactor=src/bst_x
+    --src-map src/bst_x=src/bst_x
 ```
 
 Exit code is non-zero on any mismatch; the report prints offender lists by category.

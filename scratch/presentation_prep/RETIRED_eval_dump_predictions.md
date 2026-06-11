@@ -8,7 +8,7 @@ The old `.pt` dump (`predictions/serial_<n>.pt` with `y_true` / `y_pred` /
 Dump predictions for an existing run:
 
 ```
-PYTHONPATH=src/bst_refactor:src/bst_refactor/stroke_classification \
+PYTHONPATH=src/bst_x:src/bst_x/stroke_classification \
     python -m main_on_shuttleset.bst_x_infer --fe \
         --run-dir .../experiments/run_<id> --serial 5 \
         --fe-output-dir /some/dump/root --splits test

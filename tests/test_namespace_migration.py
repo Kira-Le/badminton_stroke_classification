@@ -62,14 +62,13 @@ def _first_importable(*candidates: str):
 
 
 def _experiments_dir() -> Path:
-    for pkg in ('bst_x', 'bst_refactor'):
-        candidate = (
-            REPO_ROOT / 'src' / pkg / 'stroke_classification'
-            / 'main_on_shuttleset' / 'experiments'
-        )
-        if candidate.is_dir():
-            return candidate
-    raise RuntimeError(f'No experiments dir under src/bst_x or src/bst_refactor in {REPO_ROOT}')
+    candidate = (
+        REPO_ROOT / 'src' / 'bst_x' / 'stroke_classification'
+        / 'main_on_shuttleset' / 'experiments'
+    )
+    if candidate.is_dir():
+        return candidate
+    raise RuntimeError(f'No experiments dir under src/bst_x in {REPO_ROOT}')
 
 
 def _common_module():
@@ -815,6 +814,8 @@ def _scan_pattern(pattern: re.Pattern[str], paths, allow_path):
 
 
 def _step8_landed() -> bool:
+    """Step 8 lands when the old src/bst_refactor directory is gone and the
+    new src/bst_x is in place."""
     return not (REPO_ROOT / 'src' / 'bst_refactor').exists() and \
         (REPO_ROOT / 'src' / 'bst_x').exists()
 
@@ -858,9 +859,18 @@ def _step9b_landed() -> bool:
 def test_t11_stage1_bst_refactor():
     if not _step8_landed():
         pytest.skip('Step 8 not landed: src/bst_refactor still exists')
+    # The test file and design doc both quote the pattern verbatim; the two
+    # historical-archive narrative docs reference scratch/project_history/
+    # bst_refactor_deprecated/ as the actual archived directory name.
+    allowed = {
+        'scratch/architecture_notes/namespace_migration_test_design.md',
+        'scratch/architecture_notes/historical_bst.md',
+        'scratch/architecture_notes/pre_phase_2_tidy_plan.md',
+        'tests/test_namespace_migration.py',
+    }
     hits = _scan_pattern(
         re.compile(r'bst_refactor'), _tracked_text_files(),
-        allow_path=lambda rel: False,
+        allow_path=lambda rel: str(rel) in allowed,
     )
     assert hits == [], '\n'.join(f'{r}:{n}: {l}' for r, n, l in hits)
 
@@ -932,10 +942,10 @@ def _stage6_in_scope(rel: str) -> bool:
         return True
     if rel == 'scripts/model_manifest.tsv':
         return True
-    if rel.startswith(('src/bst_refactor/stroke_classification/main_on_shuttleset/experiments/run_',
+    if rel.startswith(('src/bst_x/stroke_classification/main_on_shuttleset/experiments/run_',
                        'src/bst_x/stroke_classification/main_on_shuttleset/experiments/run_')):
         return True
-    if rel.startswith(('src/bst_refactor/stroke_classification/main_on_shuttleset/experiments/bst_cg_ap_base_',
+    if rel.startswith(('src/bst_x/stroke_classification/main_on_shuttleset/experiments/bst_cg_ap_base_',
                        'src/bst_x/stroke_classification/main_on_shuttleset/experiments/bst_cg_ap_base_')):
         return True
     return False
@@ -1002,7 +1012,7 @@ def _runner_modules() -> list[tuple[str, str]]:
         out.append((label, Path(mod.__file__).read_text()))
     # verify_bst_train_target may rename to verify_bst_x_train_target at Step 6.
     for verify_candidate in ('verify_bst_x_train_target', 'verify_bst_train_target'):
-        path = REPO_ROOT / 'src' / 'bst_refactor' / 'validation_scripts' / f'{verify_candidate}.py'
+        path = REPO_ROOT / 'src' / 'bst_x' / 'validation_scripts' / f'{verify_candidate}.py'
         if not path.exists():
             path = REPO_ROOT / 'src' / 'bst_x' / 'validation_scripts' / f'{verify_candidate}.py'
         if path.exists():
