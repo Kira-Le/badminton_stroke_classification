@@ -763,10 +763,13 @@ def test_t10_baseline_manifest_declares_the_full_triple():
 
 TEXT_EXTS = {
     '.py', '.md', '.yaml', '.yml', '.toml', '.sh', '.ipynb', '.txt', '.tsv',
-    '.jsx', '.js', '.gitignore',
+    '.jsx', '.js',
 }
-EXPLICIT_TEXT_NAMES = {'.env.example', 'docker-compose.yml', 'docker-compose.dev.yml',
-                       'docker-compose.prod.yml'}
+# .gitignore must be matched by name: pathlib treats the leading dot as a
+# hidden-file prefix, so Path('.gitignore').suffix is '' and a TEXT_EXTS
+# entry never fires.
+EXPLICIT_TEXT_NAMES = {'.gitignore', '.env.example', 'docker-compose.yml',
+                       'docker-compose.dev.yml', 'docker-compose.prod.yml'}
 
 GLOBAL_EXCLUDE_PREFIXES = (
     'scratch/project_history/',
