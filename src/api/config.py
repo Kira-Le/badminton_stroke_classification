@@ -9,6 +9,7 @@ from pathlib import Path
 # pipeline.data_access mapping; no pipeline import here.
 ENV_VAR_RENAMES = {
     'BST_X_LOCAL_CLIPS_DIR': 'BST_LOCAL_CLIPS_DIR',
+    'BST_X_REPO_ROOT': 'BST_REPO_ROOT',
 }
 
 
@@ -33,7 +34,7 @@ def _resolve_env(name, default=None):
 
 # Repo root resolves the same in Docker (`/app`) and native dev (the working
 # tree). Used by registry.py to anchor relative paths in models_registry.yaml.
-REPO_ROOT = Path(os.getenv("BST_REPO_ROOT", str(Path(__file__).resolve().parents[2])))
+REPO_ROOT = Path(_resolve_env("BST_X_REPO_ROOT", str(Path(__file__).resolve().parents[2])))
 REGISTRY_PATH = Path(
     os.getenv("BST_REGISTRY_PATH", str(REPO_ROOT / "docs" / "models_registry.yaml"))
 )
