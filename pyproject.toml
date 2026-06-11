@@ -24,7 +24,7 @@ requires-python = ">=3.11"
 # Install patterns:
 #   - BRIC training:                     uv sync --extra bric --extra dev
 #   - BRIC inference only:               uv sync --extra bric-runtime
-#   - Unified API server (both arches):  uv sync --extra bric-runtime --extra bst-runtime
+#   - Unified API server (both arches):  uv sync --extra bric-runtime --extra bst-x-runtime
 #   - Dev tooling only (lint / tests):   uv sync --extra dev
 # ---------------------------------------------------------------------------
 dependencies = [
@@ -90,7 +90,7 @@ bric = [
 #
 # MMPose deliberately omitted — runs via subprocess into its own venv,
 # per the BST-X pipeline's existing isolation pattern.
-bst-runtime = [
+bst-x-runtime = [
     "positional-encodings",   # BST-X transformer model uses these (tempose.py)
     "torchinfo",              # Model summary utility (imported by tempose.py)
     "torcheval",              # multiclass_f1_score; may be used at eval time
