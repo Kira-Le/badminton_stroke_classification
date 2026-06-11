@@ -1,6 +1,6 @@
 """Build the Tier 1 FE sidecar JSONs for a registered run, from its prediction npz.
 
-Reads the self-contained per-stroke npz that ``bst_train`` / ``bst_infer --fe`` dump
+Reads the self-contained per-stroke npz that ``bst_x_train`` / ``bst_x_infer --fe`` dump
 for the chosen serial (under ``<run_dir>/predictions/``) and writes the five files the
 API serves, all under ``<run_dir>/fe_jsons/``:
 
@@ -197,7 +197,7 @@ def main() -> None:
     ap.add_argument("--clips-dir", type=Path, default=None, help="override DataPaths clips_dir")
     args = ap.parse_args()
 
-    # .env first so BST_X_CLIPS_DIR / BST_X_CLIPS_CSV resolve the same way bst_infer +
+    # .env first so BST_X_CLIPS_DIR / BST_X_CLIPS_CSV resolve the same way bst_x_infer +
     # the collator do; DataPaths then picks them up (or the in-repo defaults).
     load_repo_dotenv()
     path_kwargs = {}

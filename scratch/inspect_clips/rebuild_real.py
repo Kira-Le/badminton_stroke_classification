@@ -3,13 +3,13 @@
 drop_unknown). Class-balanced: 2 stems per class × 14 classes per split.
 
 Also computes the row index into the SCP'd collated tensors so the
-backend's bst_inference.predict() can slice directly without re-deriving
+backend's bst_x_inference.predict() can slice directly without re-deriving
 the index.
 
 The predictions JSON is populated with PLACEHOLDER y_pred values (a copy
 of y_true) at rebuild time. The /api/registry/{model_id}/splits/{split}/
 clips/{stem} endpoint is the one the per-clip browser hits for detail;
-that endpoint is being patched to call bst_inference.predict() live.
+that endpoint is being patched to call bst_x_inference.predict() live.
 The list endpoint (which displays a summary tile per clip) reads from
 this file for fast filtering.
 
@@ -146,10 +146,10 @@ def main():
                 "split":      split,
                 "raw_type_en": meta["raw_type_en"],
                 "player_side": side_prefix,
-                "row_index":  row_idx,  # NEW: lets bst_inference slice without re-deriving
+                "row_index":  row_idx,  # NEW: lets bst_x_inference slice without re-deriving
             }
 
-            # Placeholder predictions — real values come from bst_inference at request time.
+            # Placeholder predictions — real values come from bst_x_inference at request time.
             # y_pred starts as y_true; top_k is a one-hot at y_true with confidence 1.0.
             clips_list.append({
                 "clip_stem": stem,

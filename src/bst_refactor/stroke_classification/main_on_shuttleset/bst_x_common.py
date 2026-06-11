@@ -1,4 +1,4 @@
-"""Shared scaffolding between bst_train.py and bst_infer.py.
+"""Shared scaffolding between bst_x_train.py and bst_x_infer.py.
 
 Lifted pre-X3D-S so a third entry point (the X3D-S training script) does
 not triplicate the orchestration glue. The BST model graph itself is not
@@ -18,7 +18,7 @@ from model.bst import BST_0, BST_PPF, BST_CG, BST_AP, BST_CG_AP
 
 
 # BST variant name -> pre-configured constructor (partials defined in bst.py).
-# Both bst_train and bst_infer dispatch through this single mapping.
+# Both bst_x_train and bst_x_infer dispatch through this single mapping.
 MODELS = {
     'BST_0':     BST_0,
     'BST':       BST_PPF,
@@ -43,7 +43,7 @@ class Tee:
             s.flush()
 
 
-def build_bst_network(
+def build_bst_x_network(
     model_name: str,
     *,
     n_joints: int,
@@ -87,7 +87,7 @@ def dump_topk_predictions(
     """Run a loader through the model once, returning logits + a top-k summary.
 
     The single source of the per-stroke prediction payload that both
-    ``bst_train`` (end-of-serial dump) and ``bst_infer --fe`` (post-hoc dump)
+    ``bst_x_train`` (end-of-serial dump) and ``bst_x_infer --fe`` (post-hoc dump)
     write to npz. Raw logits are kept so any consumer can derive softmax and
     fit post-hoc temperature scaling without re-running inference.
 

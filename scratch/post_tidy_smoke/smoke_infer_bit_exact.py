@@ -2,8 +2,8 @@
 
 Loads a real checkpoint, runs inference on a collated dir's test split, and
 saves the predictions tensor as a ``.npy`` file. Run on both branches, then
-diff the two files: byte-identical output proves bst_infer's lift to
-``build_bst_network`` is behaviourally inert.
+diff the two files: byte-identical output proves bst_x_infer's lift to
+``build_bst_x_network`` is behaviourally inert.
 
 Required env vars:
   BST_X_DATA_DIR  -- path to a collated dir (npy_<split>_<collation_id>/, with test/labels.npy)
@@ -49,7 +49,7 @@ Usage on engelbart:
   git checkout pre-phase-2-tidy
 
 A passing diff (``IDENTICAL``) means: same architecture, same loaded weights,
-same forward pass output. Bit-exact across the bst_infer.py refactor.
+same forward pass output. Bit-exact across the bst_x_infer.py refactor.
 """
 from __future__ import annotations
 
@@ -60,7 +60,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from main_on_shuttleset.bst_infer import Task
+from main_on_shuttleset.bst_x_infer import Task
 from pipeline.config import resolve_taxonomy
 
 

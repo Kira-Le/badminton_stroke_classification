@@ -38,12 +38,12 @@ Scope is the X3D-S branch from data derivation through fused training. Out of sc
 
 Things that aren't a stage of their own but must land before any stage runs.
 
-- **Code dedup (already done)**: `bst_common.py` exists at `src/bst_refactor/stroke_classification/main_on_shuttleset/bst_common.py` carrying `MODELS`, `Tee`, `build_bst_network`, `dump_topk_predictions`, and `compute_data_provenance`. The X3D-S training script imports from there, no further extraction needed; the `bst_x_overview.md:472-473` "leave it for now" note pre-dates this refactor.
-- **Pinned-taxonomy wiring (changed by the taxon_pinned_w_preds refactor, 2026-05-30)**: head dim is `taxonomy.n_classes` directly. `labels.npy` lands in `[0, n_classes)` at collation time, so there's no runtime active/full remap and no unknown ghost. The deleted machinery (`derive_active_classes_from_labels`, `_validate_and_record_arch`, `task.n_active_classes`, the `extra.arch` manifest block) must NOT be reintroduced. New training scripts mirror `bst_train`: `resolve_taxonomy(name)` -> head `taxonomy.n_classes`, `Task._assert_label_coverage` as the train-start guard (train covers every class; val/test carry no class absent from train), and `config.classes` written into the manifest.
+- **Code dedup (already done)**: `bst_x_common.py` exists at `src/bst_refactor/stroke_classification/main_on_shuttleset/bst_x_common.py` carrying `MODELS`, `Tee`, `build_bst_x_network`, `dump_topk_predictions`, and `compute_data_provenance`. The X3D-S training script imports from there, no further extraction needed; the `bst_x_overview.md:472-473` "leave it for now" note pre-dates this refactor.
+- **Pinned-taxonomy wiring (changed by the taxon_pinned_w_preds refactor, 2026-05-30)**: head dim is `taxonomy.n_classes` directly. `labels.npy` lands in `[0, n_classes)` at collation time, so there's no runtime active/full remap and no unknown ghost. The deleted machinery (`derive_active_classes_from_labels`, `_validate_and_record_arch`, `task.n_active_classes`, the `extra.arch` manifest block) must NOT be reintroduced. New training scripts mirror `bst_x_train`: `resolve_taxonomy(name)` -> head `taxonomy.n_classes`, `Task._assert_label_coverage` as the train-start guard (train covers every class; val/test carry no class absent from train), and `config.classes` written into the manifest.
 - **Storage location**: artefacts go on /scratch on engelbart (extraction host), rsync'd to bourbaki post-extract per the existing cross-node pattern. Local disk is not a candidate.
 - **Solo X3D-S baseline gate**: before fusion, X3D-S is trained alone on the wrist crops as a 14-class classifier. The solo number is the lower bound for "fusion adds something". This sits inside Stage 5 but must be planned for in Stage 4's storage layout (the same artefacts feed solo and fused).
 - **Capacity Run 2 + augmentation landing**: scheduled before X3D-S fusion build per the active-priorities ordering at `bst_x_overview.md:51-56`. The fusion baseline is whatever's best after those land, not `run_20260503_172922` directly.
-- **Continued-training writes a NEW run folder (build before any checkpoint-warm-start / multi-stage X3D-S training)**: there is no load-checkpoint-and-train-further path today; `bst_train` loads an existing serial weight and *skips* training. When continued / multi-stage training is built (an X3D-S solo fine-tune that warm-starts from a checkpoint, or staged BST training), it must mint a fresh `run_id` and write its own `tb/`, `weights/`, `manifest.yaml`, `best_model_id.txt` into that new folder, recording `resumed_from: <source run_id>`. It must NOT resume into and overwrite the source run's outputs; a finished run dir is left untouched. (This is the reason the `taxon_pinned_w_preds` refactor needs no manifest `.bak` machinery: nothing re-opens a finished run to mutate it.)
+- **Continued-training writes a NEW run folder (build before any checkpoint-warm-start / multi-stage X3D-S training)**: there is no load-checkpoint-and-train-further path today; `bst_x_train` loads an existing serial weight and *skips* training. When continued / multi-stage training is built (an X3D-S solo fine-tune that warm-starts from a checkpoint, or staged BST training), it must mint a fresh `run_id` and write its own `tb/`, `weights/`, `manifest.yaml`, `best_model_id.txt` into that new folder, recording `resumed_from: <source run_id>`. It must NOT resume into and overwrite the source run's outputs; a finished run dir is left untouched. (This is the reason the `taxon_pinned_w_preds` refactor needs no manifest `.bak` machinery: nothing re-opens a finished run to mutate it.)
 
 ## Stage 1 — Hit-frame metadata derivation
 
@@ -216,7 +216,7 @@ Need to pick one. Default recommendation absent further data: option 4 (direct j
 
 A solo X3D-S that beats chance (1/14 ≈ 7%) is the floor. A solo number in the 0.55-0.65 macro F1 band is plausible given the wrist-only context (wide bands of stroke-distinctive whole-body motion are gone; only the racket-end signal remains). Anything ≥ ~0.5 macro is signal-positive for fusion; below that and the wrist-crop content question reopens.
 
-**Deliverable shape**: `main_on_shuttleset/x3d_s_train.py` (mirror of `bst_train.py`), checkpoint dir under `experiments/`, manifest record per the existing pattern, comparison entry in `nosides_runs_table.md`.
+**Deliverable shape**: `main_on_shuttleset/x3d_s_train.py` (mirror of `bst_x_train.py`), checkpoint dir under `experiments/`, manifest record per the existing pattern, comparison entry in `nosides_runs_table.md`.
 
 **Dependencies**: Stage 4 wrist-crop artefacts.
 
@@ -326,7 +326,7 @@ For when each stage's sub-plan is written:
 - `src/bst_refactor/pipeline/wrist_crop_extractor.py` (Stage 4; new)
 - `src/bst_refactor/stroke_classification/preparing_data/wrist_crop_dataset.py` (Stage 4; new)
 - `src/bst_refactor/stroke_classification/main_on_shuttleset/x3d_s_train.py` (Stage 5; new)
-- `src/bst_refactor/stroke_classification/main_on_shuttleset/bst_common.py` (Stage 0; extract from existing duplication per `bst_x_overview.md:472-473`)
+- `src/bst_refactor/stroke_classification/main_on_shuttleset/bst_x_common.py` (Stage 0; extract from existing duplication per `bst_x_overview.md:472-473`)
 - `src/bst_refactor/stroke_classification/model/fusion/` (Stage 6; new dir, fusion modules per shortlist)
 - `src/bst_refactor/stroke_classification/main_on_shuttleset/arch1_train.py` (Stage 6; new)
 - `src/bst_refactor/stroke_classification/model/bst.py` (Stage 6; possibly extend with optional `x3d_branch` flag, or leave untouched and wrap)

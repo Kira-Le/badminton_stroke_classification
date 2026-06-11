@@ -1164,7 +1164,7 @@ def main():
             f"valid: {','.join(VALID_POSE_STYLES)}"
         )
 
-    # Collated dir naming via shared helper (mirrored on the bst_train.py
+    # Collated dir naming via shared helper (mirrored on the bst_x_train.py
     # reader side); see ``pipeline.config.derive_npy_collated_dir_basename``.
     npy_collated_dir = preparing_root / derive_npy_collated_dir_basename(
         use_3d_pose=args.use_3d_pose,

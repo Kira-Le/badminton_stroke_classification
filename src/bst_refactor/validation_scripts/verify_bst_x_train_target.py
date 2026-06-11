@@ -1,7 +1,7 @@
-"""Pre-flight check for ``bst_train.py``: confirm the hyp config resolves
+"""Pre-flight check for ``bst_x_train.py``: confirm the hyp config resolves
 to a collated dir that actually exists on disk.
 
-Reads ``bst_train.py``'s active ``hyp`` namedtuple, derives the collated dir
+Reads ``bst_x_train.py``'s active ``hyp`` namedtuple, derives the collated dir
 basename via the same helper the script uses, and checks that the resulting
 path exists under the expected scratch root.
 
@@ -25,7 +25,7 @@ from pipeline.data_access import env_path_or_none, load_repo_dotenv
 
 
 def main() -> int:
-    # Mirror bst_train's root resolution: BST_X_COLLATED_DATA_ROOT (from .env or
+    # Mirror bst_x_train's root resolution: BST_X_COLLATED_DATA_ROOT (from .env or
     # the shell) when set, else /scratch/comp320a. Keeps the pre-flight check
     # aimed at the same tree the trainer will read.
     load_repo_dotenv()
@@ -38,10 +38,10 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    # Pull the live hyp namedtuple from bst_train.py without running its
+    # Pull the live hyp namedtuple from bst_x_train.py without running its
     # if __name__ == '__main__': block.
-    bst_train = importlib.import_module('main_on_shuttleset.bst_train')
-    hyp = bst_train.hyp
+    bst_x_train = importlib.import_module('main_on_shuttleset.bst_x_train')
+    hyp = bst_x_train.hyp
 
     print('hyp config:')
     print(f'  taxonomy:        {hyp.taxonomy}')
@@ -83,7 +83,7 @@ def main() -> int:
         print(f'  {s}/: {len(files)} files  {files}')
 
     print()
-    print('OK -- bst_train.py is aimed at an existing collated dir.')
+    print('OK -- bst_x_train.py is aimed at an existing collated dir.')
     return 0
 
 

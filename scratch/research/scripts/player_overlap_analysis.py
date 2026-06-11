@@ -332,15 +332,15 @@ def main():
     print(f'  Flaw-filter drops: {n_flaw_drops} clips '
           f'(of {len(clips):,}, {n_flaw_drops/len(clips)*100:.2f}%)')
 
-    # (c) After bst_train discard filter (videos_len == 0)
-    print('\nLoading bst_train discard flags from CSV...')
+    # (c) After bst_x_train discard filter (videos_len == 0)
+    print('\nLoading bst_x_train discard flags from CSV...')
     discard_df = pd.read_csv(DISCARD_CSV)
     zero_stems = set(discard_df.loc[discard_df['videos_len'] == 0, 'clip_stem'].astype(str))
     print(f'  {len(zero_stems)} clips have videos_len == 0 across all splits')
     is_discarded = clips['clip_stem'].astype(str).isin(zero_stems)
     clips_bst_filt = clips.loc[~is_discarded].copy()
     n_bst_drops = int(is_discarded.sum())
-    print(f'  bst_train-filter drops: {n_bst_drops} clips '
+    print(f'  bst_x_train-filter drops: {n_bst_drops} clips '
           f'(of {len(clips):,}, {n_bst_drops/len(clips)*100:.2f}%)')
 
     splits_pairs = [('train', 'val'), ('train', 'test'), ('val', 'test')]

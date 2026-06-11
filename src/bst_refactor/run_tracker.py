@@ -203,7 +203,7 @@ def _read_manifest(run_dir: Path) -> dict:
 
 def _write_manifest(run_dir: Path, manifest: dict) -> None:
     # Atomic write so concurrent readers (e.g. hparam_sweep wrapper polling
-    # the manifest after a per-serial bst_train invocation) never see a
+    # the manifest after a per-serial bst_x_train invocation) never see a
     # half-written file.
     target = _manifest_path(run_dir)
     tmp = target.with_suffix('.yaml.tmp')

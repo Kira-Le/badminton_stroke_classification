@@ -28,7 +28,7 @@ claim has a verifiable trace one click away.*
   turning the broken `RandomTranslation_batch` off (`prob=0.0`)
   regressed against the wipe_drop best (`run_20260503_172922`) by
   macro -0.8, min -4.4, acc -0.7. Conceptually wrong, empirically
-  regularising. Defaults restored at `bst_train.py:375`; replace
+  regularising. Defaults restored at `bst_x_train.py:375`; replace
   via the locked corrected formulation rather than disabling.
 - **Out for Task 2**: temporal speed jitter (Phase 3 candidate),
   Gaussian joint jitter, random joint masking,
@@ -715,7 +715,7 @@ at the floor-lift sweet spot).
 ## First aug ablation slot: fix or remove `RandomTranslation_batch`
 
 Live aug is joints-only ±0.3 with p=0.3 (verified at
-`bst_train.py:198-205`, see [A6](#a6-randomtranslation_batch-joints-only-call-site));
+`bst_x_train.py:198-205`, see [A6](#a6-randomtranslation_batch-joints-only-call-site));
 shuttle and court are not shifted. That violates Rule 1 of the
 PDF §3 (spatial transforms apply to all three streams or none) and
 is actively mis-training the cross-attention on ~30% of batches. Three options to A/B against the current baseline:
@@ -739,7 +739,7 @@ and otherwise identical hparams to the wipe_drop best
 Wrist_smash mean 0.4742 → 0.4301; S4/S5 floor at 0.39 / 0.36; min F1
 also fell below the first CDB-F1 baseline (`run_20260501_164658`). The
 decoupled body-deforming jitter is empirically regularising despite
-being structurally wrong. Defaults restored at `bst_train.py:375`.
+being structurally wrong. Defaults restored at `bst_x_train.py:375`.
 **Practical takeaway: don't disable, replace.** The corrected
 pos+shuttle constrained-jitter (above) is the path; the
 "couple-at-magnitude" and "couple-and-tighten" arms are subsumed by
@@ -1249,7 +1249,7 @@ Confirms: per-sample shift drawn `np.random.uniform(-0.3, 0.3, size=(n, d))`
 single-flip on `p=0.3`.
 
 Call site at
-`src/bst_refactor/stroke_classification/main_on_shuttleset/bst_train.py`,
+`src/bst_refactor/stroke_classification/main_on_shuttleset/bst_x_train.py`,
 lines 196-205 (inside `train_one_epoch`):
 
 ```python

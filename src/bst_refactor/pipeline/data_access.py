@@ -155,7 +155,7 @@ DEFAULT_SPLIT_COLUMN = 'split_bst_baseline'
 # passed. Picks the most permissive registered taxonomy (bst_25 keeps every
 # raw type and produces sided folder names) so exploring the data doesn't
 # silently drop rows. Training uses a narrower default (une_v1_14) in
-# bst_train.py's Hyp tuple; that's a separate concern from data exploration.
+# bst_x_train.py's Hyp tuple; that's a separate concern from data exploration.
 DEFAULT_TAXONOMY_NAME = 'bst_25'
 
 # .env is searched for in the project root. data_access.py lives at

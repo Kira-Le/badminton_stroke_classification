@@ -82,8 +82,8 @@ def _live_splits() -> set[str]:
     browser no longer gates on this (see `_pred_splits`), because the registered
     models ship precomputed real predictions that we serve directly."""
     try:
-        from . import bst_inference
-        return bst_inference.available_splits()
+        from . import bst_x_inference
+        return bst_x_inference.available_splits()
     except Exception:  # noqa: BLE001 — any import/probe failure => no live
         log.info("registry: live inference unavailable; predictions disabled")
         return set()
@@ -458,11 +458,11 @@ def get_clip(model_id: str, split: str, stem: str) -> dict:
     # sidecar. This keeps the detail view consistent with the list and the
     # per-class metrics panel (all sourced from the same model's offline run).
     #
-    # The on-demand live forward pass (bst_inference) is intentionally NOT
+    # The on-demand live forward pass (bst_x_inference) is intentionally NOT
     # called here: it is currently pinned to a different, older checkpoint than
     # the registered model and only indexes a 56-clip subset, so firing it would
     # serve a clip a prediction from a model the rest of the page doesn't use.
-    # Re-pointing bst_inference at the registered run + adding row_index belongs
+    # Re-pointing bst_x_inference at the registered run + adding row_index belongs
     # to the live-inference / Tier 3 workstream. See the Tier 2 handoff note.
     top_k = [
         {"class": class_list[i], "confidence": p}

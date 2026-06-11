@@ -38,11 +38,11 @@ log = logging.getLogger(__name__)
 # ─── Path bootstrap ─────────────────────────────────────────────────
 # bst_refactor's modules use bare imports (`from pipeline.config import ...`)
 # rather than fully-qualified paths, so we have to extend sys.path the same
-# way bst_infer.py's docstring tells you to via PYTHONPATH.
+# way bst_x_infer.py's docstring tells you to via PYTHONPATH.
 REPO_ROOT = Path("/app") if Path("/app").exists() else Path(__file__).resolve().parents[2]
-BST_REFACTOR = REPO_ROOT / "src" / "bst_refactor"
-BST_CLASSIFICATION = BST_REFACTOR / "stroke_classification"
-for p in (BST_CLASSIFICATION, BST_REFACTOR):
+BST_X_REFACTOR = REPO_ROOT / "src" / "bst_refactor"
+BST_X_CLASSIFICATION = BST_X_REFACTOR / "stroke_classification"
+for p in (BST_X_CLASSIFICATION, BST_X_REFACTOR):
     sp = str(p)
     if sp not in sys.path:
         sys.path.insert(0, sp)
@@ -96,8 +96,8 @@ _stem_to_meta: dict[str, dict] = {}                # stem -> {row_index, split, 
 # ─── Initialisation ─────────────────────────────────────────────────
 def _build_model() -> torch.nn.Module:
     """Instantiate BST_CG_AP at the right shape and load serial-5 weights."""
-    from main_on_shuttleset.bst_common import build_bst_network
-    net, _n_bones = build_bst_network(
+    from main_on_shuttleset.bst_x_common import build_bst_x_network
+    net, _n_bones = build_bst_x_network(
         "BST_CG_AP",
         n_joints=17,
         pose_style=POSE_STYLE,
@@ -109,7 +109,7 @@ def _build_model() -> torch.nn.Module:
     state = torch.load(str(WEIGHTS_PATH), map_location=DEVICE, weights_only=True)
     net.load_state_dict(state)
     net.eval()
-    log.info("bst_inference: loaded %s (%.1f MB) on %s",
+    log.info("bst_x_inference: loaded %s (%.1f MB) on %s",
              WEIGHTS_PATH.name, WEIGHTS_PATH.stat().st_size / 1e6, DEVICE)
     return net
 
@@ -125,7 +125,7 @@ def _load_split_tensors(split: str) -> dict[str, np.ndarray]:
         "shuttle":    np.load(str(base / "shuttle.npy"),    mmap_mode="r"),
         "videos_len": np.load(str(base / "videos_len.npy"), mmap_mode="r"),
     }
-    log.info("bst_inference: mmap'd %s split — %d rows, JnB_bone %s",
+    log.info("bst_x_inference: mmap'd %s split — %d rows, JnB_bone %s",
              split, out["JnB_bone"].shape[0], out["JnB_bone"].shape)
     return out
 
@@ -150,13 +150,13 @@ def _ensure_initialised() -> None:
                 try:
                     _tensors[s] = _load_split_tensors(s)
                 except FileNotFoundError as e:
-                    log.warning("bst_inference: %s", e)
+                    log.warning("bst_x_inference: %s", e)
         if not _stem_to_meta:
             _stem_to_meta = _load_stem_index()
 
 
 # ─── Public API ─────────────────────────────────────────────────────
-class BstInferenceUnavailable(Exception):
+class BstXInferenceUnavailable(Exception):
     """Raised when real inference can't proceed (missing data, bad stem, etc).
 
     The API layer catches this and falls back to the smart stub."""
@@ -168,7 +168,7 @@ def is_available() -> bool:
         _ensure_initialised()
         return _model is not None and any(_tensors.values()) and bool(_stem_to_meta)
     except Exception as e:
-        log.warning("bst_inference: not available: %s", e)
+        log.warning("bst_x_inference: not available: %s", e)
         return False
 
 
@@ -206,13 +206,13 @@ def predict(stem: str, split: str | None = None) -> dict:
         }
 
     Raises:
-        BstInferenceUnavailable: if model/tensors/stem index missing.
+        BstXInferenceUnavailable: if model/tensors/stem index missing.
         KeyError: if the stem isn't in the index.
         ValueError: if the requested split has no SCP'd tensors.
     """
     _ensure_initialised()
     if _model is None:
-        raise BstInferenceUnavailable("BST model not loaded")
+        raise BstXInferenceUnavailable("BST model not loaded")
     meta = _stem_to_meta.get(stem)
     if meta is None:
         raise KeyError(f"stem {stem!r} not in clip_index.json")
@@ -220,12 +220,12 @@ def predict(stem: str, split: str | None = None) -> dict:
     if resolved_split not in SPLITS:
         raise ValueError(f"unsupported split {resolved_split!r}")
     if resolved_split not in _tensors:
-        raise BstInferenceUnavailable(
+        raise BstXInferenceUnavailable(
             f"no SCP'd tensors for split {resolved_split!r} — "
             f"check {BST_X_INPUTS_DIR / resolved_split}"
         )
     if "row_index" not in meta:
-        raise BstInferenceUnavailable(
+        raise BstXInferenceUnavailable(
             f"stem {stem!r} has no row_index in clip_index.json — "
             "re-run scratch/inspect_clips/rebuild_real.py"
         )

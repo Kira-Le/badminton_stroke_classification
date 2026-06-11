@@ -2,7 +2,7 @@
 #
 # Run from the repo root with both package roots on PYTHONPATH:
 #   PYTHONPATH=src/bst_refactor:src/bst_refactor/stroke_classification \
-#       python -m main_on_shuttleset.bst_train
+#       python -m main_on_shuttleset.bst_x_train
 #
 # PyTorch training loop overview (differs significantly from TF/Keras):
 #   TF:      model.compile(optimizer, loss) -> model.fit(data)  (one line trains everything)
@@ -40,9 +40,9 @@ from pipeline.config import (
 )
 from pipeline.data_access import env_path_or_none, load_repo_dotenv
 from run_tracker import track_run, track_serial
-from main_on_shuttleset.bst_common import (
+from main_on_shuttleset.bst_x_common import (
     Tee,
-    build_bst_network,
+    build_bst_x_network,
     compute_data_provenance,
     dump_topk_predictions,
 )
@@ -948,7 +948,7 @@ class Task:
         already in that index space (no runtime remap), and
         ``_assert_label_coverage`` has confirmed train teaches the whole head.
         """
-        self.net, self.n_bones = build_bst_network(
+        self.net, self.n_bones = build_bst_x_network(
             model_name,
             n_joints=self.n_joints,
             pose_style=self.pose_style,
@@ -1324,7 +1324,7 @@ if __name__ == '__main__':
     # don't overwrite the original run's log file.
     #
     # Anchor test_logs/ and experiments/ to this file's directory so the
-    # write paths don't depend on cwd. Lets `python -m main_on_shuttleset.bst_train`
+    # write paths don't depend on cwd. Lets `python -m main_on_shuttleset.bst_x_train`
     # land outputs next to the script regardless of where it was invoked from.
     script_dir = Path(__file__).resolve().parent
     log_dir = script_dir / 'test_logs'

@@ -27,7 +27,7 @@ It has a single source of truth config file (`pipeline/config.py`): the splits, 
 
 The pipeline is totally separate from the model build. It's just a modular data pipeline that eats video urls and CSVs and saves out CSVs and numpy arrays. It's model agnostic.
 
-The model it feeds is BST-X: a transformer that fuses the three streams into a stroke prediction. You train it on a chosen taxonomy with one command (`bst_train`), over several serial trials so one seed can't flatter the result, and score it on macro and min-class F1; inference is a separate small script (`bst_infer`). The architecture and the results live in `bst_x_overview.md`.
+The model it feeds is BST-X: a transformer that fuses the three streams into a stroke prediction. You train it on a chosen taxonomy with one command (`bst_x_train`), over several serial trials so one seed can't flatter the result, and score it on macro and min-class F1; inference is a separate small script (`bst_x_infer`). The architecture and the results live in `bst_x_overview.md`.
 
 ## The code it was built on
 

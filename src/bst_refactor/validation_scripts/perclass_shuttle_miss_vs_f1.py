@@ -24,7 +24,7 @@ collapse needed; pass ``--no-collapse-sides`` to skip averaging.
 manifest schema. F1 is what we have, and is arguably the better
 signal for the "is the model handling this class well overall"
 question. To switch to precision, extend ``Task.test()`` in
-``bst_train.py`` to also compute and store ``per_class_precision``
+``bst_x_train.py`` to also compute and store ``per_class_precision``
 (via ``torcheval.metrics.functional.multiclass_precision`` with
 ``average=None``), then re-run this with ``--metric precision``.
 
@@ -182,7 +182,7 @@ def main() -> int:
         help=(
             "Which per-class metric to read from manifest. f1 is what "
             "the manifest currently stores; precision/recall require "
-            "a schema extension to bst_train.py to produce."
+            "a schema extension to bst_x_train.py to produce."
         ),
     )
     parser.add_argument(
@@ -229,7 +229,7 @@ def main() -> int:
             print(
                 f"ERROR: no '{metric_key}' field found in {args.manifest}. "
                 f"This metric is not in the current manifest schema; "
-                f"extend bst_train.py Task.test() to populate it, or "
+                f"extend bst_x_train.py Task.test() to populate it, or "
                 f"re-run with --metric f1."
             )
         else:

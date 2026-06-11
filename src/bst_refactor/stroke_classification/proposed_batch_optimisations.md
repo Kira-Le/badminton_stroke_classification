@@ -2,7 +2,7 @@
 
 ## Context
 
-Reviewed the full training pipeline — `bst_train.py`, `shuttleset_dataset.py`, `bst.py`, `tempose.py` — to find inefficient memory loading, batching, or compute patterns that could be fixed without accuracy degradation and with minimal code change.
+Reviewed the full training pipeline — `bst_x_train.py`, `shuttleset_dataset.py`, `bst.py`, `tempose.py` — to find inefficient memory loading, batching, or compute patterns that could be fixed without accuracy degradation and with minimal code change.
 
 ## Verdict: Already essentially optimal for this scale
 
@@ -32,7 +32,7 @@ If running PyTorch 2.0+, wrapping the model in `torch.compile()` fuses kernels a
 - **Zero accuracy impact** (mathematically identical)
 - Multiplied across 5 serial runs, the time savings add up
 
-### Change (in `bst_train.py`)
+### Change (in `bst_x_train.py`)
 
 In `train_network()`, after model is passed in but before training begins (~line 241):
 
@@ -45,7 +45,7 @@ if hasattr(torch, 'compile'):  # PyTorch 2.0+ guard
 That's it. The guard ensures it's a no-op on older PyTorch.
 
 ### Files to modify
-- `main_on_shuttleset/bst_train.py` (1 line added)
+- `main_on_shuttleset/bst_x_train.py` (1 line added)
 
 ## Optional micro-optimization: `set_to_none=True`
 

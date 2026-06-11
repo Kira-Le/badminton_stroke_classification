@@ -232,7 +232,7 @@ def _process_video(job_id: str, video_path: str, model_name: str):
             and annotation_count <= 1
         ):
             try:
-                from .bst_inference import predict as bst_predict, BstInferenceUnavailable
+                from .bst_x_inference import predict as bst_predict, BstXInferenceUnavailable
                 live = bst_predict(job.clip_stem, split=None)
                 # Translate live shape → the same {strokes, rally_summary}
                 # envelope the FE already renders.
@@ -270,7 +270,7 @@ def _process_video(job_id: str, video_path: str, model_name: str):
                     "live_inference": True,
                 }
                 log.info("job %s: live BST forward pass succeeded for stem=%s", job_id, job.clip_stem)
-            except (BstInferenceUnavailable, KeyError, ValueError) as e:
+            except (BstXInferenceUnavailable, KeyError, ValueError) as e:
                 log.info("job %s: live BST unavailable for stem=%s (%s); falling back to smart stub",
                          job_id, job.clip_stem, e)
             except Exception as e:

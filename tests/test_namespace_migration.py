@@ -73,37 +73,24 @@ def _experiments_dir() -> Path:
 
 
 def _common_module():
-    return _first_importable(
-        'main_on_shuttleset.bst_x_common',
-        'main_on_shuttleset.bst_common',
-    )
+    return _first_importable('main_on_shuttleset.bst_x_common')
 
 
 def _train_module():
-    return _first_importable(
-        'main_on_shuttleset.bst_x_train',
-        'main_on_shuttleset.bst_train',
-    )
+    return _first_importable('main_on_shuttleset.bst_x_train')
 
 
 def _infer_module():
-    return _first_importable(
-        'main_on_shuttleset.bst_x_infer',
-        'main_on_shuttleset.bst_infer',
-    )
+    return _first_importable('main_on_shuttleset.bst_x_infer')
 
 
 def _api_inference_module():
-    return _first_importable('src.api.bst_x_inference', 'src.api.bst_inference')
+    return _first_importable('src.api.bst_x_inference')
 
 
 def _builder():
-    """The shared BST network builder, under whichever name is current."""
-    common = _common_module()
-    for attr in ('build_bst_x_network', 'build_bst_network'):
-        if hasattr(common, attr):
-            return getattr(common, attr)
-    raise AttributeError(f'No BST network builder in {common.__name__}')
+    """The shared BST-X network builder."""
+    return _common_module().build_bst_x_network
 
 
 def _switchover_landed() -> bool:
@@ -207,7 +194,7 @@ def test_t2_infer_signature_defaults_are_bst_x():
 
 @pytest.mark.skipif(not _switchover_landed(), reason='Step 6b.1 not landed')
 def test_t2_train_main_call_literal_no_bst_cg_ap():
-    """The __main__ call site at bst_train.py:1394 isn't importable; check the
+    """The __main__ call site at bst_x_train.py:1394 isn't importable; check the
     source. Comments mentioning BST_CG_AP survive — the regex targets
     assignment/keyword forms only."""
     text = Path(_train_module().__file__).read_text()
@@ -633,8 +620,8 @@ def test_t8_clip_index_schema(fe_dir):
     ids=lambda p: f'{p.parent.parent.name}/{p.name}',
 )
 def test_t8_npz_schema(npz_path):
-    """Every prediction npz carries exactly the field set bst_train and
-    bst_infer's dump path emit. The npz isn't pure numeric: clip_stems,
+    """Every prediction npz carries exactly the field set bst_x_train and
+    bst_x_infer's dump path emit. The npz isn't pure numeric: clip_stems,
     class_list, run_id, taxonomy_name are object/string arrays — checked
     explicitly so the 'no model_name string' claim can't slip in."""
     npz = np.load(npz_path, allow_pickle=True)
@@ -882,9 +869,15 @@ def test_t11_stage2_module_paths():
     if not _step6_common_landed():
         pytest.skip('Step 6 not landed: bst_x_common not importable')
     pattern = re.compile(r'main_on_shuttleset\.bst_(train|infer|common)\b|\bbuild_bst_network\b')
+    # The test file itself contains the pattern as a regex literal; exempt it
+    # to avoid a self-flag. Pickup-doc + assessment historical narratives
+    # outside the in-scope code aren't part of this gate either.
+    allowed = {
+        'tests/test_namespace_migration.py',
+    }
     hits = _scan_pattern(
         pattern, _tracked_text_files(),
-        allow_path=lambda rel: False,
+        allow_path=lambda rel: rel in allowed,
     )
     assert hits == [], '\n'.join(f'{r}:{n}: {l}' for r, n, l in hits)
 

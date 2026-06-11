@@ -237,7 +237,7 @@ Intentionally NOT created today:
 
 - `src/bst_refactor/stroke_classification/preparing_data/apply_heuristic.py` — follow-up.
 - `src/bst_refactor/stroke_classification/preparing_data/heuristics/` package — follow-up.
-- Any modification to `prepare_train_on_shuttleset.py`, `collate_npy`, `bst_train.py`, `bst_infer.py`, `shuttleset_dataset.py`, or `pipeline/`.
+- Any modification to `prepare_train_on_shuttleset.py`, `collate_npy`, `bst_x_train.py`, `bst_x_infer.py`, `shuttleset_dataset.py`, or `pipeline/`.
 
 ## Verification checklist before closing the session
 

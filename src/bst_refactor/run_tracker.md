@@ -11,9 +11,9 @@ Optional Aim UI on top if you want it; works fine without.
 | `src/bst_refactor/run_tracker.py` | `track_run(config, run_id, log_path=...)` and `track_serial(run_dir, serial_no, weights_path, tb_dir, metrics)`. Writes `manifest.yaml` and (optionally) mirrors into `.aim/`. |
 | `src/bst_refactor/run_overview.py` | Aggregator. `python run_overview.py` prints a table across all runs under `experiments/` (mean/stdev/max per metric). |
 | `src/bst_refactor/aim_backfill.py` | Rebuilds Aim from every manifest + its TB event files: per-epoch curves, hparams, tags (incl `best` on the kept-checkpoint serial), each run dated to its `started_at`. Re-run with `--wipe` for a clean rebuild (see Aim UI below). |
-| `src/bst_refactor/stroke_classification/main_on_shuttleset/bst_train.py` | Integrated: two calls to the tracker, test methods now return metric dicts, TB directory is threaded through to `train_network`. |
+| `src/bst_refactor/stroke_classification/main_on_shuttleset/bst_x_train.py` | Integrated: two calls to the tracker, test methods now return metric dicts, TB directory is threaded through to `train_network`. |
 
-## How it's wired into bst_train.py
+## How it's wired into bst_x_train.py
 
 ```python
 from run_tracker import track_run, track_serial

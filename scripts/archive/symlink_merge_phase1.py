@@ -8,7 +8,7 @@ Builds a flat dir where:
   symlinks the same three files from the committed extract dir.
 
 The result feeds ``prepare_train_on_shuttleset``'s collation step. After
-collation, ``bst_train`` reads the merged dataset under the
+collation, ``bst_x_train`` reads the merged dataset under the
 ``ablation_id``-tagged collated dir name.
 
 Run from the repo root.

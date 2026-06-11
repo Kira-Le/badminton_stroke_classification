@@ -166,7 +166,7 @@ After `sticky_anchor` runs on the full 1,716 clips:
   - If stem is in `busted_hit_zone_clips_phase1.txt`: symlink the three `sticky_anchor` outputs from `..._flat_h_sticky_anchor/`.
   - Otherwise: symlink from `$BST_X_MMPOSE_NPY_DIR`.
 - Collate via `python -m preparing_data.prepare_train_on_shuttleset --skip-trajectory --skip-pose --clip-npy-dir <merged_dir>` with the Phase 1 ablation_id (`npy_une_merge_v1_split_v2_dropunk_h_sticky_anchor` under `ShuttleSet_data_une_merge_v1/`).
-- Retrain V4 via `bst_train.py` pointing at the new collated dir. 5 serials, same hyperparameters as the committed V4 run (`run_20260420_171101/`).
+- Retrain V4 via `bst_x_train.py` pointing at the new collated dir. 5 serials, same hyperparameters as the committed V4 run (`run_20260420_171101/`).
 
 **Decision gate**: conjunction of (a) >25% relative reduction in zeroing rate on target classes, (b) no >5% relative regression on non-target classes, (c) >=0.02 min-F1 lift on target-class aggregate OR >=0.005 macro-F1 lift overall. All measured against committed V4.
 

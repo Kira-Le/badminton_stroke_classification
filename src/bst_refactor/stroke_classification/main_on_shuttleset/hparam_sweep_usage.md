@@ -1,6 +1,6 @@
 # hparam_sweep usage guide
 
-How to run a hparam search using the wrapper around `bst_train.py`.
+How to run a hparam search using the wrapper around `bst_x_train.py`.
 
 The wrapper drives a list of "cells" (each one a hparam variant you want
 to test) through the existing training pipeline, applies kill rules
@@ -99,7 +99,7 @@ PYTHONPATH=src/bst_refactor:src/bst_refactor/stroke_classification \
 ```
 
 That's it. The wrapper picks up `config.yaml`, validates it, and starts
-the first cell. It calls `bst_train.py` per serial, watches the manifest
+the first cell. It calls `bst_x_train.py` per serial, watches the manifest
 for completion, decides whether to kill or continue, and moves to the
 next cell when done.
 
@@ -122,7 +122,7 @@ Time estimate (no kills): ~6h00m, expected complete 04:30 06-May
 ```
 
 And a footer at the end of each cell with the verdict and top class
-movers. bst_train's own training logs print between, exactly as they
+movers. bst_x_train's own training logs print between, exactly as they
 would on a manual run.
 
 ## Step 4: read the results
@@ -189,11 +189,11 @@ through every per-class number.
 re-run with the same session_dir. The wrapper reads
 `<run_id>/manifest.yaml` to figure out how many serials actually
 completed and picks up at the next one. The killed serial's metrics
-(if it died mid-training) get re-rolled because bst_train doesn't pin
+(if it died mid-training) get re-rolled because bst_x_train doesn't pin
 seeds across invocations: this is a small noise contribution but the
 wrapper just records what it gets.
 
-**bst_train returns non-zero** (CUDA OOM, transient driver thing,
+**bst_x_train returns non-zero** (CUDA OOM, transient driver thing,
 filesystem hiccup): the cell is marked `failed`, verdict LOSE, and the
 wrapper advances to the next cell rather than nuking the queue. The
 search log makes failed cells obvious. If you want to investigate or
@@ -258,10 +258,10 @@ requires, duplicate cell name) you'll see it here.
 
 ## What the wrapper does NOT do
 
-- It doesn't change bst_train's training loop, loss, or any training
+- It doesn't change bst_x_train's training loop, loss, or any training
   knob beyond what you put in `augmentation:`. Whatever else is in the
   module-level Hyp namedtuple stays as-is for the run.
-- It doesn't add seeds to bst_train. Re-running the same cell
+- It doesn't add seeds to bst_x_train. Re-running the same cell
   configuration produces a slightly different mean each time. That's
   the existing behaviour; the wrapper just exposes it.
 - It doesn't run cells in parallel. Single GPU, single host, single
@@ -277,7 +277,7 @@ requires, duplicate cell name) you'll see it here.
 - Design rationale, kill rule calibration, decisions log:
   `scratch/architecture_notes/hparam_search_wrapper.md`.
 - Wrapper code: `hparam_sweep.py` (alongside this file).
-- bst_train CLI changes: `bst_train.py` (the `__main__` block at the
+- bst_x_train CLI changes: `bst_x_train.py` (the `__main__` block at the
   bottom).
 - Tests: `tests/test_hparam_sweep.py` at the repo root.
 - Search log of a running/completed session:

@@ -3,18 +3,18 @@
 #   1. Library: infer() + Task — load a checkpoint and predict, for a live
 #      single-clip backend (e.g. a Gradio GUI).
 #   2. CLI --fe mode: post-hoc batch dump of per-stroke logits + top-k for an
-#      already-trained run, writing the same npz schema bst_train emits at
+#      already-trained run, writing the same npz schema bst_x_train emits at
 #      end-of-serial. Folds in the retired eval_dump_predictions.py; lets the
 #      FE-shape converter / calibration run against a run without retraining.
 #
 # Run from the repo root with both package roots on PYTHONPATH:
 #   PYTHONPATH=src/bst_refactor:src/bst_refactor/stroke_classification \
-#       python -m main_on_shuttleset.bst_infer --fe \
+#       python -m main_on_shuttleset.bst_x_infer --fe \
 #           --run-dir .../experiments/run_<id> --serial 5
 #   The dump lands in <run-dir>/inference_runs/<timestamp>/ (npz +
 #   inference_manifest.yaml); pass --fe-output-dir to redirect it elsewhere.
 #
-# See bst_train.py for detailed PyTorch/TF comparison comments.
+# See bst_x_train.py for detailed PyTorch/TF comparison comments.
 
 import argparse
 import sys
@@ -35,7 +35,7 @@ from pipeline.config import (
     resolve_taxonomy,
 )
 from pipeline.data_access import env_path_or_none, load_repo_dotenv
-from main_on_shuttleset.bst_common import build_bst_network, dump_topk_predictions
+from main_on_shuttleset.bst_x_common import build_bst_x_network, dump_topk_predictions
 
 
 @torch.no_grad()  # no gradient tracking needed for inference — saves memory
@@ -113,7 +113,7 @@ class Task:
         """
         self.taxonomy = taxonomy
         self.class_list = list(taxonomy.classes)
-        self.net, _n_bones = build_bst_network(
+        self.net, _n_bones = build_bst_x_network(
             model_name,
             n_joints=self.n_joints,
             pose_style=self.pose_style,
@@ -185,7 +185,7 @@ def dump_run_predictions(
     override is passed. A small ``inference_manifest.yaml`` records the source
     weights / serial / splits / time alongside the npz.
 
-    Same npz schema as ``bst_train``'s end-of-serial dump (logits, y_true,
+    Same npz schema as ``bst_x_train``'s end-of-serial dump (logits, y_true,
     y_pred_top1, topk_idx, clip_stems, class_list, run_id, serial_no,
     taxonomy_name). New-schema runs only: labels.npy is in active class space,
     so there's no remap.
@@ -210,7 +210,7 @@ def dump_run_predictions(
         sys.exit(f'collated dir missing: {collated_dir}')
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    net, _n_bones = build_bst_network(
+    net, _n_bones = build_bst_x_network(
         model_name,
         n_joints=n_joints,
         pose_style=config['pose_style'],
@@ -284,7 +284,7 @@ def dump_run_predictions(
 
 if __name__ == '__main__':
     # Load .env so BST_X_COLLATED_DATA_ROOT resolves the same way the collator
-    # and bst_train do. No-op without .env; shell exports win.
+    # and bst_x_train do. No-op without .env; shell exports win.
     load_repo_dotenv()
 
     parser = argparse.ArgumentParser(
@@ -323,7 +323,7 @@ if __name__ == '__main__':
         parser.error('--fe-output-dir requires --fe (no implicit dump mode)')
     if not args.fe:
         parser.error(
-            'bst_infer CLI currently only implements --fe (batch dump) mode. '
+            'bst_x_infer CLI currently only implements --fe (batch dump) mode. '
             'For live single-clip inference, import infer() / Task instead.'
         )
     if args.run_dir is None:

@@ -458,7 +458,7 @@ SPLITS: dict[str, list[int]] = {
 # ---------------------------------------------------------------------------
 # Collated-dir naming
 # ---------------------------------------------------------------------------
-# Both prepare_train_on_shuttleset.py (writer) and bst_train.py (reader) need
+# Both prepare_train_on_shuttleset.py (writer) and bst_x_train.py (reader) need
 # to construct the same collated dir basename for the same config. Single
 # source of truth so they stay in lockstep.
 

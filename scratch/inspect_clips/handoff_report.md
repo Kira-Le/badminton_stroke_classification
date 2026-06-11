@@ -1101,7 +1101,7 @@ locally. The pipeline:
 2. Sample 2 stems per class × 14 classes per split → 28 test + 28 val
    = 56 stems total, class-balanced.
 3. Build the new `clip_index.json` carrying per-stem `row_index` (the
-   row in the collated tensor). This is the field `bst_inference.py`
+   row in the collated tensor). This is the field `bst_x_inference.py`
    reads at request time to slice the right input.
 4. Build the new `predictions/{test,val}.json` with placeholder y_pred
    == y_true and a single-element `top_k` at confidence 1.0 — these
@@ -1122,13 +1122,13 @@ Counts:
 
 ### 10.5  Inference module (Phase 4b)
 
-`src/api/bst_inference.py` is a thin wrapper around the existing
-`bst_infer.Task` / `bst_common.build_bst_network`. Key choices:
+`src/api/bst_x_inference.py` is a thin wrapper around the existing
+`bst_x_infer.Task` / `bst_x_common.build_bst_x_network`. Key choices:
 
 - **Path bootstrap**: extends `sys.path` with
   `src/bst_refactor/{,stroke_classification}/` so `bst_refactor`'s
   bare `from pipeline.config import ...` style imports resolve. Same
-  trick the `PYTHONPATH=...` line in `bst_infer.py`'s docstring uses.
+  trick the `PYTHONPATH=...` line in `bst_x_infer.py`'s docstring uses.
 - **Lazy globals**: model, mmap'd tensors, stem→row index all load on
   first call to `is_available()` or `predict()`. Subsequent calls
   reuse cached state.
@@ -1140,8 +1140,8 @@ Counts:
 - **API**:
 
   ```python
-  bst_inference.is_available() -> bool
-  bst_inference.predict(stem: str, split: str | None = None) -> dict
+  bst_x_inference.is_available() -> bool
+  bst_x_inference.predict(stem: str, split: str | None = None) -> dict
   ```
 
   Returns `{predicted_class, confidence_pct, true_class, top_k,
@@ -1157,7 +1157,7 @@ Two endpoints now route real inference first, fall back gracefully:
 
 | Endpoint | Behaviour |
 |---|---|
-| `GET /api/registry/{model_id}/splits/{split}/clips/{stem}` | Tries `bst_inference.predict(stem, split)`. On success: response includes `drawn_from: "live_forward_pass"` and the live `predicted_class`/`top_k`. On `BstInferenceUnavailable`: falls back to the cached JSON entry with `drawn_from: "cached_predictions_json"`. |
+| `GET /api/registry/{model_id}/splits/{split}/clips/{stem}` | Tries `bst_x_inference.predict(stem, split)`. On success: response includes `drawn_from: "live_forward_pass"` and the live `predicted_class`/`top_k`. On `BstInferenceUnavailable`: falls back to the cached JSON entry with `drawn_from: "cached_predictions_json"`. |
 | `POST /api/library_predict` (via `_process_video` worker) | For library jobs (`source == "library"` with a `clip_stem`), tries live BST first. Translates the result into the `{strokes, rally_summary, live_inference: true}` envelope the FE already renders. On unavailability: falls back to `inference.run_inference()` (smart stub) with `live_inference: false`. |
 | `POST /api/upload` | Unchanged — always smart stub. Real inference on arbitrary uploaded video remains Ari/Scott territory. |
 
@@ -1172,7 +1172,7 @@ All inside the running stack at `localhost:24082`:
 | Test | Result |
 |---|---|
 | Module import + `is_available()` inside container | `True` (model loaded, 56 stems indexed, both splits mmap'd) |
-| 5 random stems via `bst_inference.predict()` directly | All return live; first call 959 ms (cold load), subsequent 7-8 ms each |
+| 5 random stems via `bst_x_inference.predict()` directly | All return live; first call 959 ms (cold load), subsequent 7-8 ms each |
 | `GET /api/registry/.../clips/24_3_8_2` | `drawn_from: "live_forward_pass"`, `predicted_class: clear (99 %)`, full 5-entry top_k |
 | Identity: same stem (`39_2_15_3`) curled twice | Identical bytes — `clear 96 % conf=0.9627` both times. Forward pass is deterministic with `model.eval()` + `@torch.no_grad`. |
 | Variance: 6 stems across 6 distinct true classes | 5/6 correct, varied confidences 55-99 %. One model misprediction (`drop → wrist_smash @ 76 %`) — matches the model's known weakness (per-class F1 0.49 on wrist_smash per manifest). |
@@ -1184,7 +1184,7 @@ All inside the running stack at `localhost:24082`:
 ```
 ~/.ssh/{id_ed25519,id_ed25519.pub,config}    NEW   (machine-level config)
 docker-compose.yml                          +3 lines (bst_inputs bind mount)
-src/api/bst_inference.py                    NEW  (~200 LOC)
+src/api/bst_x_inference.py                    NEW  (~200 LOC)
 src/api/registry.py                         +35 lines (live-or-cached branch)
 src/api/main.py                             +40 lines (live-or-stub in _process_video)
 src/bst_refactor/.../run_20260505_154907/clip_index.json

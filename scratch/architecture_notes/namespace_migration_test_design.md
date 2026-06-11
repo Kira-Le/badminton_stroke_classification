@@ -6,11 +6,11 @@ Sources: `/home/ariel/Documents/COSC594/bst_x_rebrand.md` (assessment, bugs #A-#
 
 Locked decisions this suite verifies:
 
-1. `MODELS` dict in `bst_common.py` gains `'BST_X': BST_CG_AP` as an alias; the five Chang keys stay.
-2. Default `model_name` flips `'BST_CG_AP'` to `'BST_X'` at `bst_train.py:942,1394` and `bst_infer.py:99,175,317`.
-3. The case-mix branch at `bst_train.py:979-985` becomes `save_name = self.model_name.lower()`; new runs write `bst_x_*.pt`.
+1. `MODELS` dict in `bst_x_common.py` gains `'BST_X': BST_CG_AP` as an alias; the five Chang keys stay.
+2. Default `model_name` flips `'BST_CG_AP'` to `'BST_X'` at `bst_x_train.py:942,1394` and `bst_x_infer.py:99,175,317`.
+3. The case-mix branch at `bst_x_train.py:979-985` becomes `save_name = self.model_name.lower()`; new runs write `bst_x_*.pt`.
 4. Every `bst_CG_AP_*.pt` under `experiments/run_*/weights/` is renamed to `bst_x_*.pt`. The Chang baseline at `experiments/bst_cg_ap_base_17_04_2026/weights/` keeps its three files but lowercases their prefix in place (`bst_CG_AP_` → `bst_cg_ap_`), with its manifest and .txt notes following, so the new save-name rule resumes it. (Revised 2026-06-11; was "its three files stay".)
-5. Manifest `weights_path` lines, `docs/models_registry.yaml`, `scripts/model_manifest.tsv` `dest_path` basenames (the models-v1 release assets keep their pre-rebrand names; only the tsv's dest column moves), and the `src/api/bst_inference.py:53` literal update in lockstep.
+5. Manifest `weights_path` lines, `docs/models_registry.yaml`, `scripts/model_manifest.tsv` `dest_path` basenames (the models-v1 release assets keep their pre-rebrand names; only the tsv's dest column moves), and the `src/api/bst_x_inference.py:53` literal update in lockstep.
 6. `fe_jsons/*.json.gz` and `predictions/*.npz` carry no model_name strings; untouched.
 7. TB logs untouched.
 8. venv renames to `venv-bst-x` (out-of-repo ops).
@@ -79,7 +79,7 @@ Numbers the specs below rely on. Re-verify any that look stale at implementation
 
 Top of `tests/test_namespace_migration.py`:
 
-- A module-resolution helper: `_first_importable(*names)` returns the first module that imports from an ordered candidate list, e.g. `('main_on_shuttleset.bst_x_common', 'main_on_shuttleset.bst_common')`. Every test that touches a renamed module goes through it, so the suite collects green on every commit between Step 0 and Step 8. Raise (don't skip) if neither imports: that state is a broken tree, not a not-yet state.
+- A module-resolution helper: `_first_importable(*names)` returns the first module that imports from an ordered candidate list, e.g. `('main_on_shuttleset.bst_x_common', 'main_on_shuttleset.bst_x_common')`. Every test that touches a renamed module goes through it, so the suite collects green on every commit between Step 0 and Step 8. Raise (don't skip) if neither imports: that state is a broken tree, not a not-yet state.
 - The switchover sentinel: `SWITCHOVER_LANDED = 'BST_X' in MODELS`. Tests gated on Step 6b skip with a clear message until it's true.
 - `REPO_ROOT = Path(__file__).resolve().parents[1]` and `EXPERIMENTS = REPO_ROOT / 'src' / <pkg> / 'stroke_classification' / 'main_on_shuttleset' / 'experiments'` where `<pkg>` is whichever of `bst_x` / `bst_refactor` exists (same first-existing pattern as the import helper).
 
@@ -95,7 +95,7 @@ Imports of `pipeline.*` / `main_on_shuttleset.*` / `model.*` resolve through `co
 - **Spec.**
   - Assert `set(MODELS) == {'BST_0', 'BST', 'BST_CG', 'BST_AP', 'BST_CG_AP', 'BST_X'}`. Exactly six: catches both a missed alias and an accidental drop of a Chang key.
   - Assert `MODELS['BST_X'] is MODELS['BST_CG_AP']`. The locked decision is alias-by-identity, not a re-declared equivalent partial.
-  - For every key: build via the shared builder (`build_bst_network` or its renamed successor, resolved through the import helper) with `n_joints=17, pose_style='JnB_bone', in_channels=2, n_class=14, seq_len=100, device='cpu'`. Assert the return is an `nn.Module` and `sum(p.numel() for p in net.parameters()) > 0`. This exercises the full dispatch path, not just dict membership.
+  - For every key: build via the shared builder (`build_bst_x_network` or its renamed successor, resolved through the import helper) with `n_joints=17, pose_style='JnB_bone', in_channels=2, n_class=14, seq_len=100, device='cpu'`. Assert the return is an `nn.Module` and `sum(p.numel() for p in net.parameters()) > 0`. This exercises the full dispatch path, not just dict membership.
   - Behavioural backstop for the alias: `torch.manual_seed(0)`, build `'BST_X'`; `torch.manual_seed(0)`, build `'BST_CG_AP'`; both `.eval()` (dropout off); assert equal param counts AND `torch.equal` on the forward output of one seeded batch (batch 2, the same input-shaping the `test_taxonomy.py` forward smoke uses, including the `human_pose.view(*shape[:-2], -1)` flatten and `set_schedule_factors(1.0, 1.0)`).
 - **Dependencies.** torch CPU; the builder; no artefacts.
 - **Brittleness.** The `is` assert is stricter than behaviour: if someone later re-declares `BST_X` as its own `partial(BST, use_ppf=True, use_cg=True, use_ap=True)`, identity fails while the forward check passes. That strictness is deliberate; an alias that stops being an alias should be a conscious decision. The forward-identity check relies on identical construction order under a fixed seed, which holds for two builds of the same partial on CPU.
@@ -106,9 +106,9 @@ Imports of `pipeline.*` / `main_on_shuttleset.*` / `model.*` resolve through `co
 - **Location.** `tests/test_namespace_migration.py`.
 - **Runs.** Standing, post-switchover. Gate: `SWITCHOVER_LANDED`.
 - **Spec.**
-  - `inspect.signature` checks on importable surfaces: `bst_train.Task.get_network_architecture` parameter `model_name` default `== 'BST_X'`; same for `bst_infer.Task.get_network_architecture` and `bst_infer.dump_run_predictions`.
-  - The two non-importable sites (`bst_train.py:1394` call literal inside `__main__`; `bst_infer.py:317` argparse default) get a source-level check: read each module's `__file__` text and assert the regexes `model_name\s*=\s*'BST_CG_AP'` and `default\s*=\s*'BST_CG_AP'` have zero matches. Comments that mention BST_CG_AP (the optimiser notes at `bst_train.py:591-592,637`, the `--model-name` help text lineage) survive because the regexes target assignment/keyword forms only.
-  - Positive pin for the argparse site: assert `default='BST_X'` appears in the `bst_infer` source within the `--model-name` `add_argument` call (regex over a window around `--model-name`).
+  - `inspect.signature` checks on importable surfaces: `bst_x_train.Task.get_network_architecture` parameter `model_name` default `== 'BST_X'`; same for `bst_x_infer.Task.get_network_architecture` and `bst_x_infer.dump_run_predictions`.
+  - The two non-importable sites (`bst_x_train.py:1394` call literal inside `__main__`; `bst_x_infer.py:317` argparse default) get a source-level check: read each module's `__file__` text and assert the regexes `model_name\s*=\s*'BST_CG_AP'` and `default\s*=\s*'BST_CG_AP'` have zero matches. Comments that mention BST_CG_AP (the optimiser notes at `bst_x_train.py:591-592,637`, the `--model-name` help text lineage) survive because the regexes target assignment/keyword forms only.
+  - Positive pin for the argparse site: assert `default='BST_X'` appears in the `bst_x_infer` source within the `--model-name` `add_argument` call (regex over a window around `--model-name`).
 - **Dependencies.** Import of the two entry modules (already done by `test_train_surface.py` / `test_inference_smoke.py`, so module-level import is known CPU-safe).
 - **Brittleness.** The source regexes couple to single-quote style and `default=` spelling. Low risk in this codebase (consistent quoting), and the failure mode is a false failure at edit time, not a silent pass. If the argparse block is ever refactored into a builder function, replace the regex with a signature check in the same commit.
 
@@ -178,11 +178,11 @@ Imports of `pipeline.*` / `main_on_shuttleset.*` / `model.*` resolve through `co
 
 ### T7: live-inference weight literal
 
-- **Purpose / bug class.** The hardcoded checkpoint path at `src/api/bst_inference.py:53` (decision 5's third edge). The model loads lazily at first predict, so an import-green API can still be a dead live-inference path; no existing test asserts the file exists.
+- **Purpose / bug class.** The hardcoded checkpoint path at `src/api/bst_x_inference.py:53` (decision 5's third edge). The model loads lazily at first predict, so an import-green API can still be a dead live-inference path; no existing test asserts the file exists.
 - **Location.** `tests/test_namespace_migration.py`.
 - **Runs.** Standing, both. Prefix assert gates on `SWITCHOVER_LANDED`.
 - **Spec.**
-  - Import the API inference module through the resolution helper (`src.api.bst_x_inference` then `src.api.bst_inference`).
+  - Import the API inference module through the resolution helper (`src.api.bst_x_inference` then `src.api.bst_x_inference`).
   - Assert `module.RUN_DIR.is_dir()` and `module.WEIGHTS_PATH.is_file()`.
   - Post-switchover: `module.WEIGHTS_PATH.name.startswith('bst_x_')`.
   - Do NOT load the checkpoint; existence is the contract under test, and the forward pass needs tensors this environment doesn't mount.
@@ -250,7 +250,7 @@ Imports of `pipeline.*` / `main_on_shuttleset.*` / `model.*` resolve through `co
     3. Sentinel: `docker-compose.dev.yml` mentions `bst_x_inputs`. Pattern: `\bbst_inputs\b` (widened 2026-06-11 from `scratch/bst_inputs\b` — the container target `/app/bst_inputs` and the code fallbacks at `bst_x_inference.py:66-70` rename too, and the narrow pattern would miss stragglers there).
     4. Sentinel: `pyproject.toml` defines `bst-x-runtime`. Pattern: `\bbst-runtime\b`. No allowlist — the alias group was dropped (2026-06-11), so post-Step-5 the pattern should hit nothing.
     5. Sentinel: the Step 4 fallback mapping has been REMOVED (mapping dict absent — the Step 9b end-of-branch cleanup commit). Pattern: `\bBST_(CLIPS_DIR|CLIPS_CSV|SHUTTLE_NPY_DIR|MMPOSE_NPY_DIR|INPUTS_DIR|DATA_DIR|LOCAL_CLIPS_DIR|REPO_ROOT|REGISTRY_PATH|SHUTTLE_CSV_DIR)\b`. The `\b` after `BST_` family names keeps `BST_X_CLIPS_DIR` from matching.
-    6. Sentinel: `SWITCHOVER_LANDED`. Pattern: `bst_CG_AP` restricted to `docs/**`, `src/api/**`, `scripts/model_manifest.tsv` dest_path column, manifest files under `experiments/run_*/`, AND the Chang baseline dir (its files + manifest lowercase at 6b.2, so a mixed-case hit there is a missed rename; the tsv's frozen `asset_name` column is the one deliberate survivor — exempt it by column, not by file). Allowlist starts empty; the two trainer lines that used to carry lowercase `bst_CG_AP` examples (`bst_train.py:965,979`) are edited or deleted in 6b.1. Scope this stage narrowly rather than repo-wide: scratch history and the runs ledger legitimately mention the old filenames.
+    6. Sentinel: `SWITCHOVER_LANDED`. Pattern: `bst_CG_AP` restricted to `docs/**`, `src/api/**`, `scripts/model_manifest.tsv` dest_path column, manifest files under `experiments/run_*/`, AND the Chang baseline dir (its files + manifest lowercase at 6b.2, so a mixed-case hit there is a missed rename; the tsv's frozen `asset_name` column is the one deliberate survivor — exempt it by column, not by file). Allowlist starts empty; the two trainer lines that used to carry lowercase `bst_CG_AP` examples (`bst_x_train.py:965,979`) are edited or deleted in 6b.1. Scope this stage narrowly rather than repo-wide: scratch history and the runs ledger legitimately mention the old filenames.
     7. Sentinel: none in-repo (the venv rename is host ops). Pattern: `venv-bst(?!-x)`. Gate on an env flag (`RENAME_SCAN_VENV=1`) rather than auto-detect; run it manually after decision 8's ops step. The lookahead matters: `\b` alone would match inside `venv-bst-x`.
   - On failure, report `file:line:match` for every hit; the test message is the work list.
 - **Dependencies.** git CLI (available in CI); stdlib re.

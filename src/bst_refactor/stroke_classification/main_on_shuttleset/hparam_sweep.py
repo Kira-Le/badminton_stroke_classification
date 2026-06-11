@@ -1,7 +1,7 @@
-"""Hparam search orchestration wrapper for bst_train.py.
+"""Hparam search orchestration wrapper for bst_x_train.py.
 
 Drives a sequence of cells (each a single-knob or multi-knob hparam variant)
-through bst_train.py one serial at a time, applying within-cell early-kill
+through bst_x_train.py one serial at a time, applying within-cell early-kill
 rules and between-cell verdict-conditional skipping. State persists to the
 session dir so abrupt termination (tmux death, network blip) can be resumed.
 
@@ -70,7 +70,7 @@ DEFAULT_TUNABLES = {
     'high_variance_warn_stdev': 0.010,
 }
 
-# Empirical wall-clock for bst_train on engelbart, used for time-remaining
+# Empirical wall-clock for bst_x_train on engelbart, used for time-remaining
 # estimates only. ETA quality scales with how stable the per-serial wall-clock
 # is; revise here if the cluster's per-serial baseline drifts.
 SECONDS_PER_SERIAL = 25 * 60
@@ -342,7 +342,7 @@ def read_cell_serials(run_id: str) -> list[dict]:
             raise RuntimeError(
                 f'{run_id}/manifest.yaml serial {sn}: missing metrics keys '
                 f'{missing}. Manifest may be from an aborted partial write or '
-                f'a different bst_train version.'
+                f'a different bst_x_train version.'
             )
     return serials
 
@@ -447,20 +447,20 @@ def compute_verdict(killed: bool, serials_done: int, mean: dict | None,
 
 
 # ==========================================================================
-# bst_train invocation
+# bst_x_train invocation
 # ==========================================================================
 
 def invoke_bst_train(serial_no: int, run_id: str, log_path: Path,
                      augmentation: dict) -> int:
-    """Run bst_train.py for one serial via subprocess. Returns exit code."""
-    # PYTHONPATH per the bst_train.py module header. Same shape regardless of cwd.
+    """Run bst_x_train.py for one serial via subprocess. Returns exit code."""
+    # PYTHONPATH per the bst_x_train.py module header. Same shape regardless of cwd.
     src_root = SCRIPT_DIR.parent.parent
     stroke_root = SCRIPT_DIR.parent
     env = os.environ.copy()
     env['PYTHONPATH'] = ':'.join([str(src_root), str(stroke_root)])
 
     cmd = [
-        sys.executable, '-m', 'main_on_shuttleset.bst_train',
+        sys.executable, '-m', 'main_on_shuttleset.bst_x_train',
         '--serial-no', str(serial_no),
         '--run-id', run_id,
         '--log-path', str(log_path),
@@ -497,7 +497,7 @@ def run_cell(state: dict, cell_config: dict, session_dir: Path,
     # immediately so a crash before the cell starts work doesn't orphan the
     # minted run dir into a phantom: resume re-uses the same run_id.
     #
-    # Run_id uses microsecond resolution (deviating from bst_train's
+    # Run_id uses microsecond resolution (deviating from bst_x_train's
     # second-resolution default) so adjacent fast-killing cells don't share
     # a timestamp and accidentally write into the same run dir. Cells that
     # take a real 2hr won't collide regardless; this is the safety net.
@@ -551,7 +551,7 @@ def run_cell(state: dict, cell_config: dict, session_dir: Path,
             # return.
             cell_state['status'] = 'failed'
             cell_state['failed_reason'] = (
-                f'bst_train exited with code {rc} on serial {next_serial}.'
+                f'bst_x_train exited with code {rc} on serial {next_serial}.'
             )
             cell_state['failed_at_serial'] = next_serial
             cell_state['verdict'] = 'LOSE'
@@ -559,7 +559,7 @@ def run_cell(state: dict, cell_config: dict, session_dir: Path,
             cell_state['per_class_mean'] = per_class_mean(cell_state['serials'])
             save_state(session_dir, state)
             sys.stderr.write(
-                f'\n[hparam_sweep] bst_train exited with code {rc} on '
+                f'\n[hparam_sweep] bst_x_train exited with code {rc} on '
                 f'cell {cell_name!r} serial {next_serial}. Marking cell '
                 f'failed and advancing to next cell.\n'
             )
@@ -1026,7 +1026,7 @@ def cmd_dry_run(session_dir: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description='hparam_sweep: drive bst_train.py through a hparam search.',
+        description='hparam_sweep: drive bst_x_train.py through a hparam search.',
     )
     parser.add_argument(
         'session_dir', nargs='?', type=Path, default=None,

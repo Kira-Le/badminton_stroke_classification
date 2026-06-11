@@ -11,7 +11,7 @@ Specifically it verifies that:
   1. Real preprocessed npy files can be loaded by Dataset_npy_collated
   2. The DataLoader correctly batches them
   3. The human_pose tensor can be flattened into the feature dim the model expects
-     (same operation as bst_train.py:101)
+     (same operation as bst_x_train.py:101)
   4. BST_0 runs a forward pass without error
   5. The output shape is (batch_size, n_classes) — i.e. one prediction per sample
 
@@ -120,7 +120,7 @@ def test_pipeline_dataloader_to_model_forward_pass():
         f"got shape {human_pose.shape} — preprocessing output may be malformed."
     )
 
-    # Step 6: Flatten joints/bones into feature dim (mirrors bst_train.py:101)
+    # Step 6: Flatten joints/bones into feature dim (mirrors bst_x_train.py:101)
     human_pose = human_pose.view(*human_pose.shape[:-2], -1)
     in_dim = human_pose.shape[-1]
     seq_len = human_pose.shape[1]

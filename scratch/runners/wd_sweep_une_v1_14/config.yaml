@@ -1,5 +1,5 @@
 # AdamW weight-decay sweep on une_v1_14. One cell per lambda; everything else at
-# the bst_train module defaults so weight decay is the only lever: aug flip0.5 /
+# the bst_x_train module defaults so weight decay is the only lever: aug flip0.5 /
 # jitter0.3, CDB-F1 tau1 gamma1, cosine + warmup100, 80 epochs, val-improvability
 # gate OFF (inherited, not set here). lambda 0.01 is the in-sweep anchor: same
 # no-decay grouping as the rest, just the old value. It is NOT bit-identical to

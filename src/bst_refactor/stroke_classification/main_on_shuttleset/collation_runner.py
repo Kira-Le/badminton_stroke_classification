@@ -1,13 +1,13 @@
-"""Drive bst_train.py through a list of (taxonomy, split, knobs) cells.
+"""Drive bst_x_train.py through a list of (taxonomy, split, knobs) cells.
 
 A stripped-down sibling of hparam_sweep.py: no kill rules, no verdict logic,
 no current-best tracking. One fresh run_id per cell, N serials per cell from the
 cell config (default 5; headline cells set 10). State persisted to state.json so
 a killed runner resumes mid-session without re-running finished serials.
 
-Each serial is a separate `bst_train --serial-no` subprocess so a crash on one
+Each serial is a separate `bst_x_train --serial-no` subprocess so a crash on one
 serial doesn't take down the session's progress (the manifest + state.json carry
-what's done). bst_train resolves the collation dir from --taxonomy /
+what's done). bst_x_train resolves the collation dir from --taxonomy /
 --split-column / --collation-id (+ BST_X_COLLATED_DATA_ROOT), so the runner only
 forwards those plus the shared sharing-flags.
 
@@ -36,13 +36,13 @@ TEST_LOGS_DIR = SCRIPT_DIR / 'test_logs'
 
 
 def invoke_bst_train(*, serial_no: int, run_id: str, log_path: Path, cell: dict) -> int:
-    """Run one bst_train serial as a subprocess. Returns the exit code."""
+    """Run one bst_x_train serial as a subprocess. Returns the exit code."""
     src_root = SCRIPT_DIR.parent.parent       # src/bst_refactor
     stroke_root = SCRIPT_DIR.parent           # src/bst_refactor/stroke_classification
     env = os.environ.copy()
     env['PYTHONPATH'] = ':'.join([str(src_root), str(stroke_root)])
     cmd = [
-        sys.executable, '-m', 'main_on_shuttleset.bst_train',
+        sys.executable, '-m', 'main_on_shuttleset.bst_x_train',
         '--serial-no',    str(serial_no),
         '--run-id',       run_id,
         '--log-path',     str(log_path),
@@ -54,12 +54,12 @@ def invoke_bst_train(*, serial_no: int, run_id: str, log_path: Path, cell: dict)
     if cell.get('ablation_id'):
         cmd += ['--ablation-id', cell['ablation_id']]
     # Optional val-improvability gate toggle. Present-and-True turns it on,
-    # present-and-False forces it off; absent leaves the bst_train Hyp default.
+    # present-and-False forces it off; absent leaves the bst_x_train Hyp default.
     if cell.get('use_val_improvability_gate') is not None:
         cmd += ['--val-improvability-gate' if cell['use_val_improvability_gate']
                 else '--no-val-improvability-gate']
     # Optional per-cell weight decay (the WD sweep dimension); cells without it
-    # fall back to the bst_train Hyp default.
+    # fall back to the bst_x_train Hyp default.
     if cell.get('weight_decay') is not None:
         cmd += ['--weight-decay', str(cell['weight_decay'])]
     return subprocess.run(cmd, env=env).returncode
@@ -100,7 +100,7 @@ def main():
                 log_path=log_path, cell=cell,
             )
             if rc != 0:
-                print(f'[{name}] bst_train failed with code {rc} on S{nxt}; aborting cell.')
+                print(f'[{name}] bst_x_train failed with code {rc} on S{nxt}; aborting cell.')
                 sys.exit(rc)
             cstate['serials_done'] = nxt
             state_path.write_text(json.dumps(state, indent=2))

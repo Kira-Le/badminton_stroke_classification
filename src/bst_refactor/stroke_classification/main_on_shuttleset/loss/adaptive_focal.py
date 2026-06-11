@@ -17,7 +17,7 @@ configured ratio so a high-F1 partner doesn't get downweighted past the point
 where its training signal collapses. The bump is absorbed across the other
 ``n_classes - 2`` classes so mean alpha stays 1.0.
 
-Train-loop responsibilities (see ``bst_train.train_one_epoch`` /
+Train-loop responsibilities (see ``bst_x_train.train_one_epoch`` /
 ``train_network``):
     1. accumulate per-class TP / FP / FN during each epoch's forward pass,
     2. compute per-class F1 with ``per_class_f1_from_counts`` at end-of-epoch,

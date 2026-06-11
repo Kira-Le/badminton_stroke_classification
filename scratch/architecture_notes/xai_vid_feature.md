@@ -118,7 +118,7 @@ Verified during scoping. Recorded here for reference:
 - `POSE_BONE_MULTIPLIER['JnB_bone'] = 1` (`preparing_data/shuttleset_dataset.py:25`).
 - `get_bone_pairs('coco')` returns 19 ordered pairs (`shuttleset_dataset.py:28-40`): head (5 pairs), ears-to-shoulders (2), arms (4), torso (4), legs (4).
 - `create_bones` (`shuttleset_dataset.py:79-89`) produces `(t, m, 19, 2)` bone tensors, zeroed where either endpoint joint is zero (sentinel for missing).
-- In-dim layout in the flat model input: `[joints (17 × 2)][bones (19 × 2)]` per (frame, player). Source: training-loop reshape at `bst_train.py:239` applied to a tensor whose shape ends in `(..., J+B=36, 2)`.
+- In-dim layout in the flat model input: `[joints (17 × 2)][bones (19 × 2)]` per (frame, player). Source: training-loop reshape at `bst_x_train.py:239` applied to a tensor whose shape ends in `(..., J+B=36, 2)`.
 
 So `attr.reshape(B, T, n_players, 36, 2)` gives a clean unflattened tensor for downstream per-joint / per-bone slicing.
 
@@ -287,7 +287,7 @@ Optional polish (defer unless quick):
 - `src/bst_refactor/stroke_classification/model/bst.py` (forward + CG/AP buffers).
 - `src/bst_refactor/stroke_classification/model/tempose.py` (attention impl).
 - `src/bst_refactor/stroke_classification/preparing_data/shuttleset_dataset.py` (POSE_BONE_MULTIPLIER, get_bone_pairs, create_bones).
-- `src/bst_refactor/stroke_classification/main_on_shuttleset/bst_train.py:239` (view-flatten that defines in_dim layout).
+- `src/bst_refactor/stroke_classification/main_on_shuttleset/bst_x_train.py:239` (view-flatten that defines in_dim layout).
 - `src/bst_refactor/stroke_classification/main_on_shuttleset/experiments/run_20260505_154907/manifest.yaml`.
 - `src/bst_refactor/stroke_classification/main_on_shuttleset/experiments/run_20260505_154907/predictions/serial_5.pt`.
 - `/scratch/comp320a/ShuttleSet/clips/**.mp4` (engelbart-only).

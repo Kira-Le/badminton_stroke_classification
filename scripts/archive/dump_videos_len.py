@@ -1,12 +1,12 @@
 """Dump per-clip videos_len from the npy collated dirs on bourbaki.
 
 Produces a small CSV mapping clip_stem -> split -> videos_len. Once that file
-is local, filter (c) "would-be discarded by bst_train" (= rows with
+is local, filter (c) "would-be discarded by bst_x_train" (= rows with
 ``videos_len == 0``) can be applied alongside filters (a) and (b) in the
 class-by-player overlap analysis.
 
 Run on bourbaki (or any host that has the npy collated dir present), from the
-repo root, with the same PYTHONPATH bst_train uses:
+repo root, with the same PYTHONPATH bst_x_train uses:
 
     cd ~/badminton_stroke_classifier
     PYTHONPATH=src/bst_refactor:src/bst_refactor/stroke_classification \\
@@ -32,7 +32,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-# Same import path bst_train uses. TAXONOMIES kept on hand for ad-hoc tweaks
+# Same import path bst_x_train uses. TAXONOMIES kept on hand for ad-hoc tweaks
 # while iterating on this script; not currently referenced.
 from pipeline.config import TAXONOMIES  # noqa: F401
 from pipeline.config import derive_npy_collated_dir_basename
@@ -115,7 +115,7 @@ def main() -> int:
     drop_unknown = bool(args.drop_unknown)
     use_3d_pose = bool(args.use_3d_pose)
 
-    # Collated dir basename + path (mirrors bst_train.train_network)
+    # Collated dir basename + path (mirrors bst_x_train.train_network)
     npy_basename = derive_npy_collated_dir_basename(
         taxonomy_name=args.taxonomy,
         split_column=args.split_column,
@@ -189,7 +189,7 @@ def main() -> int:
     out.to_csv(args.output, index=False)
     n_zero = int((out['videos_len'] == 0).sum())
     print(f'\nWrote {len(out)} rows to {args.output}')
-    print(f'Zero-videos_len clips (would be dropped by bst_train): {n_zero} '
+    print(f'Zero-videos_len clips (would be dropped by bst_x_train): {n_zero} '
           f'({n_zero / len(out) * 100:.2f}%)')
     return 0
 
