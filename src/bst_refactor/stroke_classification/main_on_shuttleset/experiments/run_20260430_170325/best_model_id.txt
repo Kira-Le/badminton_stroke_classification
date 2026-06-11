@@ -1,5 +1,5 @@
 Best model of run_20260430_170325/ - #4
-  #4: bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_4.pt
+  #4: bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_4.pt
 
 Phase 2 sanity train, run 3 of 3 (combo A: une_merge_v1_nosides +
 split_v2 + dropunk) on the unified sticky_anchor mmpose clean dir

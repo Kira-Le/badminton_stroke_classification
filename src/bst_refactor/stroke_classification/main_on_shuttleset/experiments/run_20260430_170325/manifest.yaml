@@ -22,7 +22,7 @@ config:
   ablation_id: null
 serials:
 - serial_no: 1
-  weights_path: src/bst_refactor/stroke_classification/main_on_shuttleset/experiments/run_20260430_170325/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides.pt
+  weights_path: src/bst_refactor/stroke_classification/main_on_shuttleset/experiments/run_20260430_170325/weights/bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides.pt
   tb_dir: src/bst_refactor/stroke_classification/main_on_shuttleset/experiments/run_20260430_170325/tb/serial_1
   metrics:
     macro_f1: 0.735643208026886
@@ -47,7 +47,7 @@ serials:
     top2_accuracy: 0.9376487386958591
   recorded_at: '2026-04-30T17:25:09'
 - serial_no: 2
-  weights_path: src/bst_refactor/stroke_classification/main_on_shuttleset/experiments/run_20260430_170325/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_2.pt
+  weights_path: src/bst_refactor/stroke_classification/main_on_shuttleset/experiments/run_20260430_170325/weights/bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_2.pt
   tb_dir: src/bst_refactor/stroke_classification/main_on_shuttleset/experiments/run_20260430_170325/tb/serial_2
   metrics:
     macro_f1: 0.745267927646637
@@ -72,7 +72,7 @@ serials:
     top2_accuracy: 0.9409804854831033
   recorded_at: '2026-04-30T17:44:48'
 - serial_no: 3
-  weights_path: src/bst_refactor/stroke_classification/main_on_shuttleset/experiments/run_20260430_170325/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_3.pt
+  weights_path: src/bst_refactor/stroke_classification/main_on_shuttleset/experiments/run_20260430_170325/weights/bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_3.pt
   tb_dir: src/bst_refactor/stroke_classification/main_on_shuttleset/experiments/run_20260430_170325/tb/serial_3
   metrics:
     macro_f1: 0.7375466227531433
@@ -97,7 +97,7 @@ serials:
     top2_accuracy: 0.9357448833888624
   recorded_at: '2026-04-30T18:09:45'
 - serial_no: 4
-  weights_path: src/bst_refactor/stroke_classification/main_on_shuttleset/experiments/run_20260430_170325/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_4.pt
+  weights_path: src/bst_refactor/stroke_classification/main_on_shuttleset/experiments/run_20260430_170325/weights/bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_4.pt
   tb_dir: src/bst_refactor/stroke_classification/main_on_shuttleset/experiments/run_20260430_170325/tb/serial_4
   metrics:
     macro_f1: 0.7466088533401489
@@ -122,7 +122,7 @@ serials:
     top2_accuracy: 0.9397905759162304
   recorded_at: '2026-04-30T18:32:18'
 - serial_no: 5
-  weights_path: src/bst_refactor/stroke_classification/main_on_shuttleset/experiments/run_20260430_170325/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_5.pt
+  weights_path: src/bst_refactor/stroke_classification/main_on_shuttleset/experiments/run_20260430_170325/weights/bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_5.pt
   tb_dir: src/bst_refactor/stroke_classification/main_on_shuttleset/experiments/run_20260430_170325/tb/serial_5
   metrics:
     macro_f1: 0.7442737221717834

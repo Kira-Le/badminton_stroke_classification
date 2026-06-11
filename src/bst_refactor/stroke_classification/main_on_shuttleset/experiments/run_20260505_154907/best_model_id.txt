@@ -1,5 +1,5 @@
 Best model of run_20260505_154907/ - #5
-  #5: bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_5.pt
+  #5: bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_5.pt
 
 Augmentation framework v1, p_jitter bumped 0.2 -> 0.3 to test the
 under-regularisation read on the previous aug run. Everything else

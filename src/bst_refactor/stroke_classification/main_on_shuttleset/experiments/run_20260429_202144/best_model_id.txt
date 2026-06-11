@@ -1,5 +1,5 @@
 Best model of run_20260429_202144/ - #2
-  #2: bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25_2.pt
+  #2: bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25_2.pt
 
 Phase 2 sanity train: same combo as the Phase-1 BST baseline
 (merged_25 + split_bst_baseline + drop_unknown), but on the unified

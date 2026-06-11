@@ -1,5 +1,5 @@
 Best model of run_20260417_191851/ is #1 run
-bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25.pt
+bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25.pt
 
 Retuned LR schedule (2026-04-17), matches the active block in bst_train.py at the time:
   n_epochs=120, warm_up_step=100, early_stop_n_epochs=40,

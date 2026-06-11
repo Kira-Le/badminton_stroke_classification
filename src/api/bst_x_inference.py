@@ -50,7 +50,7 @@ for p in (BST_X_CLASSIFICATION, BST_X_REFACTOR):
 
 # ─── Constants ──────────────────────────────────────────────────────
 RUN_DIR = REPO_ROOT / "src" / "bst_refactor" / "stroke_classification" / "main_on_shuttleset" / "experiments" / "run_20260505_154907"
-WEIGHTS_PATH = RUN_DIR / "weights" / "bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_5.pt"
+WEIGHTS_PATH = RUN_DIR / "weights" / "bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_5.pt"
 CLIP_INDEX_PATH = RUN_DIR / "clip_index.json"
 
 # Resolution order:

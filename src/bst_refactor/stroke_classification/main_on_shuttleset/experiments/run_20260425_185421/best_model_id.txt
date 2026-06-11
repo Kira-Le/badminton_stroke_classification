@@ -1,5 +1,5 @@
 Best model of run_20260425_185421/ - #1
-  #1: bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides.pt
+  #1: bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides.pt
 
 Phase 1 sticky_anchor + collapsed-classes ablation. Same data as
 run_20260425_150548 (28-class sticky_anchor); only the label space

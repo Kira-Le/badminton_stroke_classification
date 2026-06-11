@@ -1,5 +1,5 @@
 Best model of run_20260501_230252/ - #4
-  #4: bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_4.pt
+  #4: bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_4.pt
 
 Pair-cap follow-up to the first CDB-F1 run (run_20260501_164658).
 Same config plus a cap on smash and wrist_smash at ratio 0.7.

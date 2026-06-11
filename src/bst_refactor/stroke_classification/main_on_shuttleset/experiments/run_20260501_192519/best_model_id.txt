@@ -1,5 +1,5 @@
 Best model of run_20260501_192519/ - #2
-  #2: bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_2.pt
+  #2: bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_2.pt
 
 Follow-up to the first CDB-F1 run (run_20260501_164658), tau softened
 from 1 to 0.5; alpha range narrows from ~0.20-1.80 at tau=1 to

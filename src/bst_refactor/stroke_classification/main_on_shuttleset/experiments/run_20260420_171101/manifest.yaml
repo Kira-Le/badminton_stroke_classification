@@ -22,7 +22,7 @@ config:
   ablation_id: null
 serials:
 - serial_no: 1
-  weights_path: experiments/run_20260420_171101/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1.pt
+  weights_path: experiments/run_20260420_171101/weights/bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1.pt
   tb_dir: experiments/run_20260420_171101/tb/serial_1
   metrics:
     macro_f1: 0.7399176955223083
@@ -61,7 +61,7 @@ serials:
     top2_accuracy: 0.9340790099952404
   recorded_at: '2026-04-20T17:32:32'
 - serial_no: 2
-  weights_path: experiments/run_20260420_171101/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_2.pt
+  weights_path: experiments/run_20260420_171101/weights/bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_2.pt
   tb_dir: experiments/run_20260420_171101/tb/serial_2
   metrics:
     macro_f1: 0.742791473865509
@@ -100,7 +100,7 @@ serials:
     top2_accuracy: 0.9366968110423608
   recorded_at: '2026-04-20T17:57:10'
 - serial_no: 3
-  weights_path: experiments/run_20260420_171101/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_3.pt
+  weights_path: experiments/run_20260420_171101/weights/bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_3.pt
   tb_dir: experiments/run_20260420_171101/tb/serial_3
   metrics:
     macro_f1: 0.7429238557815552
@@ -139,7 +139,7 @@ serials:
     top2_accuracy: 0.9397905759162304
   recorded_at: '2026-04-20T18:21:48'
 - serial_no: 4
-  weights_path: experiments/run_20260420_171101/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_4.pt
+  weights_path: experiments/run_20260420_171101/weights/bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_4.pt
   tb_dir: experiments/run_20260420_171101/tb/serial_4
   metrics:
     macro_f1: 0.7346545457839966
@@ -178,7 +178,7 @@ serials:
     top2_accuracy: 0.9312232270347454
   recorded_at: '2026-04-20T18:46:24'
 - serial_no: 5
-  weights_path: experiments/run_20260420_171101/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_5.pt
+  weights_path: experiments/run_20260420_171101/weights/bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_5.pt
   tb_dir: experiments/run_20260420_171101/tb/serial_5
   metrics:
     macro_f1: 0.7430348992347717

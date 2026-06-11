@@ -1,5 +1,5 @@
 Best model of run_20260418_234822/ - #2
-  #2: bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25_2.pt
+  #2: bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25_2.pt
 
 Run B: CG/AP off from the start of training, 80-epoch schedule:
   n_epochs=80, warm_up_step=100, early_stop_n_epochs=40,

@@ -1,5 +1,5 @@
 Best model of run_20260502_075808/ - #3
-  #3: bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_3.pt
+  #3: bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_3.pt
 
 Gamma=2 follow-up to the first CDB-F1 run (run_20260501_164658).
 Same config plus the per-example focal modulator bumped from

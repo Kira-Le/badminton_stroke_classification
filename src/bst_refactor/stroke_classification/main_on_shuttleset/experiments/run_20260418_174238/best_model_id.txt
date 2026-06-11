@@ -1,5 +1,5 @@
 Best model of run_20260418_174238/ - #3
-  #3: bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25_3.pt
+  #3: bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25_3.pt
 
 Run A: paired control with CG/AP on throughout (no annealing), 80-epoch schedule:
   n_epochs=80, warm_up_step=100, early_stop_n_epochs=40,

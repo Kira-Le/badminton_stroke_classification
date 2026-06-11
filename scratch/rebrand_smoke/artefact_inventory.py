@@ -280,11 +280,24 @@ def verify(baseline: dict, current: dict, src_map: list[tuple[str, str]]) -> lis
         if expected_tb[k]['size'] != current_tb[k]['size']:
             fails.append(f'tb size changed: {k}')
 
+    baseline_registry = {e['id']: e for e in baseline['registry']}
     for entry in current['registry']:
-        if not entry['manifest_resolves']:
-            fails.append(f'registry manifest missing: {entry["id"]}')
-        if not entry['weights_resolves']:
-            fails.append(f'registry weights missing: {entry["id"]}')
+        base = baseline_registry.get(entry['id'])
+        # Flag a resolve flag that flipped vs baseline; pre-existing-missing
+        # weights (e.g. BRIC's intentionally-absent best.pt) shouldn't fail.
+        if base is None:
+            fails.append(f'registry entry new vs baseline: {entry["id"]}')
+            continue
+        if entry['manifest_resolves'] != base['manifest_resolves']:
+            fails.append(
+                f'registry manifest flag flipped: {entry["id"]} '
+                f'baseline={base["manifest_resolves"]} current={entry["manifest_resolves"]}'
+            )
+        if entry['weights_resolves'] != base['weights_resolves']:
+            fails.append(
+                f'registry weights flag flipped: {entry["id"]} '
+                f'baseline={base["weights_resolves"]} current={entry["weights_resolves"]}'
+            )
 
     for row in current['tsv']:
         if not row['resolves']:

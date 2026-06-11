@@ -1,5 +1,5 @@
 Best model of run_20260420_141629/ - #3
-  #3: bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_3.pt
+  #3: bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_3.pt
 
 V3 ablation: first run on the une_merge_v1 taxonomy, and first through
 the CSV-driven flat-dir pipeline.

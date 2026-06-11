@@ -20,7 +20,7 @@ config:
   aux_fade_end_epoch: 15
 serials:
 - serial_no: 1
-  weights_path: experiments/run_20260418_174238/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25.pt
+  weights_path: experiments/run_20260418_174238/weights/bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25.pt
   tb_dir: experiments/run_20260418_174238/tb/serial_1
   metrics:
     macro_f1: 0.824
@@ -30,7 +30,7 @@ serials:
     num_strokes: 3486
   recorded_at: null
 - serial_no: 2
-  weights_path: experiments/run_20260418_174238/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25_2.pt
+  weights_path: experiments/run_20260418_174238/weights/bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25_2.pt
   tb_dir: experiments/run_20260418_174238/tb/serial_2
   metrics:
     macro_f1: 0.828
@@ -40,7 +40,7 @@ serials:
     num_strokes: 3486
   recorded_at: null
 - serial_no: 3
-  weights_path: experiments/run_20260418_174238/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25_3.pt
+  weights_path: experiments/run_20260418_174238/weights/bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25_3.pt
   tb_dir: experiments/run_20260418_174238/tb/serial_3
   metrics:
     macro_f1: 0.828
@@ -50,7 +50,7 @@ serials:
     num_strokes: 3486
   recorded_at: null
 - serial_no: 4
-  weights_path: experiments/run_20260418_174238/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25_4.pt
+  weights_path: experiments/run_20260418_174238/weights/bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25_4.pt
   tb_dir: experiments/run_20260418_174238/tb/serial_4
   metrics:
     macro_f1: 0.826
@@ -60,7 +60,7 @@ serials:
     num_strokes: 3486
   recorded_at: null
 - serial_no: 5
-  weights_path: experiments/run_20260418_174238/weights/bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25_5.pt
+  weights_path: experiments/run_20260418_174238/weights/bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25_5.pt
   tb_dir: experiments/run_20260418_174238/tb/serial_5
   metrics:
     macro_f1: 0.825

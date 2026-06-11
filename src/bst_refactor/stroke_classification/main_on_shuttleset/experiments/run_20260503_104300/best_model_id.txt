@@ -1,5 +1,5 @@
 Best model of run_20260503_104300/ - #1
-  #1: bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides.pt
+  #1: bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides.pt
 
 Capacity bump: mlp_head hidden 400 -> 1200 (head_dim * mlp_d_scale
 swap on bst.py:199, encoder untouched). y1t1 hparams otherwise:

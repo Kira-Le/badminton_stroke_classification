@@ -1,5 +1,5 @@
 Best model of run_20260418_104152/ is #3 run
-bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25_3.pt
+bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25_3.pt
 
 First CG/AP annealing pass (gentle schedule):
   n_epochs=120, warm_up_step=100, early_stop_n_epochs=40,

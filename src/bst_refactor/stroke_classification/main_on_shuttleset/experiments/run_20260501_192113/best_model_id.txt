@@ -1,5 +1,5 @@
 Best model of run_20260501_192113/ - #1
-  #1: bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides.pt
+  #1: bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides.pt
 
 Follow-up to the first CDB-F1 run (run_20260501_164658), gamma
 flipped from 1 to 0; alpha shape unchanged. Ran on bourbaki alongside

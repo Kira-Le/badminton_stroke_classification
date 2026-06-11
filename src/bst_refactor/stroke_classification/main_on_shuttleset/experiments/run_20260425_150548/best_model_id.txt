@@ -1,5 +1,5 @@
 Best model of run_20260425_150548/ - #3
-  #3: bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_3.pt
+  #3: bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_3.pt
 
 Phase 1 sticky_anchor mixed retrain. Pairs with run_20260420_171101 (V4
 baseline, identical hparams + split). 1,716 hit-zone-busted clips

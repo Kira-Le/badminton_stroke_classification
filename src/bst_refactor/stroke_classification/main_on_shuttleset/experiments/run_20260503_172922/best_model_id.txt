@@ -1,5 +1,5 @@
 Best model of run_20260503_172922/ - #2
-  #2: bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_2.pt
+  #2: bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_2.pt
 
 Shuttle-unzeroing-on-keypoint-fail run, branch shuttle/wipe-drop.
 Single change vs main: drops shuttle[failed,:] = 0 at

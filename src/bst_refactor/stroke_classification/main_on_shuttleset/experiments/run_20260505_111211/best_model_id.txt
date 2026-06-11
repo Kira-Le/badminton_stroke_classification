@@ -1,5 +1,5 @@
 Best model of run_20260505_111211/ - #5
-  #5: bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_5.pt
+  #5: bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_5.pt
 
 Augmentation framework v1. Coupled centreline flip + pos+shuttle
 constrained jitter (cap_y=0.05, cap_x=0.10, eps=0.15, p_flip=0.5,

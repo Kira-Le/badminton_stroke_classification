@@ -1,5 +1,5 @@
 Best model of run_20260420_171101/ - #2
-  #2: bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_2.pt
+  #2: bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_2.pt
 
 V4 ablation: une_merge_v1 + split_v2 + drop_unknown.
 Pair with run_20260420_141629 (V3, split_bst_baseline) to see the split

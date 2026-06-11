@@ -1,5 +1,5 @@
 Best model of run_20260504_152529/ - #2
-  #2: bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_2.pt
+  #2: bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_2.pt
 
 Jitter-off ablation. Single change vs the wipe_drop best
 (run_20260503_172922): RandomTranslation_batch(prob=0.0) at
