@@ -47,8 +47,8 @@ mim install mmcv==2.1.0
 pip install -r stroke_classification/preparing_data/requirements.txt
 
 # 3. BST training venv
-python3.11 -m venv venv-bst
-source venv-bst/bin/activate
+python3.11 -m venv venv-bst-x
+source venv-bst-x/bin/activate
 pip install torch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1 --index-url https://download.pytorch.org/whl/cu121
 pip install -r stroke_classification/requirements.txt
 ```
@@ -64,12 +64,12 @@ python -m pipeline.build_dataset --skip-shuttle            # download + clips + 
 # Optional: shuttle extraction (uses BST venv for TrackNetV3)
 python -m pipeline.build_dataset --skip-download \
     --tracknet-dir TrackNetV3 \
-    --tracknet-python /path/to/venv-bst/bin/python
+    --tracknet-python /path/to/venv-bst-x/bin/python
 # Resume after crash (skip completed steps 3-5, run only shuttle extraction)
 python -m pipeline.build_dataset \
     --skip-download --skip-resolution --skip-clips --skip-verify \
     --tracknet-dir TrackNetV3 \
-    --tracknet-python /path/to/venv-bst/bin/python
+    --tracknet-python /path/to/venv-bst-x/bin/python
 
 # ── Stage 2: Pose estimation (MMPose venv) ──────────────────────────
 source venv-mmpose/bin/activate
@@ -82,7 +82,7 @@ python -m preparing_data.prepare_train_on_shuttleset \
     --skip-trajectory --skip-collate                       # pose only (no shuttle CSV needed)
 
 # ── Stage 3: Collation + training (BST venv) ────────────────────────
-source venv-bst/bin/activate
+source venv-bst-x/bin/activate
 export PYTHONPATH=src/bst_x:src/bst_x/stroke_classification
 
 python -m preparing_data.prepare_train_on_shuttleset \
