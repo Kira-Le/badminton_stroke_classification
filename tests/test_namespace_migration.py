@@ -271,6 +271,66 @@ def test_t3_save_name_round_trip(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# T5: architecture wire format (lands in the Step 1 commit; the step IS the contract)
+# ---------------------------------------------------------------------------
+
+import typing
+
+
+def _architecture_literal_values(model_cls) -> set[str]:
+    """Pull the Literal values from the architecture Optional[Literal[...]]
+    annotation on a Pydantic model. Optional[X] expands to Union[X, None]; the
+    Literal sits inside the Union."""
+    hints = typing.get_type_hints(model_cls)
+    annot = hints['architecture']
+    for inner in typing.get_args(annot):
+        if typing.get_origin(inner) is typing.Literal:
+            return set(typing.get_args(inner))
+    raise RuntimeError(f'No Literal in architecture annotation: {annot!r}')
+
+
+def test_t5_markup_and_library_predict_request_share_architecture_values():
+    from src.api.main import Markup, LibraryPredictRequest
+    markup_vals = _architecture_literal_values(Markup)
+    lp_vals = _architecture_literal_values(LibraryPredictRequest)
+    assert markup_vals == lp_vals, (markup_vals, lp_vals)
+
+
+def test_t5_architecture_values_are_bric_and_bst_x_only():
+    from src.api.main import Markup
+    values = _architecture_literal_values(Markup)
+    assert 'bric' in values
+    assert 'bst-x' in values
+    assert 'bst' not in values, 'no back-compat window; "bst" dropped in Step 1'
+
+
+def test_t5_markup_validates_bst_x_and_rejects_bst():
+    from pydantic import ValidationError
+    from src.api.main import Markup
+    Markup(architecture='bst-x')  # no raise
+    Markup(architecture='bric')   # no raise
+    with pytest.raises(ValidationError):
+        Markup(architecture='bst')
+    with pytest.raises(ValidationError):
+        Markup(architecture='bogus')
+
+
+def test_t5_library_predict_endpoint_accepts_bst_x_and_422s_legacy():
+    """Wire-level smoke: the TestClient pattern from tests/test_api.py.
+    A non-422 response means request validation passed (404/503 fine — only
+    request schema is under test here)."""
+    from fastapi.testclient import TestClient
+    from src.api.main import app
+    client = TestClient(app)
+    ok_body = {'clip_stem': 'nonexistent', 'architecture': 'bst-x'}
+    resp_ok = client.post('/api/library_predict', json=ok_body)
+    assert resp_ok.status_code != 422, resp_ok.text
+    bad_body = {'clip_stem': 'nonexistent', 'architecture': 'nonsense'}
+    resp_bad = client.post('/api/library_predict', json=bad_body)
+    assert resp_bad.status_code == 422
+
+
+# ---------------------------------------------------------------------------
 # T6: registry lockstep
 # ---------------------------------------------------------------------------
 

@@ -47,7 +47,7 @@ class StrokeAnnotation(BaseModel):
 
 
 class Markup(BaseModel):
-    architecture: Optional[Literal["bric", "bst"]] = None
+    architecture: Optional[Literal["bric", "bst-x"]] = None
     model_id: Optional[str] = None
     orientation: Literal["portrait"] = "portrait"
     video_label: Optional[str] = None
@@ -87,7 +87,7 @@ class Markup(BaseModel):
 class LibraryPredictRequest(BaseModel):
     clip_stem: str
     model_id: Optional[str] = None
-    architecture: Optional[Literal["bric", "bst"]] = None
+    architecture: Optional[Literal["bric", "bst-x"]] = None
     markup: Optional[Markup] = None
 
 
