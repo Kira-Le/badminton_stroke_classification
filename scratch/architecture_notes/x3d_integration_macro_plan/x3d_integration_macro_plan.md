@@ -220,7 +220,7 @@ A solo X3D-S that beats chance (1/14 ≈ 7%) is the floor. A solo number in the 
 
 **Dependencies**: Stage 4 wrist-crop artefacts.
 
-## Stage 6 — BST + X3D-S fusion integration
+## Stage 6 — BST-X + X3D-S fusion integration
 
 **Goal**: the actual Arch 1 build. Two sub-questions: where to fuse (architecture), and how to schedule training (optimisation).
 

@@ -45,5 +45,5 @@ message — it does not crash.
 
 These clips play next to the clip's **real ground-truth label**. The model's
 **prediction** is shown as *pending (placeholder data)* until real per-clip
-inference (a live BST forward pass on the deploy box) is served — the committed
+inference (a live BST-X forward pass on the deploy box) is served — the committed
 prediction records are placeholders (prediction = ground truth at 100%).

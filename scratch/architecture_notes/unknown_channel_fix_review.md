@@ -1,4 +1,4 @@
-# Plan: drop the unknown ghost output channel in BST
+# Plan: drop the unknown ghost output channel in BST-X
 
 This doc covers six things, in order:
 
@@ -617,7 +617,7 @@ Major rewrites in three sections:
 
 The structural note added by the first fix gets reworded:
 
-> **Unknown ghost channel removed (2026-05-01)**. BST output dim now matches the empirically present classes in `labels.npy`, derived at run start via `bst_common.derive_active_classes_from_labels`. Pre-fix runs (LS sweep cells `run_20260430_170325`, `run_20260430_213933`, `run_20260501_073430`, plus the class-weighted run that finished on engelbart on 2026-05-01) carried a 15-channel head with the unknown slot as a ghost output channel. Post-fix, dropunk runs on `une_merge_v1`, `une_merge_v1_nosides`, and `raw_35` collapse to 14- / 14- / 34-class heads (their MERGE_MAP doesn't redirect anything to unknown, so the slot is empty after the writer's row filter and gets dropped). Post-fix, dropunk runs on `merged_25` retain the 25-class head because `MERGE_MAP['driven_flight']='unknown'` populates that slot — there's no ghost there to drop. Manifest `extra.arch` block records `n_classes_full`, `n_active_classes`, `has_unknown`, `unknown_first`, `active_class_list`, surfacing future taxonomy + dir combinations without code changes elsewhere. Comparisons against pre-fix runs carry a one-line caveat for v1 / nosides / raw_35 (architectural era boundary); merged_25 dropunk runs are directly comparable post-fix vs pre-fix because the head dim is unchanged there.
+> **Unknown ghost channel removed (2026-05-01)**. BST-X output dim now matches the empirically present classes in `labels.npy`, derived at run start via `bst_common.derive_active_classes_from_labels`. Pre-fix runs (LS sweep cells `run_20260430_170325`, `run_20260430_213933`, `run_20260501_073430`, plus the class-weighted run that finished on engelbart on 2026-05-01) carried a 15-channel head with the unknown slot as a ghost output channel. Post-fix, dropunk runs on `une_merge_v1`, `une_merge_v1_nosides`, and `raw_35` collapse to 14- / 14- / 34-class heads (their MERGE_MAP doesn't redirect anything to unknown, so the slot is empty after the writer's row filter and gets dropped). Post-fix, dropunk runs on `merged_25` retain the 25-class head because `MERGE_MAP['driven_flight']='unknown'` populates that slot — there's no ghost there to drop. Manifest `extra.arch` block records `n_classes_full`, `n_active_classes`, `has_unknown`, `unknown_first`, `active_class_list`, surfacing future taxonomy + dir combinations without code changes elsewhere. Comparisons against pre-fix runs carry a one-line caveat for v1 / nosides / raw_35 (architectural era boundary); merged_25 dropunk runs are directly comparable post-fix vs pre-fix because the head dim is unchanged there.
 
 ### Files NOT touched in this fix (same as the first fix)
 
@@ -1102,7 +1102,7 @@ Real-data probes (Section 5) updated: pass train_labels and val/test as `validat
 
 #### `bst_x_overview.md`
 
-Same blurb as §3, with one extra clause noting the train-only derivation: "BST output dim now matches the empirically present classes in `labels.npy` train split, with val/test asserted as subsets, derived at first serial via `bst_common.derive_active_classes_from_labels`."
+Same blurb as §3, with one extra clause noting the train-only derivation: "BST-X output dim now matches the empirically present classes in `labels.npy` train split, with val/test asserted as subsets, derived at first serial via `bst_common.derive_active_classes_from_labels`."
 
 ### 5.3 Files NOT touched
 

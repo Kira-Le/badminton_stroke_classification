@@ -44,7 +44,7 @@ python -m validation_scripts.raw_ndet_stats \
 
 Analyses two independent detection failure modes across the dataset:
 
-1. **MMPose failures** (from `*_failed.npy`): MMPose failed to detect exactly 2 players on court — joints, court positions, and shuttle coordinates are all zeroed on these frames. The BST transformer does **not** mask them in attention, so they act as noise.
+1. **MMPose failures** (from `*_failed.npy`): MMPose failed to detect exactly 2 players on court — joints, court positions, and shuttle coordinates are all zeroed on these frames. The BST-X transformer does **not** mask them in attention, so they act as noise.
 
 2. **Shuttle detection failures** (from shuttle NPYs, optional): TrackNetV3 reported visibility=0 (shuttle not detected). Independent of MMPose — the visibility column is dropped during collation, so these failures are invisible to the model as silent (0, 0) shuttle coordinates.
 

@@ -1,4 +1,4 @@
-# BST Training Efficiency Assessment
+# BST-X Training Efficiency Assessment
 
 ## Context
 

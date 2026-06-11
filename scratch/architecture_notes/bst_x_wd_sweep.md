@@ -1,6 +1,6 @@
-# BST weight-decay sweep: implementation plan
+# BST-X weight-decay sweep: implementation plan
 
-Plan for adding a swept AdamW `weight_decay` to the BST trainer, with a proper no-decay parameter group and per-epoch LR logging. All code anchors are against `feat/taxon-pinned-w-preds` as read on 2026-05-30. Rationale and the timescale maths live in `hp_and_aug_speculations_30_05_2026.md` (Q2); this doc is the build.
+Plan for adding a swept AdamW `weight_decay` to the BST-X trainer, with a proper no-decay parameter group and per-epoch LR logging. All code anchors are against `feat/taxon-pinned-w-preds` as read on 2026-05-30. Rationale and the timescale maths live in `hp_and_aug_speculations_30_05_2026.md` (Q2); this doc is the build.
 
 Model variant in play: `BST_CG_AP` (hardcoded at `bst_train.py:1259`). The verified param split for it is 27 decay / 55 no-decay (instantiated and counted).
 

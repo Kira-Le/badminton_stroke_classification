@@ -55,7 +55,7 @@ Explainable AI activation mapping overlays are currently also in development.
 
 ## Data pipeline and classifier training
 
-The classifier has its own pinned environments, separate from the root `requirements.txt`. Three venvs: data pipeline, MMPose pose extraction, BST training. They can't share dependencies; the MMPose skeleton keypoint extractor pins NumPy < 2.0, which conflicts with the rest of the project. Full setup and execution order: [`src/bst_refactor/data_pipeline_to_model_train.md`](src/bst_refactor/data_pipeline_to_model_train.md).
+The classifier has its own pinned environments, separate from the root `requirements.txt`. Three venvs: data pipeline, MMPose pose extraction, BST-X training. They can't share dependencies; the MMPose skeleton keypoint extractor pins NumPy < 2.0, which conflicts with the rest of the project. Full setup and execution order: [`src/bst_refactor/data_pipeline_to_model_train.md`](src/bst_refactor/data_pipeline_to_model_train.md).
 
 ### Local config (`.env`)
 
@@ -63,7 +63,7 @@ Data paths differ between machines (local dev vs `engelbart` vs `bourbaki`). The
 
 ```bash
 cp .env.example .env
-# edit .env to point at the four BST_*_DIR paths for your environment
+# edit .env to point at the four BST_X_*_DIR paths for your environment
 ```
 
 `.env` is gitignored. Shell exports always override the file. HPC example paths are commented at the bottom of `.env.example`.

@@ -33,7 +33,7 @@ files are gitignored and rsync'd onto the training host. See
 Each architecture has its own training pipeline. Current state:
 
 - **BRIC** uses this tree — see [BRIC layout](#bric-layout) below.
-- **BST** organises its training data and experiments under
+- **BST-X** organises its training data and experiments under
   `src/bst_refactor/`; see that subproject's own documentation.
 
 ### BRIC layout
