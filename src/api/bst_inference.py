@@ -54,20 +54,22 @@ WEIGHTS_PATH = RUN_DIR / "weights" / "bst_CG_AP_JnB_bone_between_2_hits_with_max
 CLIP_INDEX_PATH = RUN_DIR / "clip_index.json"
 
 # Resolution order:
-#   1. $BST_INPUTS_DIR — explicit override (set this in docker-compose.prod.yml
+#   1. $BST_X_INPUTS_DIR — explicit override (set this in docker-compose.prod.yml
 #      to point at wherever the host dataset's {test,val}/*.npy collation lives,
 #      e.g. /data or /data/bst_inputs). Survives `git pull`.
 #   2. /app/bst_inputs — the dev compose bind-mount target.
 #   3. <repo>/scratch/bst_inputs — bare local fallback.
 # Expected layout under whatever this resolves to:
 #   {test,val}/{JnB_bone,pos,shuttle,videos_len}.npy
-_BST_INPUTS_DIR_ENV = os.getenv("BST_INPUTS_DIR")
-if _BST_INPUTS_DIR_ENV:
-    BST_INPUTS_DIR = Path(_BST_INPUTS_DIR_ENV)
+from .config import _resolve_env as _resolve_api_env
+
+_BST_X_INPUTS_DIR_ENV = _resolve_api_env("BST_X_INPUTS_DIR")
+if _BST_X_INPUTS_DIR_ENV:
+    BST_X_INPUTS_DIR = Path(_BST_X_INPUTS_DIR_ENV)
 elif Path("/app/bst_inputs").exists():
-    BST_INPUTS_DIR = Path("/app/bst_inputs")
+    BST_X_INPUTS_DIR = Path("/app/bst_inputs")
 else:
-    BST_INPUTS_DIR = REPO_ROOT / "scratch" / "bst_inputs"
+    BST_X_INPUTS_DIR = REPO_ROOT / "scratch" / "bst_inputs"
 SPLITS = ("test", "val")
 POSE_STYLE = "JnB_bone"
 
@@ -114,7 +116,7 @@ def _build_model() -> torch.nn.Module:
 
 def _load_split_tensors(split: str) -> dict[str, np.ndarray]:
     """Memory-map the four .npy tensors for one split."""
-    base = BST_INPUTS_DIR / split
+    base = BST_X_INPUTS_DIR / split
     if not base.exists():
         raise FileNotFoundError(f"BST inputs missing: {base}")
     out = {
@@ -175,10 +177,10 @@ def available_splits() -> set[str]:
 
     Cheap existence check: does NOT load the model or mmap tensors, so it's
     safe to call from the registry summary on every page load. Reads the
-    module-global BST_INPUTS_DIR at call time so tests can monkeypatch it."""
+    module-global BST_X_INPUTS_DIR at call time so tests can monkeypatch it."""
     out: set[str] = set()
     for s in SPLITS:
-        if (BST_INPUTS_DIR / s / "JnB_bone.npy").exists():
+        if (BST_X_INPUTS_DIR / s / "JnB_bone.npy").exists():
             out.add(s)
     return out
 
@@ -220,7 +222,7 @@ def predict(stem: str, split: str | None = None) -> dict:
     if resolved_split not in _tensors:
         raise BstInferenceUnavailable(
             f"no SCP'd tensors for split {resolved_split!r} — "
-            f"check {BST_INPUTS_DIR / resolved_split}"
+            f"check {BST_X_INPUTS_DIR / resolved_split}"
         )
     if "row_index" not in meta:
         raise BstInferenceUnavailable(
