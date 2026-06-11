@@ -35,11 +35,11 @@ Next: `apply_heuristic.py --heuristic sticky_anchor` over the unified raw dir â†
 
 **Update later 2026-04-29:** sticky_anchor now run over the full 32,203-stem unified raw dir; output at `/scratch/comp320a/ShuttleSet_keypoints_clean_sticky_anchor/`, mirrored byte-identical to engelbart. Three `validate_zeroed_frames.py` reports landed (the three active taxonomy + split combos). Direct Phase-1 vs Phase-2 comparison written up at `phase1_vs_phase2_2026-04-29.md` in this dir. Headline: overall fail rate 5.38% -> 0.93%, hit-zone fail rate near hit 5.98% -> 0.58% (the gradient sign flipped, near-hit is now the cleanest zone), per-stroke gains 19x to 76x on the strokes Phase-1 was failing hardest on. Collation + sanity train is the next gate.
 
-**Update even-later 2026-04-29:** collation done for all three active (taxonomy, split) combos; trees at `/scratch/comp320a/ShuttleSet_data_<tax>/npy_<tax>_<split>_dropunk/`, mirrored bourbaki, cross-node byte-identical, per-split clip counts cross-verified by `src/bst_refactor/validation_scripts/verify_collated_counts.py`. `BST_MMPOSE_NPY_DIR` flipped to the new clean dir (`.env.bak.2026-04-29` is the rollback). The pipeline is now end-to-end ready for a sanity-train against the new extract. Decision gate: does `Top_wrist_smash` clear the V4 baseline floor that Phase-1's mixed retrain failed to clear?
+**Update even-later 2026-04-29:** collation done for all three active (taxonomy, split) combos; trees at `/scratch/comp320a/ShuttleSet_data_<tax>/npy_<tax>_<split>_dropunk/`, mirrored bourbaki, cross-node byte-identical, per-split clip counts cross-verified by `src/bst_refactor/validation_scripts/verify_collated_counts.py`. `BST_X_MMPOSE_NPY_DIR` flipped to the new clean dir (`.env.bak.2026-04-29` is the rollback). The pipeline is now end-to-end ready for a sanity-train against the new extract. Decision gate: does `Top_wrist_smash` clear the V4 baseline floor that Phase-1's mixed retrain failed to clear?
 
 ### Reproducibility caveat for the legacy nested dirs
 
-The old `/scratch/comp320a/ShuttleSet_data_merged_25/dataset_npy_between_2_hits_with_max_limits_flat/` (committed Phase-1 filtered extract) and its `_flat_raw_phase1` sibling are the only way to bit-exactly reproduce the V4 / Phase-1 baseline numbers. Once we flip `BST_MMPOSE_NPY_DIR` to the new clean dir and start training against it, those legacy dirs become dead weight from a pipeline-input perspective. They can be deleted to free `/scratch` quota, but if we do we lose exact reproducibility for V4.
+The old `/scratch/comp320a/ShuttleSet_data_merged_25/dataset_npy_between_2_hits_with_max_limits_flat/` (committed Phase-1 filtered extract) and its `_flat_raw_phase1` sibling are the only way to bit-exactly reproduce the V4 / Phase-1 baseline numbers. Once we flip `BST_X_MMPOSE_NPY_DIR` to the new clean dir and start training against it, those legacy dirs become dead weight from a pipeline-input perspective. They can be deleted to free `/scratch` quota, but if we do we lose exact reproducibility for V4.
 
 Realistically the new extract is a strict improvement: heuristic-frame-drop bug removed across the full set, `N_max=16` consistently applied, sticky_anchor about to run over all 32,203 stems instead of the 1,716 hit-zone subset. Future runs should never come out worse on the same metric. The only thing we'd lose is the ability to re-derive the historical baseline number itself. Keep the legacy dirs around at least until the Phase-2 sanity-train numbers are in and the writeup cites whichever baseline we settle on.
 
@@ -93,14 +93,14 @@ Running MMPose on 33k clips takes ~50 hr on V100. Running it multiple times to i
 Strict separation: raw extracts and the primary committed filtered extract are never overwritten. Paths are referenced via the `.env` convention Curtis established for `pipeline.data_access` (`.env.example` at the repo root, `pipeline/data_access.py`). Relevant variable:
 
 ```
-BST_MMPOSE_NPY_DIR=/scratch/comp320a/ShuttleSet_data_merged_25/dataset_npy_between_2_hits_with_max_limits_flat
+BST_X_MMPOSE_NPY_DIR=/scratch/comp320a/ShuttleSet_data_merged_25/dataset_npy_between_2_hits_with_max_limits_flat
 ```
 
 Per-clip flat dirs on engelbart, all under the same parent:
 
 ```
 {parent_dir}/
-  dataset_npy_between_2_hits_with_max_limits_flat/                  # primary committed, read-only (= $BST_MMPOSE_NPY_DIR)
+  dataset_npy_between_2_hits_with_max_limits_flat/                  # primary committed, read-only (= $BST_X_MMPOSE_NPY_DIR)
   dataset_npy_between_2_hits_with_max_limits_flat_raw_phase1/       # raw N=16 extract, read-only
   dataset_npy_between_2_hits_with_max_limits_flat_raw_phase1_n8/    # historical N=8 raw, read-only
   dataset_npy_between_2_hits_with_max_limits_flat_failsafe_gate/    # byte-identity gate output, scratch
@@ -109,7 +109,7 @@ Per-clip flat dirs on engelbart, all under the same parent:
 
 The `_h_<heuristic>` suffix extends the existing flat-dir naming consistent with the `_raw_phase1` extensions.
 
-`apply_heuristic.py` refuses to write unless `--output-dir` is distinct from both `--raw-dir` and `BST_MMPOSE_NPY_DIR`. Two-line guard against typos destroying data we can't cheaply recompute (1,716 clip re-extract is ~20 min V100 time; the committed extract is the baseline for every comparison).
+`apply_heuristic.py` refuses to write unless `--output-dir` is distinct from both `--raw-dir` and `BST_X_MMPOSE_NPY_DIR`. Two-line guard against typos destroying data we can't cheaply recompute (1,716 clip re-extract is ~20 min V100 time; the committed extract is the baseline for every comparison).
 
 **Downstream collated dir** (for the Phase 1 mixed re-train, produced by Step 3 in `prepare_train_on_shuttleset.py`): post-2026-04-21 short naming convention.
 
@@ -126,7 +126,7 @@ Existing flat dirs on scratch already match the current naming convention. The n
 
 - Sample 50 clip stems from `scratch/architecture_notes/busted_hit_zone_clips_phase1.txt`. Lex-sort, take every `len // 50`-th stem. Deterministic, no seeding. Draws from the busted list rather than `clips_master.csv` because raw extracts only exist for those 1,716 stems.
 - Run `apply_heuristic.py --heuristic current` on those stems against the raw extract, writing to `..._flat_failsafe_gate/`.
-- For each stem's three output arrays, compare against `$BST_MMPOSE_NPY_DIR`:
+- For each stem's three output arrays, compare against `$BST_X_MMPOSE_NPY_DIR`:
   - `np.array_equal` on `_failed.npy` (bool).
   - `np.allclose(rtol=0, atol=1e-5)` on `_pos.npy` and `_joints.npy` (float; tolerance absorbs float32 projection-chain non-associativity).
 - On any mismatch: stop and investigate plumbing before trusting `sticky_anchor`. Usual suspects: keypoint-index ordering, bbox row order when multiple on-court people exist, `normalize_joints` vs `normalize_position` step order, resolution-scale application.
@@ -142,7 +142,7 @@ PYTHONPATH=src/bst_refactor:src/bst_refactor/stroke_classification \
         --scratch-output-dir /scratch/comp320a/ShuttleSet_data_merged_25/dataset_npy_between_2_hits_with_max_limits_flat_failsafe_gate
 ```
 
-`--committed-dir` is auto-detected from `$BST_MMPOSE_NPY_DIR` when unset. `apply_heuristic` calls `pipeline.data_access.load_repo_dotenv()` at module load, which loads the repo-root `.env`, so the collision guards fire without a prior shell export. (The original opaque side-effect-import was lifted to an explicit call by step Q; behaviour is the same.)
+`--committed-dir` is auto-detected from `$BST_X_MMPOSE_NPY_DIR` when unset. `apply_heuristic` calls `pipeline.data_access.load_repo_dotenv()` at module load, which loads the repo-root `.env`, so the collision guards fire without a prior shell export. (The original opaque side-effect-import was lifted to an explicit call by step Q; behaviour is the same.)
 
 ### Apply heuristic (canonical run)
 
@@ -161,10 +161,10 @@ Hyperparameters expose as CLI args; defaults in the Hyperparameters section belo
 
 After `sticky_anchor` runs on the full 1,716 clips:
 
-- Build a symlink-merged flat dir at `$BST_MMPOSE_NPY_DIR/../dataset_npy_between_2_hits_with_max_limits_flat_h_sticky_anchor_phase1_merged/`.
+- Build a symlink-merged flat dir at `$BST_X_MMPOSE_NPY_DIR/../dataset_npy_between_2_hits_with_max_limits_flat_h_sticky_anchor_phase1_merged/`.
 - For each stem in `clips_master.csv` with `split_v2 in ('train','val','test')`:
   - If stem is in `busted_hit_zone_clips_phase1.txt`: symlink the three `sticky_anchor` outputs from `..._flat_h_sticky_anchor/`.
-  - Otherwise: symlink from `$BST_MMPOSE_NPY_DIR`.
+  - Otherwise: symlink from `$BST_X_MMPOSE_NPY_DIR`.
 - Collate via `python -m preparing_data.prepare_train_on_shuttleset --skip-trajectory --skip-pose --clip-npy-dir <merged_dir>` with the Phase 1 ablation_id (`npy_une_merge_v1_split_v2_dropunk_h_sticky_anchor` under `ShuttleSet_data_une_merge_v1/`).
 - Retrain V4 via `bst_train.py` pointing at the new collated dir. 5 serials, same hyperparameters as the committed V4 run (`run_20260420_171101/`).
 

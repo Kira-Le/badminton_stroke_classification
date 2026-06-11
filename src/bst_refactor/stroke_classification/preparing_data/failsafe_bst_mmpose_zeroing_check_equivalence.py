@@ -118,7 +118,7 @@ def main() -> int:
     parser.add_argument("--raw-dir", type=Path, required=True)
     parser.add_argument(
         "--committed-dir", type=Path, default=None,
-        help="Committed filtered extract dir (defaults to $BST_MMPOSE_NPY_DIR).",
+        help="Committed filtered extract dir (defaults to $BST_X_MMPOSE_NPY_DIR).",
     )
     parser.add_argument(
         "--busted-stems-file", type=Path, required=True,
@@ -146,10 +146,10 @@ def main() -> int:
 
     committed_dir = args.committed_dir
     if committed_dir is None:
-        env_val = os.environ.get("BST_MMPOSE_NPY_DIR", "").strip()
+        env_val = os.environ.get("BST_X_MMPOSE_NPY_DIR", "").strip()
         if not env_val:
             print(
-                "ERROR: --committed-dir not provided and BST_MMPOSE_NPY_DIR is unset.",
+                "ERROR: --committed-dir not provided and BST_X_MMPOSE_NPY_DIR is unset.",
                 file=sys.stderr,
             )
             return 2

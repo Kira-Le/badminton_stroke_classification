@@ -117,7 +117,7 @@ A full re-extract of all 32,203 stems (Phase 1 only repaired 1,716). Three artef
 
 - **Raw extract**: 32,203 stems at `/scratch/comp320a/ShuttleSet_keypoints_raw/` on both nodes, bit-identical (30,487 freshly re-extracted over ~20h plus the 1,716 Phase-1 backfill). Verified by file counts, an empty cross-node `rsync --checksum`, and a byte-identity gate on the overlap with max abs diff 0.000e+00. Per-frame `ndet` baseline at `raw_ndet_stats_outputs/baseline_2026-04-29.md` (0% `ndet=0`, 0.53% `ndet=1` floor).
 - **sticky_anchor + audit**: clean dir at `/scratch/comp320a/ShuttleSet_keypoints_clean_sticky_anchor/`, byte-identical cross-node. Overall fail rate 5.38% to 0.93%, hit-zone near-hit fail 5.98% to 0.58% (the near/away gradient flipped sign: the hit zone is now the cleanest zone, not the noisiest), per-stroke ratios 19x-76x on the worst-hit strokes. 17 residual fully-zeroed clips look like irreducibly broken broadcasts. Writeup at `mmpose_heuristic/phase1_vs_phase2_2026-04-29.md`.
-- **Collation + env flip**: three collated trees per active (taxonomy, split) combo, mirrored, byte-identical, counts cross-checked against `clips_master.csv`. `BST_MMPOSE_NPY_DIR` flipped to the clean dir, one-step rollback at `.env.bak.2026-04-29`.
+- **Collation + env flip**: three collated trees per active (taxonomy, split) combo, mirrored, byte-identical, counts cross-checked against `clips_master.csv`. `BST_X_MMPOSE_NPY_DIR` flipped to the clean dir, one-step rollback at `.env.bak.2026-04-29`.
 
 ### Phase 2 sanity-train, 2026-04-30
 

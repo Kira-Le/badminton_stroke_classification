@@ -36,7 +36,7 @@ Python API
     from pipeline.data_access import get_clip_records, DataPaths
 
     # Defaults: clips, shuttle_npy, clips_master from pipeline.config paths.
-    # mmpose_npy_dir is left None until BST_MMPOSE_NPY_DIR is set or passed in.
+    # mmpose_npy_dir is left None until BST_X_MMPOSE_NPY_DIR is set or passed in.
     paths = DataPaths()
 
     # Filter by split and/or class. Both are optional.
@@ -105,7 +105,7 @@ root (copy .env.example and fill in your values):
 
     BST_CLIPS_DIR=/scratch/comp320a/ShuttleSet/clips
     BST_X_SHUTTLE_NPY_DIR=/scratch/comp320a/ShuttleSet/shuttle_npy_flat
-    BST_MMPOSE_NPY_DIR=/scratch/comp320a/ShuttleSet_data_bst_25/dataset_npy_between_2_hits_with_max_limits_flat
+    BST_X_MMPOSE_NPY_DIR=/scratch/comp320a/ShuttleSet_data_bst_25/dataset_npy_between_2_hits_with_max_limits_flat
     BST_CLIPS_CSV=/home/username/badminton_stroke_classifier/notebooks/clips_master.csv
 
 Then just run with no flags:
@@ -201,6 +201,7 @@ import warnings  # noqa: E402
 ENV_VAR_RENAMES = {
     'BST_X_SHUTTLE_CSV_DIR': 'BST_SHUTTLE_CSV_DIR',
     'BST_X_SHUTTLE_NPY_DIR': 'BST_SHUTTLE_NPY_DIR',
+    'BST_X_MMPOSE_NPY_DIR': 'BST_MMPOSE_NPY_DIR',
 }
 
 
@@ -247,7 +248,7 @@ class DataPaths:
     Environment variables:
       BST_CLIPS_DIR        -- root clips directory (nested by split/class).
       BST_X_SHUTTLE_NPY_DIR  -- flat shuttle npy directory.
-      BST_MMPOSE_NPY_DIR   -- flat mmpose per-clip npy directory (omit if not
+      BST_X_MMPOSE_NPY_DIR   -- flat mmpose per-clip npy directory (omit if not
                               generated yet).
       BST_CLIPS_CSV        -- path to clips_master.csv.
 
@@ -271,7 +272,7 @@ class DataPaths:
         default_factory=lambda: env_path('BST_X_SHUTTLE_NPY_DIR', SHUTTLE_OUTPUT_DIR)
     )
     mmpose_npy_dir: Path | None = field(
-        default_factory=lambda: env_path_or_none('BST_MMPOSE_NPY_DIR')
+        default_factory=lambda: env_path_or_none('BST_X_MMPOSE_NPY_DIR')
     )
     clips_csv: Path = field(
         default_factory=lambda: env_path('BST_CLIPS_CSV', _DEFAULT_CLIPS_CSV)
@@ -620,7 +621,7 @@ def _build_cli() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         '--mmpose-npy-dir', type=Path, default=None,
-        help='Flat mmpose per-clip npy directory (overrides BST_MMPOSE_NPY_DIR).',
+        help='Flat mmpose per-clip npy directory (overrides BST_X_MMPOSE_NPY_DIR).',
     )
     parser.add_argument(
         '--clips-csv', type=Path, default=None,

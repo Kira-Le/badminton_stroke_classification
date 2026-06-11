@@ -396,7 +396,7 @@ for r in records:
     print(r.clip_stem, r.clip, r.shuttle_npy, r.mmpose_joints)
 ```
 
-`DataPaths` resolves paths in priority order: constructor arg > environment variable (or `.env` file entry: `BST_CLIPS_DIR`, `BST_SHUTTLE_NPY_DIR`, `BST_MMPOSE_NPY_DIR`, `BST_CLIPS_CSV`) > `pipeline.config` defaults. Copy `.env.example` at the repo root to `.env` to pin paths per environment.
+`DataPaths` resolves paths in priority order: constructor arg > environment variable (or `.env` file entry: `BST_CLIPS_DIR`, `BST_X_SHUTTLE_NPY_DIR`, `BST_X_MMPOSE_NPY_DIR`, `BST_CLIPS_CSV`) > `pipeline.config` defaults. Copy `.env.example` at the repo root to `.env` to pin paths per environment.
 
 CLI + TUI for quick inspection:
 

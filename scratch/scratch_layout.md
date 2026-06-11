@@ -14,7 +14,7 @@ ShuttleSet/                                     raw clips + shuttle outputs (ent
 ShuttleSet_data_merged_25/                      collations on BST original 25-class taxonomy
 ShuttleSet_data_une_merge_v1/                   collations on 14-class with-sides taxonomy
 ShuttleSet_data_une_merge_v1_nosides/           collations on 14-class no-sides taxonomy (current best)
-ShuttleSet_keypoints_clean_sticky_anchor/       apply_heuristic outputs (BST_MMPOSE_NPY_DIR)
+ShuttleSet_keypoints_clean_sticky_anchor/       apply_heuristic outputs (BST_X_MMPOSE_NPY_DIR)
 ShuttleSet_keypoints_raw/                       raw_extract.py outputs (Phase-2 unified extract)
 ShuttleSet_keypoints_raw_provenance/            stems-list files from shard runs (verification artifact, not for re-rsync)
 sticky_anchor_inspection/                       inspection artifacts
@@ -77,7 +77,7 @@ Per-clip pose data, taxonomy- and split-agnostic. Lives outside the per-taxonomy
 
 `ShuttleSet_keypoints_raw/` (9.3 MB metadata, contents in TBs): 5 `_raw_*.npy` files per stem, N_max=16. 32,203 stems total. Phase-2 unified extract finished 2026-04-29 (30,487 freshly extracted + 1,716 Phase-1 backfill, bit-identical on engelbart and bourbaki). `ndet=0` 0%, `ndet=1` 0.53% (irreducible per-frame failure floor), modal `ndet=10`.
 
-`ShuttleSet_keypoints_clean_sticky_anchor/` (8.5 MB metadata, contents in GBs): 3 files per stem (`_pos.npy`, `_joints.npy`, `_failed.npy`) from `apply_heuristic.py`. This is what `BST_MMPOSE_NPY_DIR` points at and what collation reads as input.
+`ShuttleSet_keypoints_clean_sticky_anchor/` (8.5 MB metadata, contents in GBs): 3 files per stem (`_pos.npy`, `_joints.npy`, `_failed.npy`) from `apply_heuristic.py`. This is what `BST_X_MMPOSE_NPY_DIR` points at and what collation reads as input.
 
 `ShuttleSet_keypoints_raw_provenance/`: stems-list shard files. Keep out of the canonical raw dir during verification queries and rsyncs.
 
@@ -88,7 +88,7 @@ Per-clip pose data, taxonomy- and split-agnostic. Lives outside the per-taxonomy
 ```
 BST_CLIPS_DIR=/scratch/comp320a/ShuttleSet/clips
 BST_SHUTTLE_NPY_DIR=/scratch/comp320a/ShuttleSet/shuttle_npy_flat
-BST_MMPOSE_NPY_DIR=/scratch/comp320a/ShuttleSet_keypoints_clean_sticky_anchor
+BST_X_MMPOSE_NPY_DIR=/scratch/comp320a/ShuttleSet_keypoints_clean_sticky_anchor
 BST_CLIPS_CSV=/home/ahalperi/badminton_stroke_classifier/notebooks/clips_master.csv
 # Optional: override the TrackNetV3 shuttle CSV directory. If unset, the
 # collator falls back to the repo-rooted SHUTTLE_CSV_DIR from pipeline/config.
