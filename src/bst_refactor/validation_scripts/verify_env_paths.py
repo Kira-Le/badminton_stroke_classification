@@ -37,14 +37,14 @@ def _check_dir(label: str, path_str: str | None) -> bool:
 def main() -> int:
     load_repo_dotenv()
 
-    clips_dir       = os.environ.get('BST_CLIPS_DIR')
+    clips_dir       = os.environ.get('BST_X_CLIPS_DIR')
     shuttle_dir     = os.environ.get('BST_X_SHUTTLE_NPY_DIR')
     mmpose_dir      = os.environ.get('BST_X_MMPOSE_NPY_DIR')
     clips_csv       = os.environ.get('BST_X_CLIPS_CSV')
     shuttle_csv_dir = os.environ.get('BST_X_SHUTTLE_CSV_DIR')
 
     print('Env vars (post .env load):')
-    ok_clips       = _check_dir('BST_CLIPS_DIR         ', clips_dir)
+    ok_clips       = _check_dir('BST_X_CLIPS_DIR         ', clips_dir)
     ok_shuttle     = _check_dir('BST_X_SHUTTLE_NPY_DIR ', shuttle_dir)
     ok_mmpose      = _check_dir('BST_X_MMPOSE_NPY_DIR  ', mmpose_dir)
     ok_shuttle_csv = _check_dir('BST_X_SHUTTLE_CSV_DIR ', shuttle_csv_dir)

@@ -1036,8 +1036,8 @@ def main():
     parser.add_argument(
         "--clips-dir",
         type=Path,
-        default=env_path('BST_CLIPS_DIR', CLIPS_OUTPUT_DIR),
-        help=f"Clip .mp4 input directory (default: BST_CLIPS_DIR or {CLIPS_OUTPUT_DIR})",
+        default=env_path('BST_X_CLIPS_DIR', CLIPS_OUTPUT_DIR),
+        help=f"Clip .mp4 input directory (default: BST_X_CLIPS_DIR or {CLIPS_OUTPUT_DIR})",
     )
     parser.add_argument(
         "--tracknet-dir",

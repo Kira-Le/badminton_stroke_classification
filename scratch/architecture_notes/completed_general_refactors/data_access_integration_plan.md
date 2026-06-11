@@ -156,7 +156,7 @@ directory tree uses.
 ```python
 @dataclass
 class DataPaths:
-    clips_dir: Path = field(default_factory=lambda: _env_path('BST_CLIPS_DIR', CLIPS_OUTPUT_DIR))
+    clips_dir: Path = field(default_factory=lambda: _env_path('BST_X_CLIPS_DIR', CLIPS_OUTPUT_DIR))
     shuttle_npy_dir: Path = field(default_factory=lambda: _env_path('BST_SHUTTLE_NPY_DIR', SHUTTLE_OUTPUT_DIR))
     mmpose_npy_dir: Path | None = field(default_factory=lambda: _env_path_or_none('BST_X_MMPOSE_NPY_DIR'))
     clips_csv: Path = field(default_factory=lambda: _env_path('BST_X_CLIPS_CSV', REPO_ROOT / 'notebooks' / 'clips_master.csv'))
@@ -207,7 +207,7 @@ overrides always win. Curtis's `.env.example` is a good template;
 update the commented HPC paths to reflect post-Phase-2 layout:
 
 ```
-BST_CLIPS_DIR=/scratch/comp320a/ShuttleSet/clips
+BST_X_CLIPS_DIR=/scratch/comp320a/ShuttleSet/clips
 BST_SHUTTLE_NPY_DIR=/scratch/comp320a/ShuttleSet/shuttle_npy_flat
 BST_X_MMPOSE_NPY_DIR=/scratch/comp320a/ShuttleSet_data_merged_25/dataset_npy_between_2_hits_with_max_limits_flat
 BST_X_CLIPS_CSV=/home/ahalperi/badminton_stroke_classifier/notebooks/clips_master.csv

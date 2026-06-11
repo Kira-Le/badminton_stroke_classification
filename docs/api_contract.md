@@ -294,7 +294,7 @@ HTML5 `<video>` scrubbing works.
 **Response:** binary `video/mp4`.
 
 **Errors:** `404` if the clip isn't in any registered model's clip
-index, or if `BST_CLIPS_DIR` is unset / the file isn't on this host.
+index, or if `BST_X_CLIPS_DIR` is unset / the file isn't on this host.
 
 ---
 

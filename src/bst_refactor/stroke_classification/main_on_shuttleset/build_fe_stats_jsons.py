@@ -157,7 +157,7 @@ def build_clip_index(
     Metadata (match / set / rally / ball_round / raw type / side) is a direct
     projection of ``clips_master.csv``. ``video_path`` is the clip's path relative to
     the clips dir, found via ``pipeline.clip_index.build_clip_path_index``; the serving
-    side joins it back onto its own ``BST_CLIPS_DIR``. With no clips tree present,
+    side joins it back onto its own ``BST_X_CLIPS_DIR``. With no clips tree present,
     ``video_path`` is null and the rest of the entry still populates.
     """
     master = pd.read_csv(clips_csv, dtype={"clip_stem": str}).set_index("clip_stem")
@@ -166,7 +166,7 @@ def build_clip_index(
     path_by_stem = build_clip_path_index(clips_dir) if clips_dir.is_dir() else {}
     if not path_by_stem:
         print(f"WARNING: no mp4s under {clips_dir}; clip_index video_path will be null "
-              f"(run where BST_CLIPS_DIR is mounted to populate it).")
+              f"(run where BST_X_CLIPS_DIR is mounted to populate it).")
 
     index = {}
     for split, stems in stems_by_split.items():
@@ -197,7 +197,7 @@ def main() -> None:
     ap.add_argument("--clips-dir", type=Path, default=None, help="override DataPaths clips_dir")
     args = ap.parse_args()
 
-    # .env first so BST_CLIPS_DIR / BST_X_CLIPS_CSV resolve the same way bst_infer +
+    # .env first so BST_X_CLIPS_DIR / BST_X_CLIPS_CSV resolve the same way bst_infer +
     # the collator do; DataPaths then picks them up (or the in-repo defaults).
     load_repo_dotenv()
     path_kwargs = {}

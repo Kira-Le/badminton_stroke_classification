@@ -103,7 +103,7 @@ Environment / .env file
 Instead of passing flags every time, set paths in a .env file at the project
 root (copy .env.example and fill in your values):
 
-    BST_CLIPS_DIR=/scratch/comp320a/ShuttleSet/clips
+    BST_X_CLIPS_DIR=/scratch/comp320a/ShuttleSet/clips
     BST_X_SHUTTLE_NPY_DIR=/scratch/comp320a/ShuttleSet/shuttle_npy_flat
     BST_X_MMPOSE_NPY_DIR=/scratch/comp320a/ShuttleSet_data_bst_25/dataset_npy_between_2_hits_with_max_limits_flat
     BST_X_CLIPS_CSV=/home/username/badminton_stroke_classifier/notebooks/clips_master.csv
@@ -115,7 +115,7 @@ Then just run with no flags:
 
 Shell exports take precedence over .env, so on-the-fly overrides work:
 
-    BST_CLIPS_DIR=/other/path python -m pipeline.data_access --summary
+    BST_X_CLIPS_DIR=/other/path python -m pipeline.data_access --summary
 
 Relationship to ``clip_index.py``
 ---------------------------------
@@ -203,6 +203,7 @@ ENV_VAR_RENAMES = {
     'BST_X_SHUTTLE_NPY_DIR': 'BST_SHUTTLE_NPY_DIR',
     'BST_X_MMPOSE_NPY_DIR': 'BST_MMPOSE_NPY_DIR',
     'BST_X_CLIPS_CSV': 'BST_CLIPS_CSV',
+    'BST_X_CLIPS_DIR': 'BST_CLIPS_DIR',
 }
 
 
@@ -247,7 +248,7 @@ class DataPaths:
       3. Default from ``pipeline.config`` / repo root.
 
     Environment variables:
-      BST_CLIPS_DIR        -- root clips directory (nested by split/class).
+      BST_X_CLIPS_DIR        -- root clips directory (nested by split/class).
       BST_X_SHUTTLE_NPY_DIR  -- flat shuttle npy directory.
       BST_X_MMPOSE_NPY_DIR   -- flat mmpose per-clip npy directory (omit if not
                               generated yet).
@@ -267,7 +268,7 @@ class DataPaths:
     """
 
     clips_dir: Path = field(
-        default_factory=lambda: env_path('BST_CLIPS_DIR', CLIPS_OUTPUT_DIR)
+        default_factory=lambda: env_path('BST_X_CLIPS_DIR', CLIPS_OUTPUT_DIR)
     )
     shuttle_npy_dir: Path = field(
         default_factory=lambda: env_path('BST_X_SHUTTLE_NPY_DIR', SHUTTLE_OUTPUT_DIR)
@@ -613,7 +614,7 @@ def _build_cli() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         '--clips-dir', type=Path, default=None,
-        help='Root clips directory (overrides BST_CLIPS_DIR + config default).',
+        help='Root clips directory (overrides BST_X_CLIPS_DIR + config default).',
     )
     parser.add_argument(
         '--shuttle-npy-dir', type=Path, default=None,

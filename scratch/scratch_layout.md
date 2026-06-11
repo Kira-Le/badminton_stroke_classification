@@ -10,7 +10,7 @@ From `ls -lah /scratch/comp320a/`:
 
 ```
 ahalperi/                                       personal scratch space (node-v20 install for yt-dlp JS runtime)
-ShuttleSet/                                     raw clips + shuttle outputs (entrypoint for BST_CLIPS_DIR + BST_SHUTTLE_NPY_DIR)
+ShuttleSet/                                     raw clips + shuttle outputs (entrypoint for BST_X_CLIPS_DIR + BST_SHUTTLE_NPY_DIR)
 ShuttleSet_data_merged_25/                      collations on BST original 25-class taxonomy
 ShuttleSet_data_une_merge_v1/                   collations on 14-class with-sides taxonomy
 ShuttleSet_data_une_merge_v1_nosides/           collations on 14-class no-sides taxonomy (current best)
@@ -30,7 +30,7 @@ Layout: `<split>/<Side>_<class>/<stem>.mp4`
 
 Example: `/scratch/comp320a/ShuttleSet/clips/test/Bottom_smash/35_1_10_17.mp4`.
 
-`BST_CLIPS_DIR` points at the `clips/` root. The FE serving layer joins it with `clip_index.json`'s `video_path` field to stream individual mp4s.
+`BST_X_CLIPS_DIR` points at the `clips/` root. The FE serving layer joins it with `clip_index.json`'s `video_path` field to stream individual mp4s.
 
 ## Collation dirs
 
@@ -86,7 +86,7 @@ Per-clip pose data, taxonomy- and split-agnostic. Lives outside the per-taxonomy
 `~/badminton_stroke_classifier/.env` (NFS-shared via /home across nodes; read at import time by `pipeline.data_access`):
 
 ```
-BST_CLIPS_DIR=/scratch/comp320a/ShuttleSet/clips
+BST_X_CLIPS_DIR=/scratch/comp320a/ShuttleSet/clips
 BST_SHUTTLE_NPY_DIR=/scratch/comp320a/ShuttleSet/shuttle_npy_flat
 BST_X_MMPOSE_NPY_DIR=/scratch/comp320a/ShuttleSet_keypoints_clean_sticky_anchor
 BST_X_CLIPS_CSV=/home/ahalperi/badminton_stroke_classifier/notebooks/clips_master.csv

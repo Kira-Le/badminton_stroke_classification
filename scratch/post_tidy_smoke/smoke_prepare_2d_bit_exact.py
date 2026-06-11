@@ -40,7 +40,7 @@ Usage on engelbart:
   # mp4s into a fresh sample dir.
   mkdir -p /tmp/prepare_2d_smoke_clips/sample
   for stem in 19_1_5_1 19_1_5_2 19_1_5_3 19_1_5_4 19_1_5_5; do
-      find $BST_CLIPS_DIR -name "${stem}.mp4" -exec ln -sf {} /tmp/prepare_2d_smoke_clips/sample/${stem}.mp4 \\;
+      find $BST_X_CLIPS_DIR -name "${stem}.mp4" -exec ln -sf {} /tmp/prepare_2d_smoke_clips/sample/${stem}.mp4 \\;
   done
 
   export CLIPS_DIR=/tmp/prepare_2d_smoke_clips

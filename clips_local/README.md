@@ -33,9 +33,9 @@ src/bst_refactor/stroke_classification/main_on_shuttleset/experiments/run_202605
 The backend endpoint `GET /api/clips/<stem>/video` resolves in this order:
 
 1. `clips_local/<stem>.mp4` (this directory) — what you drop here.
-2. The dataset tree under `BST_CLIPS_DIR` (UNE HPC / mounted box).
+2. The dataset tree under `BST_X_CLIPS_DIR` (UNE HPC / mounted box).
 
-So you do **not** need `BST_CLIPS_DIR` set to play a local drop. Override the
+So you do **not** need `BST_X_CLIPS_DIR` set to play a local drop. Override the
 directory with the `BST_X_LOCAL_CLIPS_DIR` env var if you want it elsewhere.
 
 If no clip is found for a stem, the player shows a "Clip not available locally"

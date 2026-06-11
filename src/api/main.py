@@ -456,12 +456,12 @@ async def library_predict(req: LibraryPredictRequest, background_tasks: Backgrou
     also accepts library YouTube identifiers as a stand-in stem for
     demo purposes."""
     from .registry import _build_stem_index  # local import to avoid cycle
-    from .config import BST_CLIPS_DIR
+    from .config import BST_X_CLIPS_DIR
 
     rel_path = _build_stem_index().get(req.clip_stem)
     abs_path: Path
-    if rel_path is not None and BST_CLIPS_DIR is not None and (BST_CLIPS_DIR / rel_path).exists():
-        abs_path = BST_CLIPS_DIR / rel_path
+    if rel_path is not None and BST_X_CLIPS_DIR is not None and (BST_X_CLIPS_DIR / rel_path).exists():
+        abs_path = BST_X_CLIPS_DIR / rel_path
         resolution = "dataset_clip"
     else:
         # Stand-in: stub inference doesn't read the file, but we still

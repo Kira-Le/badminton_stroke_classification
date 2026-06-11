@@ -231,10 +231,10 @@ patches Isiah marked LOCAL-ONLY).
    paired with `cursor: offset+limit > total ? …` — the `==` boundary case
    showed a `pointer` cursor on a disabled button. Made both use `>=`.
 3. **Neutralised the "no video" fallback message.** Old copy said *"Set
-   BST_CLIPS_DIR … or run on UNE HPC"* — but with the docker-compose mount
+   BST_X_CLIPS_DIR … or run on UNE HPC"* — but with the docker-compose mount
    the env var IS set in the container; the issue is per-clip file absence.
    New copy: *"Video unavailable for this clip on the current host. The
-   backend serves clips from BST_CLIPS_DIR; only clips whose mp4 is present
+   backend serves clips from BST_X_CLIPS_DIR; only clips whose mp4 is present
    there will play."* Most of the 46 fallback clips will trip this message
    during the walkthrough.
 

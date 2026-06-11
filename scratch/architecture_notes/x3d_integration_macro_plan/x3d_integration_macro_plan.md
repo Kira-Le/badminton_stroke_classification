@@ -26,7 +26,7 @@ Scope is the X3D-S branch from data derivation through fused training. Out of sc
 - Target input shape: 39 frames × stride=1, fine-tuning toward this from K400's default 13 × stride=6. RF reaches the full window by the final conv block; ~40 frames is the upper limit. Source: `bst_x_overview.md:133-135`.
 - Hit-frame derivation: Method A (CSV correlation, deterministic) + Method B (shuttle horizontal-velocity sign reversal, independent verification). Re-extraction of source clips not required. Method A scaffold already exists at `src/bst_refactor/validation_scripts/hit_frame_lookup.py`. Source: `augmentation_framework.md:790-868`.
 - Existing data path:
-    - Per-clip .mp4 in `BST_CLIPS_DIR` (`/scratch/comp320a/ShuttleSet/clips/{split}/{Top|Bottom}_{stroke}/*.mp4`); 1920×1080 H.264.
+    - Per-clip .mp4 in `BST_X_CLIPS_DIR` (`/scratch/comp320a/ShuttleSet/clips/{split}/{Top|Bottom}_{stroke}/*.mp4`); 1920×1080 H.264.
     - Per-clip MMPose npy at `BST_X_MMPOSE_NPY_DIR/{stem}_joints.npy` (F, 2, 17, 2), `_pos.npy`, `_failed.npy`. Wrists are COCO indices 9 (left) / 10 (right); torso anchors are shoulders 5/6 and hips 11/12.
     - Collated tensors at `npy_wipe_drop/{train,val,test}/`: pose, pos, shuttle, videos_len, labels, all padded to seq_len=100.
     - `clips_master.csv` carries `clip_stem`, `raw_type_en`, `player_side`, split column, and the rally/ball_round indices needed to rederive the windowing.
