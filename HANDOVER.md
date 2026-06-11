@@ -55,7 +55,7 @@ still runs; specific features degrade gracefully.
 | Data | Used for | Dev path | Prod path | In git? |
 | --- | --- | --- | --- | --- |
 | Sample inspect clips | Clip playback / library | `scratch/inspect_clips/` | n/a | partial sample tracked |
-| BST-X collation tensors | Live per-clip inference | `scratch/bst_inputs/` | `${DATA_HOST_DIR}` (`/data`) | no |
+| BST-X collation tensors | Live per-clip inference | `scratch/bst_x_inputs/` | `${DATA_HOST_DIR}` (`/data`) | no |
 | ShuttleSet (clips + npy) | Training / data pipeline | set `BST_X_*` in `.env` | n/a (training is off-server) | no |
 | Model registry | Model cards / selection | `docs/models_registry.yaml` | same | yes |
 | Precomputed predictions | Results / model screens | served from each model's run dir | same | **yes (~11 MB)** |
@@ -66,7 +66,7 @@ still runs; specific features degrade gracefully.
 $BST_X_INPUTS_DIR/{test,val}/{JnB_bone,pos,shuttle,videos_len}.npy
 ```
 - TODO (team): **where are these SCP'd from?** Document the source host /
-  account / path, e.g. `scp engelbart:/scratch/comp320a/.../bst_inputs ...`.
+  account / path, e.g. `scp engelbart:/scratch/comp320a/.../bst_x_inputs ...`.
 - Without them, the per-clip browser and the "Errors only" filter stay hidden
   (every model reports `live=false`). The rest of the app is unaffected.
 

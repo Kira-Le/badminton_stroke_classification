@@ -1078,11 +1078,11 @@ predictions JSON or making the run dir world-readable.
   intermediate compression (these are float32 dense arrays; gzip
   would save ~5 %). Wall time: ~3 minutes for 542 MB over the campus
   link.
-- Destination: `E:\bsc-tier1\scratch\bst_inputs\{test,val}\` (mirrors
+- Destination: `E:\bsc-tier1\scratch\bst_x_inputs\{test,val}\` (mirrors
   the engelbart layout 1:1; 5 .npy files per split).
 - `docker-compose.yml` gained one new local-only bind mount:
-  `./scratch/bst_inputs:/app/bst_inputs:ro`. Visible as
-  `/app/bst_inputs/{test,val}/{JnB_bone,pos,shuttle,labels,videos_len}.npy`
+  `./scratch/bst_x_inputs:/app/bst_x_inputs:ro`. Visible as
+  `/app/bst_x_inputs/{test,val}/{JnB_bone,pos,shuttle,labels,videos_len}.npy`
   inside the container.
 - `notebooks/clips_master.csv` was already local (4 MB) and matches
   the engelbart SHA per the manifest's `data_provenance` block, so no
@@ -1183,7 +1183,7 @@ All inside the running stack at `localhost:24082`:
 
 ```
 ~/.ssh/{id_ed25519,id_ed25519.pub,config}    NEW   (machine-level config)
-docker-compose.yml                          +3 lines (bst_inputs bind mount)
+docker-compose.yml                          +3 lines (bst_x_inputs bind mount)
 src/api/bst_x_inference.py                    NEW  (~200 LOC)
 src/api/registry.py                         +35 lines (live-or-cached branch)
 src/api/main.py                             +40 lines (live-or-stub in _process_video)
@@ -1193,7 +1193,7 @@ src/bst_refactor/.../run_20260505_154907/predictions/{test,val}.json
                                             rewritten — 28+28 real stems with placeholder predictions
 scratch/inspect_clips/rebuild_real.py       NEW (rebuild helper)
 scratch/inspect_clips/mock_backup/           NEW (backups of original mocks)
-scratch/bst_inputs/{test,val}/*.npy         NEW · 542 MB (SCP'd, gitignored by size)
+scratch/bst_x_inputs/{test,val}/*.npy         NEW · 542 MB (SCP'd, gitignored by size)
 ```
 
 The previous §1a / §1b / §7-9 work is unchanged. The §1a remap rules

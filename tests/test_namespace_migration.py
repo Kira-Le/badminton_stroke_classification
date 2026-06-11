@@ -885,9 +885,12 @@ def test_t11_stage2_module_paths():
 def test_t11_stage3_bst_inputs_dir():
     if not _step7_bst_inputs_landed():
         pytest.skip('Step 7 not landed: docker-compose.dev.yml does not mention bst_x_inputs')
+    # The design doc quotes the bst_inputs pattern verbatim as the stage-3
+    # regex spec; allowlisting it avoids a self-flag.
+    allowed = {'scratch/architecture_notes/namespace_migration_test_design.md'}
     hits = _scan_pattern(
         re.compile(r'\bbst_inputs\b'), _tracked_text_files(),
-        allow_path=lambda rel: False,
+        allow_path=lambda rel: rel in allowed,
     )
     assert hits == [], '\n'.join(f'{r}:{n}: {l}' for r, n, l in hits)
 

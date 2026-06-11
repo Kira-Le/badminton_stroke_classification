@@ -179,7 +179,7 @@ def main():
         "_real_stems": True,
         "_notes": "56 real stems (28 test + 28 val) sampled from clips_master.csv, "
                   "class-balanced. row_index is the row in the collated tensors at "
-                  "scratch/bst_inputs/{split}/JnB_bone.npy etc.",
+                  "scratch/bst_x_inputs/{split}/JnB_bone.npy etc.",
         "clips": new_clips,
     }
 

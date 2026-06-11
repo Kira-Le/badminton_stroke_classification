@@ -150,9 +150,9 @@ $BST_X_INPUTS_DIR/{test,val}/{JnB_bone,pos,shuttle,videos_len}.npy
 ```
 
 `docker-compose.prod.yml` defaults `BST_X_INPUTS_DIR=/data`, which is correct if
-your `DATA_HOST_DIR` points directly at a `bst_inputs`-shaped tree (i.e. it
+your `DATA_HOST_DIR` points directly at a `bst_x_inputs`-shaped tree (i.e. it
 contains `test/` and `val/` at its root). If your dataset has those tensors
-under a `bst_inputs/` subfolder, change it to `BST_X_INPUTS_DIR=/data/bst_inputs`.
+under a `bst_x_inputs/` subfolder, change it to `BST_X_INPUTS_DIR=/data/bst_x_inputs`.
 
 If neither layout matches and the env var is wrong, the rest of the app still
 works — only the per-clip browser falls back to the "not available in this

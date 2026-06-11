@@ -10,8 +10,8 @@ branch has predictions for. Upload-flow inference (`src/api/inference.py`)
 remains a smart stub — that's a separate Ari/Scott workstream.
 
 Bind mounts required (set in docker-compose.yml):
-    ./scratch/bst_inputs/{test,val}/{JnB_bone,pos,shuttle,videos_len,labels}.npy
-        -> /app/bst_inputs/{test,val}/...
+    ./scratch/bst_x_inputs/{test,val}/{JnB_bone,pos,shuttle,videos_len,labels}.npy
+        -> /app/bst_x_inputs/{test,val}/...
 
 The checkpoint and clip_index.json live in the repo tree at
 `src/bst_refactor/.../experiments/run_20260505_154907/`.
@@ -56,9 +56,9 @@ CLIP_INDEX_PATH = RUN_DIR / "clip_index.json"
 # Resolution order:
 #   1. $BST_X_INPUTS_DIR — explicit override (set this in docker-compose.prod.yml
 #      to point at wherever the host dataset's {test,val}/*.npy collation lives,
-#      e.g. /data or /data/bst_inputs). Survives `git pull`.
-#   2. /app/bst_inputs — the dev compose bind-mount target.
-#   3. <repo>/scratch/bst_inputs — bare local fallback.
+#      e.g. /data or /data/bst_x_inputs). Survives `git pull`.
+#   2. /app/bst_x_inputs — the dev compose bind-mount target.
+#   3. <repo>/scratch/bst_x_inputs — bare local fallback.
 # Expected layout under whatever this resolves to:
 #   {test,val}/{JnB_bone,pos,shuttle,videos_len}.npy
 from .config import _resolve_env as _resolve_api_env
@@ -66,10 +66,10 @@ from .config import _resolve_env as _resolve_api_env
 _BST_X_INPUTS_DIR_ENV = _resolve_api_env("BST_X_INPUTS_DIR")
 if _BST_X_INPUTS_DIR_ENV:
     BST_X_INPUTS_DIR = Path(_BST_X_INPUTS_DIR_ENV)
-elif Path("/app/bst_inputs").exists():
-    BST_X_INPUTS_DIR = Path("/app/bst_inputs")
+elif Path("/app/bst_x_inputs").exists():
+    BST_X_INPUTS_DIR = Path("/app/bst_x_inputs")
 else:
-    BST_X_INPUTS_DIR = REPO_ROOT / "scratch" / "bst_inputs"
+    BST_X_INPUTS_DIR = REPO_ROOT / "scratch" / "bst_x_inputs"
 SPLITS = ("test", "val")
 POSE_STYLE = "JnB_bone"
 
