@@ -104,7 +104,7 @@ Instead of passing flags every time, set paths in a .env file at the project
 root (copy .env.example and fill in your values):
 
     BST_CLIPS_DIR=/scratch/comp320a/ShuttleSet/clips
-    BST_SHUTTLE_NPY_DIR=/scratch/comp320a/ShuttleSet/shuttle_npy_flat
+    BST_X_SHUTTLE_NPY_DIR=/scratch/comp320a/ShuttleSet/shuttle_npy_flat
     BST_MMPOSE_NPY_DIR=/scratch/comp320a/ShuttleSet_data_bst_25/dataset_npy_between_2_hits_with_max_limits_flat
     BST_CLIPS_CSV=/home/username/badminton_stroke_classifier/notebooks/clips_master.csv
 
@@ -200,6 +200,7 @@ import warnings  # noqa: E402
 
 ENV_VAR_RENAMES = {
     'BST_X_SHUTTLE_CSV_DIR': 'BST_SHUTTLE_CSV_DIR',
+    'BST_X_SHUTTLE_NPY_DIR': 'BST_SHUTTLE_NPY_DIR',
 }
 
 
@@ -245,7 +246,7 @@ class DataPaths:
 
     Environment variables:
       BST_CLIPS_DIR        -- root clips directory (nested by split/class).
-      BST_SHUTTLE_NPY_DIR  -- flat shuttle npy directory.
+      BST_X_SHUTTLE_NPY_DIR  -- flat shuttle npy directory.
       BST_MMPOSE_NPY_DIR   -- flat mmpose per-clip npy directory (omit if not
                               generated yet).
       BST_CLIPS_CSV        -- path to clips_master.csv.
@@ -267,7 +268,7 @@ class DataPaths:
         default_factory=lambda: env_path('BST_CLIPS_DIR', CLIPS_OUTPUT_DIR)
     )
     shuttle_npy_dir: Path = field(
-        default_factory=lambda: env_path('BST_SHUTTLE_NPY_DIR', SHUTTLE_OUTPUT_DIR)
+        default_factory=lambda: env_path('BST_X_SHUTTLE_NPY_DIR', SHUTTLE_OUTPUT_DIR)
     )
     mmpose_npy_dir: Path | None = field(
         default_factory=lambda: env_path_or_none('BST_MMPOSE_NPY_DIR')
@@ -614,7 +615,7 @@ def _build_cli() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         '--shuttle-npy-dir', type=Path, default=None,
-        help='Flat shuttle npy directory (overrides BST_SHUTTLE_NPY_DIR '
+        help='Flat shuttle npy directory (overrides BST_X_SHUTTLE_NPY_DIR '
              '+ config default).',
     )
     parser.add_argument(
