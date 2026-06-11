@@ -10,6 +10,7 @@ from pathlib import Path
 ENV_VAR_RENAMES = {
     'BST_X_LOCAL_CLIPS_DIR': 'BST_LOCAL_CLIPS_DIR',
     'BST_X_REPO_ROOT': 'BST_REPO_ROOT',
+    'BST_X_REGISTRY_PATH': 'BST_REGISTRY_PATH',
 }
 
 
@@ -36,7 +37,7 @@ def _resolve_env(name, default=None):
 # tree). Used by registry.py to anchor relative paths in models_registry.yaml.
 REPO_ROOT = Path(_resolve_env("BST_X_REPO_ROOT", str(Path(__file__).resolve().parents[2])))
 REGISTRY_PATH = Path(
-    os.getenv("BST_REGISTRY_PATH", str(REPO_ROOT / "docs" / "models_registry.yaml"))
+    _resolve_env("BST_X_REGISTRY_PATH", str(REPO_ROOT / "docs" / "models_registry.yaml"))
 )
 
 # Optional: directory holding the clip mp4s, with layout
