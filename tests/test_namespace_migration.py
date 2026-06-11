@@ -877,7 +877,7 @@ def test_t11_stage2_module_paths():
     }
     hits = _scan_pattern(
         pattern, _tracked_text_files(),
-        allow_path=lambda rel: rel in allowed,
+        allow_path=lambda rel: str(rel) in allowed,
     )
     assert hits == [], '\n'.join(f'{r}:{n}: {l}' for r, n, l in hits)
 
@@ -893,7 +893,7 @@ def test_t11_stage3_bst_inputs_dir():
     }
     hits = _scan_pattern(
         re.compile(r'\bbst_inputs\b'), _tracked_text_files(),
-        allow_path=lambda rel: rel in allowed,
+        allow_path=lambda rel: str(rel) in allowed,
     )
     assert hits == [], '\n'.join(f'{r}:{n}: {l}' for r, n, l in hits)
 
