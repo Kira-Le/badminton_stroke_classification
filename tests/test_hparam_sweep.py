@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from main_on_shuttleset import hparam_sweep as hs
+import hparam_sweep as hs
 
 
 # ==========================================================================

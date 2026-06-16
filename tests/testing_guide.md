@@ -70,6 +70,6 @@ GitHub Actions runs `pytest` on every push and PR (`.github/workflows/ci.yml`). 
 The root `conftest.py` adds two entries to `sys.path` so that imports used inside `bst_x` work from the test directory:
 
 - `src/bst_x` — allows `from pipeline.config import ...`, `from run_tracker import ...`
-- `src/bst_x/stroke_classification` — allows `from preparing_data.shuttleset_dataset import ...`, `from main_on_shuttleset.bst_x_common import ...`, `from model.tempose import ...`
+- `src/bst_x/stroke_classification` — allows `from preparing_data.shuttleset_dataset import ...`, `from bst_x_common import ...`, `from model.tempose import ...`
 
-The same pair is the documented PYTHONPATH for non-test invocation post-step-P (`PYTHONPATH=src/bst_x:src/bst_x/stroke_classification python -m main_on_shuttleset.bst_x_train`), so tests and production share one resolution layout.
+The same pair is the documented PYTHONPATH for non-test invocation post-step-P (`PYTHONPATH=src/bst_x:src/bst_x/stroke_classification python -m bst_x_train`), so tests and production share one resolution layout.

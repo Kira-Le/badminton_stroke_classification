@@ -190,7 +190,7 @@ PHASE_2_NOSIDES_RUNS = [
 
 def compute_median_class_ranks() -> dict:
     """For each class, compute median test F1 across Phase 2 nosides runs."""
-    EXP = REPO / 'src/bst_x/stroke_classification/main_on_shuttleset/experiments'
+    EXP = REPO / 'src/bst_x/stroke_classification/experiments'
     per_run_per_class = {}
     for run_id in PHASE_2_NOSIDES_RUNS:
         m = yaml.safe_load(open(EXP / run_id / 'manifest.yaml'))

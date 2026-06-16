@@ -40,7 +40,7 @@ def main() -> int:
 
     # Pull the live hyp namedtuple from bst_x_train.py without running its
     # if __name__ == '__main__': block.
-    bst_x_train = importlib.import_module('main_on_shuttleset.bst_x_train')
+    bst_x_train = importlib.import_module('bst_x_train')
     hyp = bst_x_train.hyp
 
     print('hyp config:')

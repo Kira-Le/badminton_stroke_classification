@@ -160,7 +160,7 @@ Three small scripts that confirm a sanity-train run is pointed at the right arte
 
 - **`verify_env_paths.py`** — loads `.env` via `pipeline.data_access.load_repo_dotenv`, prints the four `BST_X_*` vars, and confirms each resolves to an existing path. Spot-checks `BST_X_MMPOSE_NPY_DIR` for 32,203 `_failed.npy` and `_pos.npy` files (the post-Phase-2 expected count).
 - **`verify_collated_counts.py`** — pure-stdlib check that the three active collated dirs (combo A / B / C) contain the per-split clip counts expected from `clips_master.csv` filtered for `--drop-unknown`. Hardcoded combo expectations; no external CSV read needed at run time.
-- **`verify_bst_train_target.py`** — imports the live `hyp` namedtuple from `main_on_shuttleset.bst_x_train` without running its `__main__` block, derives the basename via the same `derive_npy_collated_dir_basename` helper the script uses (`npy_[3d_][seq{N}_]{split}_{collation_id}`), and confirms the resolved collated dir exists with its train/val/test sub-dirs and `.npy` files. Resolves the root the same way `bst_x_train` does (`BST_X_COLLATED_DATA_ROOT`, else `/scratch/comp320a`). The standard pre-launch check after a `hyp` edit.
+- **`verify_bst_train_target.py`** — imports the live `hyp` namedtuple from `bst_x_train` without running its `__main__` block, derives the basename via the same `derive_npy_collated_dir_basename` helper the script uses (`npy_[3d_][seq{N}_]{split}_{collation_id}`), and confirms the resolved collated dir exists with its train/val/test sub-dirs and `.npy` files. Resolves the root the same way `bst_x_train` does (`BST_X_COLLATED_DATA_ROOT`, else `/scratch/comp320a`). The standard pre-launch check after a `hyp` edit.
 
 All three run from the repo root:
 

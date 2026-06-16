@@ -45,7 +45,7 @@ if hasattr(torch, 'compile'):  # PyTorch 2.0+ guard
 That's it. The guard ensures it's a no-op on older PyTorch.
 
 ### Files to modify
-- `main_on_shuttleset/bst_x_train.py` (1 line added)
+- `bst_x_train.py` (1 line added)
 
 ## Optional micro-optimization: `set_to_none=True`
 

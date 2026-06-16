@@ -13,8 +13,8 @@ New here? [`data_pipeline_and_model_train_overview.md`](data_pipeline_and_model_
   - [Between Stages 2 and 3: Data Quality Validation](#between-stages-2-and-3----data-quality-validation-validation_scripts)
   - [Stage 3: Dataset Loading](#stage-3----dataset-loading-stroke_classificationpreparing_datashuttleset_datasetpy)
   - [Stage 4: Model](#stage-4----model-stroke_classificationmodel)
-  - [Stage 5: Training](#stage-5----training-stroke_classificationmain_on_shuttleset)
-  - [Stage 6: Inference](#stage-6----inference-stroke_classificationmain_on_shuttlesetbst_inferpy)
+  - [Stage 5: Training](#stage-5----training-stroke_classification)
+  - [Stage 6: Inference](#stage-6----inference-stroke_classificationbst_x_inferpy)
   - [Stage 7: Results](#stage-7----results-stroke_classificationresult_utilspy)
   - [Full dependency chain](#full-dependency-chain-bst-x-on-shuttleset)
 - [Part 2: Adapting for a Custom (Non-BST-X) Model](#part-2-adapting-for-a-custom-non-bst-x-model)
@@ -88,11 +88,11 @@ export PYTHONPATH=src/bst_x:src/bst_x/stroke_classification
 python -m preparing_data.prepare_train_on_shuttleset \
     --skip-trajectory --skip-pose                          # collate (reads shuttle CSVs)
 
-python -m main_on_shuttleset.bst_x_train                     # train (5 serial trials)
-python -m main_on_shuttleset.bst_x_infer                     # inference
+python -m bst_x_train                     # train (5 serial trials)
+python -m bst_x_infer                     # inference
 ```
 
-The same `PYTHONPATH=src/bst_x:src/bst_x/stroke_classification` setting is what `conftest.py` inserts for the test suite, so test and production invocation share one resolution layout. Pre-step-P invocation (`cd main_on_shuttleset && python bst_x_train.py`) no longer works after the proper-packages refactor.
+The same `PYTHONPATH=src/bst_x:src/bst_x/stroke_classification` setting is what `conftest.py` inserts for the test suite, so test and production invocation share one resolution layout. Bare-cd invocation (running the training script directly from inside its containing dir) no longer works after the proper-packages refactor.
 
 Each stage's output feeds the next. Stages are independently re-runnable — use `--skip-*` flags to avoid repeating completed work. **Important:** after class merge (step 4) has run, always pass `--skip-clips` on re-runs to avoid re-generating clips that were moved into merged folders.
 
@@ -397,7 +397,7 @@ BST_CG_AP = BST(use_ppf=True,  use_cg=True,  use_ap=True)   # Full model
 
 ---
 
-### Stage 5 -- Training (`stroke_classification/main_on_shuttleset/`)
+### Stage 5 -- Training (`stroke_classification/`)
 
 Stage 5 spans two files:
 
@@ -434,13 +434,13 @@ The `__main__` block runs 5 serial trials (`range(1, 6)`) to measure seed varian
 
 #### Outputs
 
-Every invocation writes under `main_on_shuttleset/experiments/<run_id>/`, where `<run_id>` is `run_<timestamp>` on a fresh run or the `resume_from` folder name on a re-test. That folder is the single collection point: manifest + per-serial weights + per-serial TB dirs all live side by side.
+Every invocation writes under `experiments/<run_id>/`, where `<run_id>` is `run_<timestamp>` on a fresh run or the `resume_from` folder name on a re-test. That folder is the single collection point: manifest + per-serial weights + per-serial TB dirs all live side by side.
 
 - **Manifest** (`experiments/<run_id>/manifest.yaml`): source of truth for hparams, git SHA + host, per-serial metrics (`macro_f1`, `min_f1`, `accuracy`, `top2_accuracy`, `num_strokes`), paths to each serial's weight file and TB dir, plus a `log_path:` pointer back to the matching test log. Tracked in git.
 - **Best-model notes** (`experiments/<run_id>/best_model_id.txt`): freeform notes flagging the best-performing serial(s) and the config context, written by hand after eyeballing the test log. Tracked in git alongside the manifest.
 - **Model weights** (`experiments/<run_id>/weights/bst_x_..._une_v1_14[_N].pt`): one best-validation-F1 checkpoint per serial. Gitignored by default; `src/bst_x/stroke_classification/.gitignore` carries a per-run tactical `!` unignore for the serial(s) flagged in `best_model_id.txt`, so git history stays small while the best checkpoints are still shareable.
 - **TensorBoard logs** (`experiments/<run_id>/tb/serial_N/`): per-serial event directories grouped under one run folder. Launch with `tensorboard --logdir experiments/<run_id>/tb` to see all serials of a run in one view. Each subfolder holds **two** event files: a larger one (60-70 KB) with the per-epoch scalar curves (train/val loss, val macro/min F1, `Schedule/aux_factor`) and a tiny one (~1.6 KB) with the end-of-run HParams summary (best/2nd-best macro F1 and min F1, best val loss, their epochs, `stopped_epoch`). Gitignored.
-- **Test logs** (`main_on_shuttleset/test_logs/test_<timestamp>.log`): all serials' test-set output (`=== Serial N (...) ===` headers, macro F1 table, accuracy, top-2 accuracy) auto-captured via the `Tee` class so metrics survive a dropped terminal. One file per script invocation; the run's manifest points at it via `log_path:`. Grep with `grep -E 'Accuracy|macro' test_logs/test_*.log` for a quick summary across runs, or use `run_overview.py` for a proper tabulation.
+- **Test logs** (`test_logs/test_<timestamp>.log`): all serials' test-set output (`=== Serial N (...) ===` headers, macro F1 table, accuracy, top-2 accuracy) auto-captured via the `Tee` class so metrics survive a dropped terminal. One file per script invocation; the run's manifest points at it via `log_path:`. Grep with `grep -E 'Accuracy|macro' test_logs/test_*.log` for a quick summary across runs, or use `run_overview.py` for a proper tabulation.
 
 #### Run tracker + aggregator
 
@@ -448,13 +448,13 @@ Cross-run comparison and the optional Aim UI are handled by the YAML-based track
 
 - **`run_overview.py`** aggregates every `experiments/<run_id>/manifest.yaml` into one table with mean / stdev / max per metric across serials:
   ```bash
-  cd main_on_shuttleset
-  python ../../run_overview.py                              # default: experiments/
-  python ../../run_overview.py -c n_epochs,use_aux_schedule -m macro_f1,min_f1
+  cd src/bst_x/stroke_classification
+  python ../run_overview.py                              # default: experiments/
+  python ../run_overview.py -c n_epochs,use_aux_schedule -m macro_f1,min_f1
   ```
 - **`aim_backfill.py`** rebuilds the Aim UI from every manifest + its TB event files: per-epoch curves, per-class final F1, hparams, auto-derived tags (`legacy`, the anneal-regime label, and `best` on the serial whose checkpoint was kept), and each run dated to its `started_at` rather than backfill-import time. Re-running needs `--wipe` (it removes `.aim` and rebuilds from scratch): aim 3.29 can't reopen a stable run hash, and an in-place update bleeds tags between runs. Runs in the tb-viewer venv (aim + tensorboard); `--repo` points at the Aim repo. Filter the kept-checkpoint runs in the UI search bar with `'best' in run.tags`.
   ```bash
-  ~/.venvs/tb-viewer/bin/python ../../aim_backfill.py \
+  ~/.venvs/tb-viewer/bin/python ../aim_backfill.py \
       --repo /path/to/.aim_repos/bst --wipe experiments
   ~/.venvs/tb-viewer/bin/aim up --repo /path/to/.aim_repos/bst   # UI at http://localhost:43800
   ```
@@ -462,7 +462,7 @@ Cross-run comparison and the optional Aim UI are handled by the YAML-based track
 
 ---
 
-### Stage 6 -- Inference (`stroke_classification/main_on_shuttleset/bst_x_infer.py`)
+### Stage 6 -- Inference (`stroke_classification/bst_x_infer.py`)
 
 Lightweight script for loading a trained checkpoint and predicting stroke types. Suitable as a Gradio backend.
 
@@ -515,9 +515,9 @@ model/tempose.py                      # TCN, MLP, TransformerEncoder, etc.
 model/bst.py                          # BST-X model (imports tempose building blocks)
     |
     v
-main_on_shuttleset/bst_x_common.py      # MODELS dispatch, build_bst_x_network, Tee, provenance
-main_on_shuttleset/bst_x_train.py       # Training loop (taxonomy in Hyp namedtuple)
-main_on_shuttleset/bst_x_infer.py       # Inference from checkpoint
+bst_x_common.py                       # MODELS dispatch, build_bst_x_network, Tee, provenance
+bst_x_train.py                        # Training loop (taxonomy in Hyp namedtuple)
+bst_x_infer.py                        # Inference from checkpoint
     |
     v
 result_utils.py                       # F1 scores, confusion matrices

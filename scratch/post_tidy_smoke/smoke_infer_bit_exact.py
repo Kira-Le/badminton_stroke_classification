@@ -60,7 +60,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from main_on_shuttleset.bst_x_infer import Task
+from bst_x_infer import Task
 from pipeline.config import resolve_taxonomy
 
 

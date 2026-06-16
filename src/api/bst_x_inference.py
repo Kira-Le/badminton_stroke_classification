@@ -49,7 +49,7 @@ for p in (BST_X_CLASSIFICATION, BST_X_REFACTOR):
 
 
 # ─── Constants ──────────────────────────────────────────────────────
-RUN_DIR = REPO_ROOT / "src" / "bst_x" / "stroke_classification" / "main_on_shuttleset" / "experiments" / "run_20260505_154907"
+RUN_DIR = REPO_ROOT / "src" / "bst_x" / "stroke_classification" / "experiments" / "run_20260505_154907"
 WEIGHTS_PATH = RUN_DIR / "weights" / "bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_5.pt"
 CLIP_INDEX_PATH = RUN_DIR / "clip_index.json"
 
@@ -94,7 +94,7 @@ _stem_to_meta: dict[str, dict] = {}                # stem -> {row_index, split, 
 # ─── Initialisation ─────────────────────────────────────────────────
 def _build_model() -> torch.nn.Module:
     """Instantiate BST_X at the right shape and load serial-5 weights."""
-    from main_on_shuttleset.bst_x_common import build_bst_x_network
+    from bst_x_common import build_bst_x_network
     net, _n_bones = build_bst_x_network(
         "BST_X",
         n_joints=17,
