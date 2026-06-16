@@ -112,7 +112,7 @@ def run_id_cell(rid: str) -> str:
     (for the one legacy name) between the descriptive part and its date tail.
     Each half is its own code span so the underscores stay literal and the id
     keeps monospace; the <br> sits outside the spans so it renders as a break."""
-    if rid == "bst_cg_ap_base_17_04_2026":
+    if rid == "foundation_chang_baseline":
         head, tail = "bst_cg_ap_base", "_17_04_2026"
     elif rid.startswith("run_") and rid[4:12].isdigit():
         head, tail = rid[:12], rid[12:]  # run_YYYYMMDD | _HHMMSS[_micros]

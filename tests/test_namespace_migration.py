@@ -698,7 +698,7 @@ def test_t9_chang_attribution_intact():
 # T10: Chang baseline run untouched
 # ---------------------------------------------------------------------------
 
-BASELINE_DIR = EXPERIMENTS / 'bst_cg_ap_base_17_04_2026'
+BASELINE_DIR = EXPERIMENTS / 'foundation_chang_baseline'
 BASELINE_PREFIX_MIXED = 'bst_CG_AP_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25'
 BASELINE_PREFIX_LOWER = 'bst_cg_ap_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25'
 BASELINE_TRIPLE_MIXED = {

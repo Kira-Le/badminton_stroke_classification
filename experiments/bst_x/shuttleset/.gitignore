@@ -21,8 +21,8 @@
 
 # Best checkpoints per run (tactical unignores).
 
-# bst_cg_ap_base_17_04_2026: pre-tracker baseline (paper hyperparams + TrackNetV3 WITH inpaint). S2 best.
-!bst_cg_ap_base_17_04_2026/weights/bst_cg_ap_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25_2.pt
+# foundation_chang_baseline: pre-tracker baseline (paper hyperparams + TrackNetV3 WITH inpaint). S2 best.
+!foundation_chang_baseline/weights/bst_cg_ap_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25_2.pt
 
 # run_20260417_191851: retuned-LR baseline, 120 epochs, no CG/AP anneal. S1 best on every metric.
 !run_20260417_191851/weights/bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_merged_25.pt

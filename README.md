@@ -14,7 +14,7 @@ TemPose-TF (2023) and BST (Chang 2025) are the two published benchmarks for badm
 | --- | --- | --- | --- | --- |
 | TemPose-TF (2023, prior published benchmark) | 0.794 | 0.493 | 0.819 | 0.950 |
 | BST paper, variable-length (Chang 2025) | 0.810 | 0.576 | 0.832 | 0.959 |
-| Upgraded TrackNet w/ inpaint (`bst_cg_ap_base_17_04_2026`) | 0.823 | 0.585 | 0.841 | 0.963 |
+| Upgraded TrackNet w/ inpaint (`foundation_chang_baseline`) | 0.823 | 0.585 | 0.841 | 0.963 |
 | Training-schedule sweep (`run_20260417_191851`) | 0.830 | **0.627** | 0.844 | 0.964 |
 | Keypoint extraction heuristic (`run_20260429_202144`) | **0.831** | 0.577 | **0.849** | **0.968** |
 

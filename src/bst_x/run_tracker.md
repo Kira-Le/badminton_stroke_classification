@@ -35,7 +35,7 @@ for serial_no in range(1, 6):
 What each call configures:
 
 - **`config=hyp`**: the hparam payload on `track_run`. Accepts any dataclass, namedtuple, dict, or object with `vars()`; lands verbatim under `config:` in `manifest.yaml`.
-- **`run_id`**: names the `experiments/<run_id>/` subfolder. `run_{timestamp}` is the convention for regular runs; pass any string for a named/legacy run (e.g. `bst_cg_ap_base_17_04_2026`), or pass `None` to let `track_run` auto-generate a `run_YYYYMMDD_HHMMSS` id.
+- **`run_id`**: names the `experiments/<run_id>/` subfolder. `run_{timestamp}` is the convention for regular runs; pass any string for a named/legacy run (e.g. `foundation_chang_baseline`), or pass `None` to let `track_run` auto-generate a `run_YYYYMMDD_HHMMSS` id.
 - **`weights_path` / `tb_dir` / `metrics`**: the per-serial payload on `track_serial`; lands in the manifest's `serials:` list. No layout is enforced, but by convention weights live at `run_dir/weights/` and TB events at `run_dir/tb/serial_N/`. `track_serial` is keyed by `serial_no`, so re-running a test updates the entry in place.
 - **`log_path=<path>`** (optional, on `track_run`): stored on the manifest so `aim_backfill.py` can slice per-serial blocks out of the test log later. Not needed during the live run; only matters if you want the backfill to enrich Aim descriptions.
 - **Aim mirror**: if `aim` is pip-installed (it isn't on the HPC train venv, so usually a no-op), `track_serial` also writes the serial into Aim as a fresh run and force-indexes it. Re-running a serial adds another Aim run rather than overwriting it; the clean rebuild is `aim_backfill.py --wipe` (see Aim UI below). Skips silently when aim is absent; nothing in the training loop breaks either way.
