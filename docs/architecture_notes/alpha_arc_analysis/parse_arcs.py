@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 
-EXP = Path(__file__).resolve().parents[3] / 'src/bst_x/stroke_classification/main_on_shuttleset/experiments'
+EXP = Path(__file__).resolve().parents[3] / 'experiments/bst_x/shuttleset'
 OUT = Path(__file__).resolve().parent / 'arcs.pkl'
 
 # label -> (run_id, predictions serial kept on disk). Order matches config.yaml.

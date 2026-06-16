@@ -1063,7 +1063,7 @@ def main():
         type=Path,
         default=env_path(
             'BST_X_CLIPS_CSV',
-            Path(__file__).resolve().parents[4] / "notebooks" / "clips_master.csv",
+            Path(__file__).resolve().parents[3] / "notebooks" / "clips_master.csv",
         ),
         help="Master clips CSV with split + label per clip "
              "(default: BST_X_CLIPS_CSV or <repo>/notebooks/clips_master.csv).",

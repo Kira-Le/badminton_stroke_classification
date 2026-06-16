@@ -1356,8 +1356,10 @@ if __name__ == '__main__':
             collated_data_root / f'ShuttleSet_data_{taxonomy.name}' / npy_collated_dir
         )
     else:
+        # bst_x_train.py lives at src/bst_x/; preparing_data/ is a sibling, so
+        # one .parent walks to src/bst_x/ and then into preparing_data/.
         collated_root = (
-            Path(__file__).resolve().parent.parent
+            Path(__file__).resolve().parent
             / f'preparing_data/ShuttleSet_data_{taxonomy.name}'
             / npy_collated_dir
         )

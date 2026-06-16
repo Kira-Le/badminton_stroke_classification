@@ -373,5 +373,5 @@ All drop-unknown, all on or before 1 May morning. The fix doc names #13–16; th
 
 **Does it move the numbers?** The dead logit rarely wins an argmax, so the practical hit to the affected runs' macro / min / acc is small, but #7–10 and #12–16 dropunk do sit in a different architecture era from #17 on: not a like-for-like head against the clean runs. The weights are what they are, so there's nothing to redo.
 
-Full diagnosis and fix design: [`architecture_notes/unknown_channel_fix_review.md`](architecture_notes/unknown_channel_fix_review.md).
+Full diagnosis and fix design: [`docs/architecture_notes/unknown_channel_fix_review.md`](../../docs/architecture_notes/unknown_channel_fix_review.md).
 

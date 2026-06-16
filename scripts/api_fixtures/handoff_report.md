@@ -945,7 +945,7 @@ The old `startMockUpload()` helper from before §7 — which did
 deleted as part of Item 2. Nothing in the current `UploadTab` reads
 the `ALL[]` library list. The current `UploadTab` JSX is a real
 `<input type="file">` plus drag-drop dropzone (see
-[library-screen.jsx:489-545](frontend/hba-stroke-classifier/library-screen.jsx)).
+[library-screen.jsx:489-545](../../frontend/hba-stroke-classifier/library-screen.jsx)).
 
 **What Vite serves matches the source.** Hitting
 `http://localhost:5173/hba-stroke-classifier/library-screen.jsx`
