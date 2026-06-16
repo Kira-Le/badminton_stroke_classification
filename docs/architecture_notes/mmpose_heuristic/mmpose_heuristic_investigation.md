@@ -124,7 +124,7 @@ Existing flat dirs on scratch already match the current naming convention. The n
 
 `failsafe_bst_mmpose_zeroing_check_equivalence.py` lives alongside `apply_heuristic.py`. Run it before trusting any `sticky_anchor` output:
 
-- Sample 50 clip stems from `scratch/architecture_notes/busted_hit_zone_clips_phase1.txt`. Lex-sort, take every `len // 50`-th stem. Deterministic, no seeding. Draws from the busted list rather than `clips_master.csv` because raw extracts only exist for those 1,716 stems.
+- Sample 50 clip stems from `docs/architecture_notes/busted_hit_zone_clips_phase1.txt`. Lex-sort, take every `len // 50`-th stem. Deterministic, no seeding. Draws from the busted list rather than `clips_master.csv` because raw extracts only exist for those 1,716 stems.
 - Run `apply_heuristic.py --heuristic current` on those stems against the raw extract, writing to `..._flat_failsafe_gate/`.
 - For each stem's three output arrays, compare against `$BST_X_MMPOSE_NPY_DIR`:
   - `np.array_equal` on `_failed.npy` (bool).
@@ -137,7 +137,7 @@ Canonical gate command (run from the repo root with both package roots on PYTHON
 PYTHONPATH=src/bst_x:src/bst_x/stroke_classification \
     python -m preparing_data.failsafe_bst_mmpose_zeroing_check_equivalence \
         --raw-dir /scratch/comp320a/ShuttleSet_data_merged_25/dataset_npy_between_2_hits_with_max_limits_flat_raw_phase1 \
-        --busted-stems-file scratch/architecture_notes/busted_hit_zone_clips_phase1.txt \
+        --busted-stems-file docs/architecture_notes/busted_hit_zone_clips_phase1.txt \
         --clips-csv notebooks/clips_master.csv \
         --scratch-output-dir /scratch/comp320a/ShuttleSet_data_merged_25/dataset_npy_between_2_hits_with_max_limits_flat_failsafe_gate
 ```
@@ -597,10 +597,10 @@ None of these need Phase 1 work; hooks exist via CLI args.
 - `src/bst_x/validation_scripts/validate_zeroed_frames.py` and `fail_rate_per_class.py`: per-class fail-rate diagnostics.
 - `src/bst_x/validation_scripts/zeroed_frames_analysis_outputs/analysis_unemergev1_v2_20260421_1159.txt`: original analysis confirming the busted-clip class skew.
 - `src/bst_x/stroke_classification/preparing_data/keypoints_schema.md`: COCO joint indices (15 and 16 = ankles, 11 and 12 = hips, 13 and 14 = knees, 5 and 6 = shoulders).
-- `scratch/architecture_notes/busted_hit_zone_clips_phase1.txt`: the canonical 1,716 hit-zone-busted stem list.
-- `scratch/architecture_notes/busted_whole_clips_phase1.txt`: historical 222 whole-clip-busted list.
-- `scratch/architecture_notes/mmpose_heuristic/mmpose_phase1_extraction_plan.md`: Phase 1 execution log.
-- `scratch/architecture_notes/mmpose_heuristic/mmpose_bounds_filtering_research.md`: external research. No published ablations of filter strategies found. Key inputs: MonoTrack (CVPRW 2022) relaxed-boundary + closest-to-last-in-court pose; Padel paper (Javadiha et al. Sensors 2021) projection-geometry quantification; TemPose carry-forward vs BST zero-fill contrast.
+- `docs/architecture_notes/busted_hit_zone_clips_phase1.txt`: the canonical 1,716 hit-zone-busted stem list.
+- `docs/architecture_notes/busted_whole_clips_phase1.txt`: historical 222 whole-clip-busted list.
+- `docs/architecture_notes/mmpose_heuristic/mmpose_phase1_extraction_plan.md`: Phase 1 execution log.
+- `docs/architecture_notes/mmpose_heuristic/mmpose_bounds_filtering_research.md`: external research. No published ablations of filter strategies found. Key inputs: MonoTrack (CVPRW 2022) relaxed-boundary + closest-to-last-in-court pose; Padel paper (Javadiha et al. Sensors 2021) projection-geometry quantification; TemPose carry-forward vs BST zero-fill contrast.
 - V3 and V4 committed run manifests: `run_20260420_141629/` (V3) and `run_20260420_171101/` (V4).
 
 ## Revisions log
@@ -623,7 +623,7 @@ Chronological record of how the design and implementation evolved. Each entry le
 Phase 1 raw extraction executed.
 
 - Scope changed from 222 whole-clip-fail clips to 1,716 hit-zone-fail clips (+/-10 frames around the hit frame).
-- Canonical list: `scratch/architecture_notes/busted_hit_zone_clips_phase1.txt` (1,716 stems).
+- Canonical list: `docs/architecture_notes/busted_hit_zone_clips_phase1.txt` (1,716 stems).
 - N_max bumped 8 -> 16. Original plan said N_max=8 "basically never fires"; false on the busted subset (87% of the first 222-clip extract triggered the cap). At N=16, only 0.79% of frames hit.
 - Score-filtered ndet peaks at 8; players reliably the most salient detections by bbox area and horizontal centrality. Load-bearing input for the sticky_anchor design revisit.
 - New artefacts: `find_busted_clips.py` gained `--hit-zone` flags; `raw_extract.py` prints end-of-run unique-clip summary; `summarise_raw_ndet.py` added.

@@ -396,7 +396,7 @@ Class-F1-driven Seesaw Loss for combo A.
 Implements Wang et al. (CVPR 2021) Seesaw Loss with the mitigation
 factor signal swapped from cumulative training counts to per-class
 running train F1. Compensation factor unchanged from the paper.
-See scratch/architecture_notes/seesaw_f1_focal_design.md for the
+See docs/architecture_notes/seesaw_f1_focal_design.md for the
 full motivation.
 """
 import torch

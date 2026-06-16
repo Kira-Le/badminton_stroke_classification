@@ -18,11 +18,11 @@ Status: preflight scope locked, handedness data landed, inter-frame diagnostic s
 ## Resumption prompt (for a future cleared session)
 
 ```
-Open scratch/architecture_notes/x3d_integration_macro_plan/stage_2_wrist_loss_assessment.md
+Open docs/architecture_notes/x3d_integration_macro_plan/stage_2_wrist_loss_assessment.md
 and read end-to-end. Background context (read the TLDR sections only):
-- scratch/architecture_notes/x3d_integration_macro_plan/x3d_integration_macro_plan.md
-- scratch/architecture_notes/x3d_integration_macro_plan/stage_1_hit_frame_derivation.md
-- scratch/architecture_notes/bst_x_overview.md (TLDR + active priorities)
+- docs/architecture_notes/x3d_integration_macro_plan/x3d_integration_macro_plan.md
+- docs/architecture_notes/x3d_integration_macro_plan/stage_1_hit_frame_derivation.md
+- docs/architecture_notes/bst_x_overview.md (TLDR + active priorities)
 Memory: ~/.claude/projects/.../memory/MEMORY.md and the entries it points at.
 
 Stage 2 preflight status:

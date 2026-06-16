@@ -9,7 +9,7 @@ End-to-end audit + remap-based clip wiring, ahead of the browser walkthrough.
 Same-class assignment of the 13 local `train/*.mp4` files to mocked test/val
 entries in
 `src/bst_x/.../run_20260505_154907/clip_index.json`. Script:
-`scratch/inspect_clips/remap.py`. Test split was drained first, val took
+`scripts/api_fixtures/remap.py` (archived; pre-rehome). Test split was drained first, val took
 spillover. The 8_3_17_5 swap from earlier today was reverted from git before
 remapping so test/Bottom_smash/8_3_17_5 starts clean and is now rebound to a
 train smash mp4 by the same one-pass rule.
@@ -48,7 +48,7 @@ error JSON.
 ### 1a. Round-robin fill of the remaining 46 entries
 
 Follow-up after the class-aligned pass: every per-clip-browser entry now
-plays video. Script: `scratch/inspect_clips/fill_remaining.py`. The 10
+plays video. Script: `scripts/api_fixtures/fill_remaining.py` (archived; pre-rehome). The 10
 class-aligned remaps above are preserved; the other 46 entries cycle
 through the 13 train mp4s in this order (sorted alphabetically by
 relative path):

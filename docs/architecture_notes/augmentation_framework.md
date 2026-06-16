@@ -2,7 +2,7 @@
 
 *Extracted from `hparams_sweep_speculations.md` on 2026-05-04 once the
 augmentation analysis grew large enough to live on its own. Companion
-doc to Isiah's writeup at `scratch/research/Augmentation.pdf`. The
+doc to Isiah's writeup at `docs/research/Augmentation.pdf`. The
 locked decisions are anchored against that PDF; the
 project-side filtering, code traces, and implementation outlines are
 this doc.*
@@ -670,7 +670,7 @@ break-even. For Phase 3 (amateur generalisation is the goal), worth
 running with a held-out amateur sample as the gate.
 
 Architecture 2 prior research at
-`scratch/architecture_notes/architecture_2_research_10_April.md` §9
+`docs/architecture_notes/architecture_2_research_10_April.md` §9
 carries the same trade-off acknowledgement and arrives at uniform
 stretch [1.0, 2.0] for Phase 3 by default. If we adopt it,
 configuration: scale ∈ [1.0, 2.0] (slow-only, since pros are the
@@ -921,7 +921,7 @@ position).
 
 Phase 3 amateur-generalisation interest in asymmetric pre-vs-post
 contact stretch surfaced via the prior research at
-`scratch/architecture_notes/architecture_2_research_10_April.md` §9:
+`docs/architecture_notes/architecture_2_research_10_April.md` §9:
 biomechanical evidence puts amateur-vs-pro at ~2:1 overall, but the
 gap concentrates on the preparation phase; the forward-swing phase
 (60-100ms before contact) is only ~1.5x slower for amateurs.

@@ -144,8 +144,8 @@ Three follow-ups this points at:
 - Player name resolution mirrors `pipeline/player_mapping.py`. For sets 1 and 2 it's deterministic from `downcourt`. For set 3, the script reads each match's `set3.csv` and finds the first rally where either score reaches 11; the rally after that is the switch point. Clips with rally < switch are pre-switch (set-1 mapping), rally >= switch are post-switch (set-2 mapping). When neither player reaches 11 (rare retirements), all set-3 rallies stay pre-switch.
 - A=winner, B=loser convention from BST-original `ShuttleSet/get_each_class_total.py:8` (`'''A is the winner and B is the loser.'''`).
 - Filter (b) reads the per-shot `flaw` column from each match's `set1.csv` / `set2.csv` / `set3.csv`. Shots with `flaw == 1` (NaN-or-1 column) are dropped at this filter. **Note**: this is the per-shot annotator flag, separate from `flaw_shot_records.csv` (the removal log), which was already applied during `notebooks/03_build_clips_master.ipynb` and so doesn't show up here.
-- Scripts: `scratch/research/scripts/player_overlap_analysis.py` (loader + metrics + charts). Output JSON: `/tmp/player_overlap_results.json`.
-- Filter (c) source: `scratch/research/dump_videos_len.py` runs on bourbaki against the npy collated dirs and writes `scratch/research/discard_flags_split_v2_dropunk_nosides.csv`. Re-run if the npy collation regenerates.
+- Scripts: `docs/architecture_notes/player_overlap_analysis.py` (loader + metrics + charts). Output JSON: `/tmp/player_overlap_results.json`.
+- Filter (c) source: `scratch/research/dump_videos_len.py` runs on bourbaki against the npy collated dirs and writes `docs/architecture_notes/discard_flags_split_v2_dropunk_nosides.csv`. Re-run if the npy collation regenerates.
 
 ## Appendix: pooled overlap by filter level
 
@@ -195,7 +195,7 @@ python scratch/research/dump_videos_len.py --trust-clip-count
 
 # pull the result back
 exit
-boursync -avR bourbaki-hpc:badminton_stroke_classifier/scratch/research/discard_flags_split_v2_dropunk_nosides.csv scratch/research/
+boursync -avR bourbaki-hpc:badminton_stroke_classifier/docs/architecture_notes/discard_flags_split_v2_dropunk_nosides.csv scratch/research/
 ```
 
 The `--trust-clip-count` flag skips the existence check on the flat per-clip dir (which is pruned post-collation on bourbaki); the clip-count match between filtered `clips_master.csv` and `videos_len.npy` is sufficient verification.
@@ -203,17 +203,17 @@ The `--trust-clip-count` flag skips the existence check on the flat per-clip dir
 **2. Run the overlap analysis locally:**
 
 ```bash
-python scratch/research/scripts/player_overlap_analysis.py
+python docs/architecture_notes/player_overlap_analysis.py
 ```
 
 Inputs read:
 - `notebooks/clips_master.csv` (33,481 raw clips)
 - `data/shuttleset/set/match.csv` (winner / loser / downcourt per match)
 - `data/shuttleset/set/<vid>/set{1,2,3}.csv` (per-shot rally + flaw flags)
-- `scratch/research/discard_flags_split_v2_dropunk_nosides.csv` (filter c)
+- `docs/architecture_notes/discard_flags_split_v2_dropunk_nosides.csv` (filter c)
 
 Outputs written:
-- `scratch/research/charts/{overlap_clip_weighted,overlap_jaccard_players,gross_overlap,class_counts_per_split}.png`
+- `docs/architecture_notes/charts/{overlap_clip_weighted,overlap_jaccard_players,gross_overlap,class_counts_per_split}.png`
 - `/tmp/player_overlap_results.json` (full numeric dump for the tables above)
 
 Re-run the analysis script after either: a fresh npy collation (which changes filter c), or a taxonomy / split change (which changes the class set and clip routing).

@@ -118,7 +118,7 @@ Architecture is set: X3D-S Kinetics-400 (K400)-pretrained, 39 frames × stride 1
 
 How to schedule the training: probably best to fine-tune pure X3D-S on wrist RGB alone first. Otherwise the combined model will probably just auto-anneal out the 3D Convolutional Neural Network (3D-CNN) signal, since the core BST-CG-AP branch almost certainly converges faster independently and already does so to a high F1. Worth testing separate multi-stage vs end-to-end integrated train approaches if time permits — maybe the latter gives more useful specialisation of the RGB wrist-cam module.
 
-Existing 6-stage plan at `scratch/architecture_notes/x3d_integration_macro_plan/` (stages 1 and 2 already detailed):
+Existing 6-stage plan at `docs/architecture_notes/x3d_integration_macro_plan/` (stages 1 and 2 already detailed):
 
 1. Hit-frame derivation (Method A CSV correlation, Method B' shuttle direction reversal cross-referenced with wrist-velocity peaks per Liu et al. 2023)
 2. Wrist-loss assessment (per-class ±19-frame loss rates, dominant wrist)

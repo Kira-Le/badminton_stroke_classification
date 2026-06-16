@@ -4,7 +4,7 @@ Maps each clip to its player NAME via (vid, set, rally, side) -> {winner, loser}
 using match.csv (downcourt flag) and the set-3 court switch rule. Then computes
 overlap of unique players across split pairs, weighted by clip count.
 
-Output: scratch/research/class_player_split_overlap_exploration.md (and charts/).
+Output: docs/architecture_notes/class_player_split_overlap_exploration.md (and charts/).
 """
 from __future__ import annotations
 
@@ -21,9 +21,9 @@ CLIPS_CSV = REPO / 'notebooks' / 'clips_master.csv'
 MATCH_CSV = REPO / 'data/shuttleset/set/match.csv'
 SET_DIR = REPO / 'data/shuttleset/set'
 FLAW_CSV = REPO / 'data/shuttleset/flaw_shot_records.csv'
-DISCARD_CSV = REPO / 'scratch/research/discard_flags_split_v2_dropunk_nosides.csv'
+DISCARD_CSV = REPO / 'docs/architecture_notes/discard_flags_split_v2_dropunk_nosides.csv'
 
-CHARTS_DIR = REPO / 'scratch/research/charts'
+CHARTS_DIR = REPO / 'docs/architecture_notes/charts'
 CHARTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # UNE_MERGE_V1_MAP from pipeline/config.py: 4 raw -> merged mappings.

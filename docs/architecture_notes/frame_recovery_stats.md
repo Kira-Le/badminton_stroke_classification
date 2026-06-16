@@ -37,20 +37,20 @@ pose-fail frames). Different stream, different recovery.
   `src/bst_x/validation_scripts/zeroed_frames_analysis_outputs/analysis_merged25_bstbaseline_20260429_1906.txt`
   (crosstab lines 128-137, overall shuttle miss line 115).
 - Shuttle wipe design + cohort table:
-  `scratch/architecture_notes/frame_zeroing.md`.
+  `docs/architecture_notes/frame_zeroing.md`.
 - Wipe removed in code:
   `src/bst_x/preparing_data/prepare_train_on_shuttleset.py`
   (the prose comment near line 898 sits where `shuttle[failed, :] = 0`
   used to be; dropped at commit 4e478fc, branch shuttle/wipe-drop).
 - Pose before/after:
-  `scratch/architecture_notes/mmpose_heuristic/phase1_vs_phase2_2026-04-29.md`,
+  `docs/architecture_notes/mmpose_heuristic/phase1_vs_phase2_2026-04-29.md`,
   off Phase-1 report `analysis_unemergev1_v2_20260421_1159.txt` and
   Phase-2 report `analysis_unemergev1_v2_20260429_1905.txt` (same
   outputs dir).
 - `ndet=1` floor:
   `src/bst_x/validation_scripts/raw_ndet_stats_outputs/baseline_2026-04-29.md`.
 - sticky_anchor heuristic design:
-  `scratch/architecture_notes/mmpose_heuristic/mmpose_heuristic_investigation.md`.
+  `docs/architecture_notes/mmpose_heuristic/mmpose_heuristic_investigation.md`.
 
 Denominator note: the pose numbers sit on 1,722,058 frames, the shuttle
 crosstab on 1,719,627. The 2,431-frame gap (0.14%) is per-clip

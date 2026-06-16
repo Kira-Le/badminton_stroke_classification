@@ -32,9 +32,9 @@ If `_derive_tags` is parameterised away from BST CG/AP specifics post-X3D-S, the
 
 ## Cross-references
 
-- `scratch/architecture_notes/historical_bst.md` — BST-core excisions.
-- `scratch/architecture_notes/pre_phase_2_review_2026-04-26.md` — review that drove the tidy pass.
-- `scratch/architecture_notes/pre_phase_2_tidy_plan.md` — execution plan for the tidy pass.
+- `docs/architecture_notes/historical_bst.md` — BST-core excisions.
+- `docs/architecture_notes/pre_phase_2_review_2026-04-26.md` — review that drove the tidy pass.
+- `docs/architecture_notes/pre_phase_2_tidy_plan.md` — execution plan for the tidy pass.
 
 ---
 

@@ -13,7 +13,7 @@ is actually right. Temperature scaling never changes the argmax (it divides all 
 by T > 0, which preserves order), so accuracy is identical before and after; only the
 confidence number moves.
 
-Run: ~/.venvs/badminton-cicd/bin/python scratch/architecture_notes/calibration_ece.py
+Run: ~/.venvs/badminton-cicd/bin/python docs/architecture_notes/calibration_ece.py
 """
 
 from pathlib import Path

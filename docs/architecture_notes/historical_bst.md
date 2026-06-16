@@ -668,7 +668,7 @@ The original BST recipe also ran with `num_cycles=0.25` in the cosine scheduler 
 
 ### 3.3 Cross-link
 
-Current state: `scratch/architecture_notes/bst_x_overview.md` (under "current LR + aux schedule").
+Current state: `docs/architecture_notes/bst_x_overview.md` (under "current LR + aux schedule").
 
 ---
 
@@ -1148,7 +1148,7 @@ For reproducing the BST paper's published numbers, use `center_align=False` and 
   # Consolidated BST training script for ShuttleSet
   # Replaces: bst_main.py, bst_main_summary_writer.py, bst_backbone_main.py
   ```
-- `bst_x_train.py:53-57`: refactor cross-ref to `scratch/architecture_notes/completed_general_refactors/dir_flatten_refactor.md` (block comment preserved as-is below).
+- `bst_x_train.py:53-57`: refactor cross-ref to `docs/architecture_notes/completed_general_refactors/dir_flatten_refactor.md` (block comment preserved as-is below).
 - `bst_x_train.py:151`:
   ```python
   use_aux_schedule=True,    # Aggressive CG/AP annealing — matches preferred config from run_20260418_151139.
@@ -1158,7 +1158,7 @@ For reproducing the BST paper's published numbers, use `center_align=False` and 
 
 **Why removed:** the migrations are done; the run id reference rots as new ablation runs supersede it.
 
-The `completed_general_refactors/` directory at `scratch/architecture_notes/completed_general_refactors/` still holds the long-form refactor notes; this file just records that the in-source pointers to it have been removed in step 10.
+The `completed_general_refactors/` directory at `docs/architecture_notes/completed_general_refactors/` still holds the long-form refactor notes; this file just records that the in-source pointers to it have been removed in step 10.
 
 ---
 
@@ -1182,10 +1182,10 @@ Original locations are recorded in `scratch/project_history/README.md`.
 
 ## Cross-references
 
-- `scratch/architecture_notes/bst_x_overview.md` — current Architecture 1 state and recent decision history.
-- `scratch/architecture_notes/pipeline_context_notes.md` — pipeline-area excisions (separate from BST-core).
-- `scratch/architecture_notes/pre_phase_2_review_2026-04-26.md` — review that drove the tidy pass.
-- `scratch/architecture_notes/pre_phase_2_tidy_plan.md` — execution plan for the tidy pass.
+- `docs/architecture_notes/bst_x_overview.md` — current Architecture 1 state and recent decision history.
+- `docs/architecture_notes/pipeline_context_notes.md` — pipeline-area excisions (separate from BST-core).
+- `docs/architecture_notes/pre_phase_2_review_2026-04-26.md` — review that drove the tidy pass.
+- `docs/architecture_notes/pre_phase_2_tidy_plan.md` — execution plan for the tidy pass.
 - `.claude/project_overview.md` — project handover document.
 
 ---

@@ -1,6 +1,6 @@
 # Collation taxon_pinned_w_preds refactor log
 
-Running log for the taxon_pinned_w_preds refactor. Companion docs: `scratch/collation_taxon_pin_w_preds_refactor.md` (full plan, locked decisions, touch surface inventory), `scratch/taxon_pin_w_preds_tldr.md` (FE-facing summary).
+Running log for the taxon_pinned_w_preds refactor. Companion docs: `docs/architecture_notes/collation_taxon_pin_w_preds_refactor.md` (full plan, locked decisions, touch surface inventory), `scratch/taxon_pin_w_preds_tldr.md` (FE-facing summary).
 
 Per-phase blocks below. Commit blocks added once code lands.
 
@@ -29,7 +29,7 @@ Repo-wide grep for the deprecated symbol surface, before any code edits. Five pa
 - `src/bst_x/preparing_data/prepare_train_on_shuttleset.py` full collator surface (Step C)
 - `tests/test_active_classes.py`, `tests/test_data_access.py`, `tests/test_integration.py` (Step F)
 - `scratch/presentation_prep/eval_dump_predictions.py` delete (Step D10)
-- `scratch/presentation_prep/confusion_matrix.py` adapt to npz (Step D10)
+- `scripts/plots/confusion_matrix.py` adapt to npz (Step D10)
 
 ### Unexpected hits — scope additions
 
@@ -43,14 +43,14 @@ Four code files and four doc files not in the original hit list.
 
 3. `src/bst_x/validation_scripts/verify_bst_train_target.py` — live pre-flight script importing `derive_ablation_id` + `derive_npy_collated_dir_basename`. Both signatures change. ~5 lines.
 
-4. `scratch/api_mocks/build_mock_artifacts.py` lines 29, 204 — writes mock JSONs with `active_class_list` field. The Step J fallback handles reads, so this is low-priority. Either update for consistency or leave (fallback covers).
+4. `scripts/api_fixtures/build_mock_artifacts.py` lines 29, 204 — writes mock JSONs with `active_class_list` field. The Step J fallback handles reads, so this is low-priority. Either update for consistency or leave (fallback covers).
 
 **Docs:**
 
 5. `src/bst_x/data_pipeline_to_model_train.md` lines 94, 398, 544 — references `DEFAULT_TAXONOMY`, deprecated taxonomy methods, `drop_unknown`.
 6. `src/bst_x/pipeline/README.md` lines 248, 253, 254, 288, 322, 323, 376 — same deprecated-symbol refs.
 7. `tests/testing_guide.md` lines 21, 51 — references `_derive_class_label` semantics and the `ablation_id` naming convention.
-8. `scratch/architecture_notes/xai_vid_feature.md:132` — references the old `.pt` predictions schema's `active_class_list` field.
+8. `docs/architecture_notes/xai_vid_feature.md:132` — references the old `.pt` predictions schema's `active_class_list` field.
 
 ### Hits ignored (out of scope or no impact)
 
@@ -104,13 +104,13 @@ End-of-refactor sweep targets. Updated as new finds emerge during execution.
 - `src/bst_x/data_pipeline_to_model_train.md` (deprecated symbol refs)
 - `src/bst_x/pipeline/README.md` (deprecated symbol refs, multiple entries)
 - `tests/testing_guide.md` (`_derive_class_label` semantics + `ablation_id` naming)
-- `scratch/architecture_notes/xai_vid_feature.md` (old `.pt` schema field name)
-- `scratch/frontend_integration_handoff.md` (per plan Step G)
+- `docs/architecture_notes/xai_vid_feature.md` (old `.pt` schema field name)
+- `../frontend_integration_handoff.md` (per plan Step G)
 - `scratch/scratch_layout.md` (new collation dirs)
-- `scratch/architecture_notes/bst_x_overview.md` (active baseline pointer)
+- `docs/architecture_notes/bst_x_overview.md` (active baseline pointer)
 - `docs/models_registry.yaml` (taxonomy field; leave-via-alias or re-key)
-- `scratch/architecture_notes/unknown_channel_fix_review.md` (archived design doc, deprecated symbol refs; pure history)
-- `scratch/architecture_notes/completed_general_refactors/data_access_integration_plan.md` (archived design doc, deprecated symbol refs; pure history)
+- `docs/architecture_notes/unknown_channel_fix_review.md` (archived design doc, deprecated symbol refs; pure history)
+- `docs/architecture_notes/completed_general_refactors/data_access_integration_plan.md` (archived design doc, deprecated symbol refs; pure history)
 - `src/bst_x/validation_scripts/README.md` (line 163 references `derive_ablation_id`)
 - `scratch/research/dump_videos_len.py` (uses old `derive_npy_collated_dir_basename` signature; TypeError on invocation; ad-hoc inspection script Ariel likely reaches for during X3D-S work — fix when next touched)
 
@@ -184,7 +184,7 @@ Step A landed. Touched:
 
 - `tests/test_integration.py` — replaced `TAXONOMIES[DEFAULT_TAXONOMY].n_classes` with `resolve_taxonomy('bst_25').n_classes` (largest registered taxonomy; head can handle labels from any post-refactor collation).
 
-- `scratch/collation_taxon_pin_w_preds_refactor.md` — `excludes_raw` → `excluded_base_stroke_types` throughout (20 occurrences) per the locked naming.
+- `docs/architecture_notes/collation_taxon_pin_w_preds_refactor.md` — `excludes_raw` → `excluded_base_stroke_types` throughout (20 occurrences) per the locked naming.
 
 ### Tests green
 

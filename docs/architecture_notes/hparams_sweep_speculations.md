@@ -141,7 +141,7 @@ landed)**:
   alpha = `(1 - F1_c)^τ` with EMA-smoothed running per-class
   train F1, composed with focal `(1-p_t)^γ`. Design verified
   against the ACCV 2020 paper at
-  `scratch/architecture_notes/class_f1_focal_design.md`. First
+  `docs/architecture_notes/class_f1_focal_design.md`. First
   run `run_20260501_164658` (tau=1, gamma=1) lifted mean
   wrist_smash +8.7 pp on the LS=0.1 baseline; push +6.7 picked
   up automatically; bimodal-seed problem solved (range 0.140 →
@@ -156,7 +156,7 @@ landed)**:
   alpha can't resolve it. No CDB run breaks the val/test plateau
   at 0.74-0.75 macro.
 - **Capacity-bottleneck research done (2026-05-02).** Writeup at
-  `scratch/architecture_notes/model_capacity_bottleneck_question.md`
+  `docs/architecture_notes/model_capacity_bottleneck_question.md`
   argues the plateau is data-bound and signal-bound rather than
   capacity-bound. BST at 1.85M params on 32K clips sits in the
   converged 1-3M zone for skeleton-AR. Famous from-scratch video
@@ -167,7 +167,7 @@ landed)**:
   and `d_model` 100 → 128 with `d_head` trim 128 → 32 (the
   Voita-style head trim pairs with the residual-stream widen).
 - **Pair-aware Seesaw-F1 held.** Design at
-  `scratch/architecture_notes/seesaw_f1_focal_design.md` (verified
+  `docs/architecture_notes/seesaw_f1_focal_design.md` (verified
   against the CVPR 2021 paper). Held as a targeted second
   loss-side arm only if a future signal-side gain reopens the
   smash↔ws pair-confusion question.
@@ -986,7 +986,7 @@ plan the rest as informed-by-results.
    numbers in `bst_x_overview.md`.
 2a. **Capacity-bump confirmation runs**.
     Capacity-bottleneck research at
-    `scratch/architecture_notes/model_capacity_bottleneck_question.md`
+    `docs/architecture_notes/model_capacity_bottleneck_question.md`
     argues the plateau is data-bound and signal-bound. Two cheap
     confirmatory runs while compute is around.
     - **Run 1 (mlp_head hidden 400 → 1200)** — **DONE
@@ -1012,7 +1012,7 @@ plan the rest as informed-by-results.
       a small theoretical advantage Run 1 didn't. Expected gain
       still 0-2 pp on test macro. Implementation surface +
       verification checklist + LR-schedule notes at
-      `scratch/architecture_notes/transformer_widening_hparam_changes.md`.
+      `docs/architecture_notes/transformer_widening_hparam_changes.md`.
 3. **Weight decay sweep [0.0, 0.05, 0.1]**: single-arm, cheapest
    architectural-side win after the capacity-bump runs settle.
 4. **Augmentation magnitude sweep** (tighten / off): clarifies

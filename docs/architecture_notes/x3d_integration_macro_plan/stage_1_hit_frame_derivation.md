@@ -22,11 +22,11 @@ Status: plan signed off, no code written.
 ## Resumption prompt (for a future cleared session)
 
 ```
-Open scratch/architecture_notes/x3d_integration_macro_plan/stage_1_hit_frame_derivation.md
+Open docs/architecture_notes/x3d_integration_macro_plan/stage_1_hit_frame_derivation.md
 and read end-to-end. Background context (read the TLDR sections only, not full docs):
-- scratch/architecture_notes/x3d_integration_macro_plan/x3d_integration_macro_plan.md
-- scratch/architecture_notes/bst_x_overview.md (TLDR + active priorities)
-- scratch/architecture_notes/augmentation_framework.md "How hit-frame metadata
+- docs/architecture_notes/x3d_integration_macro_plan/x3d_integration_macro_plan.md
+- docs/architecture_notes/bst_x_overview.md (TLDR + active priorities)
+- docs/architecture_notes/augmentation_framework.md "How hit-frame metadata
   would get derived" section (around line 836)
 The plan is locked in scope. Implementation has not started. Existing entry point:
 src/bst_x/validation_scripts/hit_frame_lookup.py (Method A scaffold).
@@ -166,7 +166,7 @@ All four aligned to the same stem order as the existing `pose.npy` / `pos.npy` /
 
 ### Diagnostic CSV (one file, all splits)
 
-`hit_frame_diagnostic.csv` at `scratch/architecture_notes/x3d_integration_macro_plan/stage_1_outputs/`. Columns:
+`hit_frame_diagnostic.csv` at `docs/architecture_notes/x3d_integration_macro_plan/stage_1_outputs/`. Columns:
 
 - `stem` — clip stem.
 - `split` — train / val / test (from `split_v2`).
@@ -195,7 +195,7 @@ Two scripts. The diagnostic runs first across the whole tree; the random-sample 
 
 ### Diagnostic script (CSV-driven, automated)
 
-`src/bst_x/validation_scripts/hit_frame_ab_diagnostic.py`. Reads `hit_frame_diagnostic.csv`. Outputs to `scratch/architecture_notes/x3d_integration_macro_plan/stage_1_outputs/`:
+`src/bst_x/validation_scripts/hit_frame_ab_diagnostic.py`. Reads `hit_frame_diagnostic.csv`. Outputs to `docs/architecture_notes/x3d_integration_macro_plan/stage_1_outputs/`:
 
 - `disagreement_overall.png` — histogram of `abs_disagreement_frames` across all clips with both methods; bucket size 1 frame, x-range 0-30 then a single bin for "30+".
 - `disagreement_by_split.png` — same histogram split into 3 panels (train / val / test).
@@ -250,7 +250,7 @@ Stage 1 lands when:
 2. Diagnostic histogram is generated; per-class summary CSV is written.
 3. Validation sample is produced and hand-checked; per-method MAE is reported.
 4. Decision is logged: which method becomes `hit_frame_idx.npy` (the primary), based on the validation-sample MAE plus the diagnostic disagreement distribution.
-5. Stage 1 report writeup is committed under `scratch/architecture_notes/x3d_integration_macro_plan/`, summarising 2-4.
+5. Stage 1 report writeup is committed under `docs/architecture_notes/x3d_integration_macro_plan/`, summarising 2-4.
 
 ## Deliverables
 
@@ -260,7 +260,7 @@ Stage 1 lands when:
 - `src/bst_x/validation_scripts/hit_frame_validation_sample.py` (new) — picks the 32-clip sample, writes the rsync-prompt + per-clip-table .md.
 - `tests/test_hit_frame_method_b.py` (new) — unit tests for the seven test cases listed above, against hand-checked ground-truth clips embedded as small npy fixtures.
 - Sidecar npy files per split (4 × 3 = 12 files).
-- Diagnostic outputs under `scratch/architecture_notes/x3d_integration_macro_plan/stage_1_outputs/`.
+- Diagnostic outputs under `docs/architecture_notes/x3d_integration_macro_plan/stage_1_outputs/`.
 - `stage_1_report.md` (new, in the same dir) — short writeup of the diagnostic findings, validation-pass hand-truth numbers, and the chosen-primary decision with rationale.
 
 ## Open questions (left for implementation)

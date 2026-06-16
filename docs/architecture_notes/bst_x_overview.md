@@ -6,7 +6,7 @@ The "X" in "BST-X" shows the model heritage: it marks where I've extended the BS
 
 ## Summary (trimester-1 close, 2026-06-02)
 
-- **Performance**: ~0.75 macro on the 14-class no-sides taxonomy, and the hardest class, wrist_smash, finally cleared **0.5 min-F1** (0.525, from the weight-decay sweep), a fine-grained discrimination milestone for smash-wrist_smash. The coarser taxonomies reach 0.84 macro. Per-taxonomy bests are below; every run's numbers sit in the [ledger](../bst_x_training_runs.md).
+- **Performance**: ~0.75 macro on the 14-class no-sides taxonomy, and the hardest class, wrist_smash, finally cleared **0.5 min-F1** (0.525, from the weight-decay sweep), a fine-grained discrimination milestone for smash-wrist_smash. The coarser taxonomies reach 0.84 macro. Per-taxonomy bests are below; every run's numbers sit in the [ledger](../../experiments/bst_x/bst_x_training_runs.md).
 - **The feature signal needs a new channel**: shown by smash vs wrist_smash. Pose-2D just doesn't carry the wrist-versus-full-swing tell, so the encoder can't split them. Everything pose/shuttle motion *can* discriminate sits at 0.95+.
 - **What I tried**: schedule, the CDB-F1 loss, more model capacity, lost-frame recovery, a data-loss masking channel, augmentation, weight decay. Each nudged the floor a bit, but nothing moved the macro-F1 plateau by more than a couple of points.
 - **Next**: the model needs more signal. The X3D-S wrist crop sees what pose can't. Series J settled the optimiser (wd 4e-1 with the decay exclusion is the new default; focal-alpha-revert retired); capacity Run 2 is the one small loose end left.
@@ -48,7 +48,7 @@ collation:      taxon_pinned_w_preds (shuttle-unzeroing baked in)
 
 ## How I got here
 
-Phase boundaries only; the [ledger](../bst_x_training_runs.md) has the per-run detail and the appendix the workings.
+Phase boundaries only; the [ledger](../../experiments/bst_x/bst_x_training_runs.md) has the per-run detail and the appendix the workings.
 
 - **Apr 17-18**: reproduced the BST baseline on bst_25, then retuned the LR schedule and the CG/AP auxiliary-loss schedule.
 - **Apr 20-25**: moved to the UNE taxonomy + split_v2 on a CSV pipeline, and tested collapsing the sides.
@@ -81,7 +81,7 @@ Across all 32,203 clips it cut the overall drop rate 5.38% to 0.93%, and at the 
 
 ## Pointers
 
-- [`bst_x_training_runs.md`](../bst_x_training_runs.md): the run ledger, every run's per-metric best and mean, grouped global / per-taxonomy / per-series.
+- [`bst_x_training_runs.md`](../../experiments/bst_x/bst_x_training_runs.md): the run ledger, every run's per-metric best and mean, grouped global / per-taxonomy / per-series.
 - [`bst_x_overview_technical_appendix.md`](bst_x_overview_technical_appendix.md): the workings, per-experiment detail, comparability caveats, decisions on hold, secondary investigations, cross-references.
 - [`augmentation_framework.md`](augmentation_framework.md) and [`x3d_integration_macro_plan/`](x3d_integration_macro_plan/): the two most active sub-docs.
 

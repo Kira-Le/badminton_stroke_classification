@@ -24,7 +24,7 @@ You are one of a parallel team of agents brought in to give this branch a final,
 The coordinating agent will assign you exactly one of these. Do only your assigned role.
 
 1. **REGRESSION_HUNTER** — walk the `main..pre-phase-2-tidy` diff and surface any place a behavioural regression could have crept in. Scope priorities: (a) anywhere a function body changed, not just moved; (b) anywhere a same-named symbol was deleted from one file and added to another (lift); (c) anywhere a default argument, exception type, or import order changed; (d) anywhere a "no-op refactor" claim cannot be verified from the diff alone. Pytest already covers the public dataset/loader/BST_0 forward path on real data when `BST_DATA_DIR` is set; you do not need to re-run it.
-2. **GOALS_AUDITOR** — read `scratch/architecture_notes/pre_phase_2_review_2026-04-26.md` (the original review that motivated this branch) and map each of its six focus areas against what landed. For each focus area: did the refactor address it? Partially? Not at all? Was the chosen approach the right one in retrospect? Then read §3 below ("Open items going into the next phase") and assess whether anything on it should actually move *before* merge.
+2. **GOALS_AUDITOR** — read `docs/architecture_notes/pre_phase_2_review_2026-04-26.md` (the original review that motivated this branch) and map each of its six focus areas against what landed. For each focus area: did the refactor address it? Partially? Not at all? Was the chosen approach the right one in retrospect? Then read §3 below ("Open items going into the next phase") and assess whether anything on it should actually move *before* merge.
 3. **DOC_COVERAGE_AUDITOR** — sanity-check the doc/test surface. Is anything claimed in the docs (this plan doc included) contradicted by the code? Are there changes in the diff that are not reflected anywhere user-facing? Are the verification gates listed in §2 below sufficient — or is there a meaningful surface they don't cover that a small additional test would close cheaply?
 
 ### Operating constraints (all roles)
@@ -41,7 +41,7 @@ The coordinating agent will assign you exactly one of these. Do only your assign
 ### Required reading before you start
 
 1. The rest of this document (sections 1-3, plus the appendix per-step plan if you need granularity).
-2. `scratch/architecture_notes/pre_phase_2_review_2026-04-26.md` — the original review whose six focus areas drove this branch.
+2. `docs/architecture_notes/pre_phase_2_review_2026-04-26.md` — the original review whose six focus areas drove this branch.
 3. `git log main..pre-phase-2-tidy --stat` for commit-level scope; `git diff main..pre-phase-2-tidy -- <file>` for any file you want to inspect closely.
 4. `.claude/project_overview.md` for project context (taxonomies, splits, hardware, team).
 
@@ -292,7 +292,7 @@ Order is smallest blast radius first. Steps 1-7 are bundled into one local-only 
 - `src/bst_x/data_pipeline_to_model_train.md:121, 535` and `src/bst_x/pipeline/README.md:165, 247`: add `une_merge_v1_nosides` to taxonomy lists.
 - `src/bst_x/data_pipeline_to_model_train.md:260-263`: remove `Dataset_npy_collated_one_side` and `_single_pose` from "primary classes" listing (or mark as orphaned-pending-deletion).
 - `src/bst_x/run_tracker.md:64-90`: add `extra: data_provenance: {clips_csv_path, clips_csv_sha256, effective_ablation_id, npy_collated_dir}` to the manifest format example.
-- `scratch/architecture_notes/bst_x_overview.md:101`: refresh `bst_x_train.py` line refs (cosine scheduler now at `:395-400`).
+- `docs/architecture_notes/bst_x_overview.md:101`: refresh `bst_x_train.py` line refs (cosine scheduler now at `:395-400`).
 - `README.md:100-104`: list the actual contents of `tests/` (`test_api`, `test_data_access`, `test_dataset`, `test_environment`, `test_integration`).
 
 **Safety checks:** `pytest`. (Doc-only, but runs as a sanity gate on the working tree.)
@@ -305,8 +305,8 @@ Order is smallest blast radius first. Steps 1-7 are bundled into one local-only 
 
 **Touches:** New empty/skeleton files, new directories.
 
-- `scratch/architecture_notes/historical_bst.md` — already drafted as a skeleton in this same session (see below). Will be filled in steps 3 and 4 as content is excised.
-- `scratch/architecture_notes/pipeline_context_notes.md` — light skeleton; filled if any pipeline-area context notes are excised in later steps.
+- `docs/architecture_notes/historical_bst.md` — already drafted as a skeleton in this same session (see below). Will be filled in steps 3 and 4 as content is excised.
+- `docs/architecture_notes/pipeline_context_notes.md` — light skeleton; filled if any pipeline-area context notes are excised in later steps.
 - `scratch/project_history/` — new directory for the relocated `deprecated/` and `outdated_*` content. Directory created with a `README.md` explaining what lives there.
 - `scripts/archive/` — new directory with a `README.md` explaining that everything inside is one-shot tooling kept for reference, not part of the active build.
 
@@ -339,7 +339,7 @@ Each move uses `git mv`. The five `outdated_*.md` and `historical_*.md` files in
 
 ### Step 4 — Capture excised content into `historical_bst.md` (pre-deletion fill)
 
-**Touches:** `scratch/architecture_notes/historical_bst.md`, `scratch/architecture_notes/bst_x_overview.md`. No source-code deletes yet.
+**Touches:** `docs/architecture_notes/historical_bst.md`, `docs/architecture_notes/bst_x_overview.md`. No source-code deletes yet.
 
 Before deleting anything from `tempose.py`, `shuttleset_dataset.py`, or `bst_x_train.py`, capture:
 

@@ -10,7 +10,7 @@ Parent plan: `mmpose_heuristic_investigation.md` (same dir, section "Phase 1").
 
 ## Goals for today
 
-1. Produce `scratch/architecture_notes/busted_whole_clips_phase1.txt` containing the ~222 stems with `fail_rate > 0.50` in the current extract, excluding unknown.
+1. Produce `docs/architecture_notes/busted_whole_clips_phase1.txt` containing the ~222 stems with `fail_rate > 0.50` in the current extract, excluding unknown.
 2. Run raw MMPose extraction across those ~222 clips on engelbart, with no filtering. Save per-clip `_raw_kps`, `_raw_bboxes`, `_raw_scores`, `_raw_kp_scores`, `_raw_ndet` files to a dedicated `_flat_raw_phase1` directory distinct from the committed flat dir.
 3. Rsync the raw outputs back to local for downstream heuristic work on a laptop. ~35 MB total; trivial transfer.
 
@@ -18,7 +18,7 @@ Explicitly NOT today: apply_heuristic, heuristics package, mixed re-train, any m
 
 ## Success criteria for today
 
-- `busted_whole_clips_phase1.txt` materialised, committed (or at least archived locally) at `scratch/architecture_notes/busted_whole_clips_phase1.txt`.
+- `busted_whole_clips_phase1.txt` materialised, committed (or at least archived locally) at `docs/architecture_notes/busted_whole_clips_phase1.txt`.
 - The 222 clips have all five raw output files populated at the engelbart `_flat_raw_phase1` directory.
 - Sample verification: for at least one smash clip and one "fully succeeded under current heuristic" control clip, the raw outputs pass a spot-check on shape, NaN padding, and non-zero kp_scores.
 - Raw files rsync'd to a local mirror path for laptop-side iteration.
@@ -46,7 +46,7 @@ python scripts/find_busted_clips.py \
     --split-column split_v2 \
     --threshold 0.50 \
     --exclude-unknown \
-    --output /home/ahalperi/badminton_stroke_classifier/scratch/architecture_notes/busted_whole_clips_phase1.txt
+    --output /home/ahalperi/badminton_stroke_classifier/docs/architecture_notes/busted_whole_clips_phase1.txt
 ```
 
 ### Implementation notes
@@ -157,7 +157,7 @@ Mirror the existing `gc.collect() + torch.cuda.empty_cache()` pattern at the end
 ```
 python -m preparing_data.raw_extract \
     --clips-dir /scratch/comp320a/ShuttleSet_data_merged_25/ShuttleSet/clips \
-    --clip-stems-file /home/ahalperi/badminton_stroke_classifier/scratch/architecture_notes/busted_whole_clips_phase1.txt \
+    --clip-stems-file /home/ahalperi/badminton_stroke_classifier/docs/architecture_notes/busted_whole_clips_phase1.txt \
     --save-dir /scratch/comp320a/ShuttleSet_data_merged_25/dataset_npy_between_2_hits_with_max_limits_flat_raw_phase1 \
     --n-max 8
 ```
@@ -216,7 +216,7 @@ Canonical paths used in the plan:
 - **Clips dir** (raw mp4 input): `/scratch/comp320a/ShuttleSet_data_merged_25/ShuttleSet/clips/` (verify on engelbart)
 - **New raw output dir**: `/scratch/comp320a/ShuttleSet_data_merged_25/dataset_npy_between_2_hits_with_max_limits_flat_raw_phase1/`
 - **clips_master.csv**: `/home/ahalperi/badminton_stroke_classifier/notebooks/clips_master.csv`
-- **busted_whole_clips_phase1.txt**: `/home/ahalperi/badminton_stroke_classifier/scratch/architecture_notes/busted_whole_clips_phase1.txt`
+- **busted_whole_clips_phase1.txt**: `/home/ahalperi/badminton_stroke_classifier/docs/architecture_notes/busted_whole_clips_phase1.txt`
 
 On local:
 - **Raw output mirror**: a folder under local scratch (pick a path; not critical). Suggest `/home/ariel/Documents/COSC594/badminton_stroke_classification/scratch/raw_extract_phase1/`.
@@ -231,7 +231,7 @@ New files created:
 
 - `scripts/find_busted_clips.py` (~30-40 lines).
 - `src/bst_x/stroke_classification/preparing_data/raw_extract.py` (~120-160 lines; structural clone of `prepare_2d_dataset_npy_from_raw_video` plus the padded-array save logic).
-- `scratch/architecture_notes/busted_whole_clips_phase1.txt` (materialized by running Task A; one stem per line).
+- `docs/architecture_notes/busted_whole_clips_phase1.txt` (materialized by running Task A; one stem per line).
 
 Intentionally NOT created today:
 
@@ -311,7 +311,7 @@ Do not improvise paths from memory. Use these exactly:
 - Engelbart current flat dir: `/scratch/comp320a/ShuttleSet_data_merged_25/dataset_npy_between_2_hits_with_max_limits_flat/`
 - Engelbart clips dir: `/scratch/comp320a/ShuttleSet_data_merged_25/ShuttleSet/clips/` **VERIFY on engelbart**. The `pipeline.config.CLIPS_OUTPUT_DIR` default is `PROJECT_ROOT / 'ShuttleSet' / 'clips'`, which resolves to the local-dev path. Engelbart may use a scratch-dir override or symlink.
 - New raw output dir: `/scratch/comp320a/ShuttleSet_data_merged_25/dataset_npy_between_2_hits_with_max_limits_flat_raw_phase1/` (distinct from the primary `_flat/`).
-- busted_whole_clips_phase1.txt: `/home/ahalperi/badminton_stroke_classifier/scratch/architecture_notes/busted_whole_clips_phase1.txt`.
+- busted_whole_clips_phase1.txt: `/home/ahalperi/badminton_stroke_classifier/docs/architecture_notes/busted_whole_clips_phase1.txt`.
 
 ### Order of operations (do not skip steps)
 
@@ -353,7 +353,7 @@ Raw extraction for Phase 1 is done. This section records what actually happened,
 
 1. Wrote `scripts/find_busted_clips.py`. First pass used the plan's whole-clip `fail_rate > 0.50` criterion, emitted **222 stems**, split 143/45/34 train/val/test. (Plan guessed 110/49/33 from an older analysis; total matched, split ratios didn't.)
 2. Clarified that the intended criterion was the **hit-zone fail rate** (matches the `hit_zone_heatmap` filter in `validate_zeroed_frames.py`), not whole-clip. Added `--hit-zone`, `--set-dir`, `--video-metadata-csv`, `--hit-window` flags. Kept whole-clip as the default mode so the flag doesn't change existing behaviour.
-3. Re-ran the scanner with `--hit-zone --hit-window 10 --exclude-unknown`. Emitted **1,716 stems**. This is the canonical Phase 1 busted set from here on. The 222-stem whole-clip list is retained as a historical artefact at `scratch/architecture_notes/busted_whole_clips_phase1.txt`; the canonical hit-zone list lives at `scratch/architecture_notes/busted_hit_zone_clips_phase1.txt`.
+3. Re-ran the scanner with `--hit-zone --hit-window 10 --exclude-unknown`. Emitted **1,716 stems**. This is the canonical Phase 1 busted set from here on. The 222-stem whole-clip list is retained as a historical artefact at `docs/architecture_notes/busted_whole_clips_phase1.txt`; the canonical hit-zone list lives at `docs/architecture_notes/busted_hit_zone_clips_phase1.txt`.
 4. Wrote `src/bst_x/stroke_classification/preparing_data/raw_extract.py`. Five-array schema (`_raw_kps`, `_raw_bboxes`, `_raw_scores`, `_raw_kp_scores`, `_raw_ndet`), NaN padding, int8 `ndet`, `_raw_ndet.npy` as the resume marker. `--inspect-result` and `--dry-run` flags for pre-flight verification. End-of-run summary prints the unique list of clips that triggered over-detection warnings (survives tmux scrollback truncation).
 5. Initial extract ran at `N_max = 8` against the 222-clip whole-clip list. Completed successfully, but **193 of 222 clips** triggered the over-detection cap (87%). Plan said "basically never fires"; that was true for the full 33k corpus, not for the busted subset which is specifically over-represented in crowded-frame clips.
 6. Preserved the N=8 extract at `/scratch/.../dataset_npy_between_2_hits_with_max_limits_flat_raw_phase1_n8/` for optional later diffing against N=16 on the stems where the two lists overlap.
@@ -390,8 +390,8 @@ New files on local (not yet committed):
 - `src/bst_x/validation_scripts/mmpose_heuristic_investigation/diagnose_top_k_capture.py` and `render_detection_overlays.py` (added later in the session as the sticky_anchor selector design developed).
 
 On engelbart (not yet committed):
-- `scratch/architecture_notes/busted_whole_clips_phase1.txt` (222 stems, whole-clip).
-- `scratch/architecture_notes/busted_hit_zone_clips_phase1.txt` (1,716 stems, hit-zone; canonical).
+- `docs/architecture_notes/busted_whole_clips_phase1.txt` (222 stems, whole-clip).
+- `docs/architecture_notes/busted_hit_zone_clips_phase1.txt` (1,716 stems, hit-zone; canonical).
 
 Scratch-dir extracts on engelbart:
 - `/scratch/comp320a/ShuttleSet_data_merged_25/dataset_npy_between_2_hits_with_max_limits_flat_raw_phase1_n8/`: historical N=8 run on the 222-clip whole-clip set.

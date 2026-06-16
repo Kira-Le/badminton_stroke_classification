@@ -24,7 +24,7 @@ The viewer simultaneously sees: the raw rally, the abstracted view the model rec
 - Attribution targets the predicted-class logit, not the true class. For the misclassified clip this gives the "this is what made it look like wrist_smash" story rather than "this is what should have but didn't".
 - Zero baseline for IG, with a mean-pose fallback if convergence-delta gates fail (see Risks).
 - Per-joint resolution recoverable from the gradient on the model's flat-input tensor of shape `(B, T, n_players, in_dim)` where `in_dim = (J+B)*2 = (17+19)*2 = 72`. L2 over the two coord dims yields per-joint and per-bone scalars per frame per player.
-- Render layer: opencv on local cicd venv, source clip + raw mmpose kps + raw shuttle xy pulled back from engelbart. Final mp4 lives at `scratch/presentation_prep/ig_overlay_smash_vs_ws.mp4`.
+- Render layer: opencv on local cicd venv, source clip + raw mmpose kps + raw shuttle xy pulled back from engelbart. Final mp4 lives at `scripts/plots/ig_overlay_smash_vs_ws.mp4`.
 
 ## Data flow
 
@@ -124,7 +124,7 @@ So `attr.reshape(B, T, n_players, 36, 2)` gives a clean unflattened tensor for d
 
 ## Phase 1 — pick the A/B clips
 
-Local script at `scratch/presentation_prep/pick_ig_clips.py`:
+Local script at `scripts/plots/pick_ig_clips.py`:
 
 ```python
 # pseudocode
@@ -146,7 +146,7 @@ Pick produces: `(correct_row_idx, correct_clip_stem)`, `(misclassed_row_idx, mis
 
 ## Phase 2 — Captum attribution
 
-Engelbart-side script at `scratch/presentation_prep/ig_attribute.py`. Runs once per clip.
+Engelbart-side script at `scripts/plots/ig_attribute.py`. Runs once per clip.
 
 ### 2.1 — Model load
 
@@ -215,7 +215,7 @@ Snapshot-guard pattern from `eval_dump_predictions.py` re-used: refuse any write
 
 ## Phase 3 — render layer
 
-Local script at `scratch/presentation_prep/ig_overlay_render.py`. Uses cicd venv (matplotlib + numpy + opencv-python). Confirm opencv presence: `~/.venvs/badminton-cicd/bin/pip install --dry-run opencv-python-headless` — install if needed.
+Local script at `scripts/plots/ig_overlay_render.py`. Uses cicd venv (matplotlib + numpy + opencv-python). Confirm opencv presence: `~/.venvs/badminton-cicd/bin/pip install --dry-run opencv-python-headless` — install if needed.
 
 ### 3.1 — Per-clip data fetch
 
@@ -271,12 +271,12 @@ Optional polish (defer unless quick):
 
 ### New files
 
-- `scratch/architecture_notes/xai_vid_feature.md` (this file).
-- `scratch/presentation_prep/pick_ig_clips.py` — local A/B picker.
-- `scratch/presentation_prep/ig_attribute.py` — engelbart-side Captum runner.
-- `scratch/presentation_prep/ig_overlay_render.py` — local renderer.
+- `docs/architecture_notes/xai_vid_feature.md` (this file).
+- `scripts/plots/pick_ig_clips.py` — local A/B picker.
+- `scripts/plots/ig_attribute.py` — engelbart-side Captum runner.
+- `scripts/plots/ig_overlay_render.py` — local renderer.
 - `<run_dir>/attributions/{stem}.pt` (×2) — engelbart-side, committed.
-- `scratch/presentation_prep/ig_overlay_smash_vs_ws.mp4` — final video, committed.
+- `scripts/plots/ig_overlay_smash_vs_ws.mp4` — final video, committed.
 
 ### Modified files
 

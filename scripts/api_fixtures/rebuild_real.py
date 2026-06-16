@@ -25,8 +25,8 @@ import pandas as pd
 
 REPO = Path("E:/bsc-tier1")
 CSV = REPO / "notebooks/clips_master.csv"
-RUN_DIR = REPO / "src/bst_x/stroke_classification/main_on_shuttleset/experiments/run_20260505_154907"
-LOCAL_CLIPS = REPO / "scratch/inspect_clips"  # where the 13 train mp4s live
+RUN_DIR = REPO / "experiments/bst_x/shuttleset/run_20260505_154907"
+LOCAL_CLIPS = REPO / "scripts/api_fixtures"  # where the 13 train mp4s live
 
 CLASS_LIST = [
     "net_shot", "return_net", "smash", "wrist_smash",
@@ -71,7 +71,7 @@ def pick_stems(csv: pd.DataFrame, split: str, rng) -> list[tuple[int, str, dict]
 def find_video_path(stem: str, side_prefix: str, true_class: str,
                     train_files_by_class: dict[str, list[str]],
                     rr_index: dict[str, int]) -> str:
-    """Resolve a stem to a playable mp4 under scratch/inspect_clips/.
+    """Resolve a stem to a playable mp4 under scripts/api_fixtures/.
 
     Priority: (a) the stem's actual file if SCP'd locally; (b) the 13
     train clips, class-aligned where possible; (c) round-robin fallback.
@@ -186,7 +186,7 @@ def main():
     # Backup the existing mocked files
     ci_path = RUN_DIR / "clip_index.json"
     pred_dir = RUN_DIR / "predictions"
-    backup_root = REPO / "scratch/inspect_clips/mock_backup"
+    backup_root = REPO / "scripts/api_fixtures/mock_backup"
     backup_root.mkdir(parents=True, exist_ok=True)
     if ci_path.exists():
         shutil.copy2(ci_path, backup_root / "clip_index.mock.json")

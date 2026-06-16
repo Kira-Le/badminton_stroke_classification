@@ -2,7 +2,7 @@
 
 Design doc for the class-F1-driven focal loss arm queued behind the
 class-weighting smoke test + manually-alpha focal cells. Output of the
-research prompt at `scratch/architecture_notes/class_f1_focal_exploration_prompt.md`.
+research prompt at `docs/architecture_notes/class_f1_focal_exploration_prompt.md`.
 Recommends the variant, the implementation surface in `bst_x_train.py`,
 and the gate condition for "this worked".
 
@@ -349,7 +349,7 @@ Class-F1-driven adaptive focal loss for combo A (une_merge_v1_nosides).
 Implements CDB-loss (Sinha et al. ACCV 2020 / IJCV 2022) with the
 per-class difficulty signal computed from running train F1 instead of
 held-out val accuracy, optionally composed with focal's (1 - p_t)^gamma
-per-sample focusing. See scratch/architecture_notes/class_f1_focal_design.md
+per-sample focusing. See docs/architecture_notes/class_f1_focal_design.md
 for the full motivation.
 """
 import torch
@@ -760,7 +760,7 @@ instruction in the design pass).
 
 ## 9. Val-improvability gate (added 2026-05-31)
 
-This section post-dates the original design pass above. The loss was built and run, and a six-cell arc analysis (`scratch/architecture_notes/alpha_arc_analysis/`) confirmed, at scale and across taxonomies, the failure mode §8 anticipated under "Train F1 vs val F1 drift". The val-improvability gate is the fix. It's off by default; a terser, decision-focused version of this writeup is in `hp_and_aug_speculations_30_05_2026.md` Q4.
+This section post-dates the original design pass above. The loss was built and run, and a six-cell arc analysis (`docs/architecture_notes/alpha_arc_analysis/`) confirmed, at scale and across taxonomies, the failure mode §8 anticipated under "Train F1 vs val F1 drift". The val-improvability gate is the fix. It's off by default; a terser, decision-focused version of this writeup is in `hp_and_aug_speculations_30_05_2026.md` Q4.
 
 ### The problem, in plain English
 
@@ -838,4 +838,4 @@ Even a perfect gate buys a point or two of macro. The classes it feeds (the stil
 
 ### Status
 
-Built 2026-05-31 (`apply_val_gate` in this module plus the wiring in `bst_x_train.py` and the `collation_runner` forward). Off by default, not yet run. Unit tests in `tests/test_adaptive_focal.py` section 9; two independent reviews passed. Full analysis, tables and figures in `scratch/architecture_notes/alpha_arc_analysis/`.
+Built 2026-05-31 (`apply_val_gate` in this module plus the wiring in `bst_x_train.py` and the `collation_runner` forward). Off by default, not yet run. Unit tests in `tests/test_adaptive_focal.py` section 9; two independent reviews passed. Full analysis, tables and figures in `docs/architecture_notes/alpha_arc_analysis/`.

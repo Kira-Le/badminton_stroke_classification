@@ -1,4 +1,4 @@
-"""Regenerate scratch/bst_x_training_runs.md from the per-run manifest.yaml files.
+"""Regenerate experiments/bst_x/bst_x_training_runs.md from the per-run manifest.yaml files.
 
 Self-contained: parses every experiments/*/manifest.yaml, computes
 mean-across-serials and best-serial test metrics, resolves canonical taxonomy
@@ -7,7 +7,7 @@ assign the global run number, then writes the global / per-taxon / per-series
 tables. Re-run after new runs land; update DESC / SERIES for the new run
 numbers (they shift, since the index is chronological).
 
-    ~/.venvs/badminton-cicd/bin/python scratch/build_training_runs_table.py
+    ~/.venvs/badminton-cicd/bin/python experiments/bst_x/build_training_runs_table.py
 """
 import glob
 import statistics as stats
@@ -15,9 +15,9 @@ from pathlib import Path
 
 import yaml
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 EXP = ROOT / "experiments/bst_x/shuttleset"
-OUT = ROOT / "scratch/bst_x_training_runs.md"
+OUT = ROOT / "experiments/bst_x/bst_x_training_runs.md"
 
 # Legacy -> canonical taxonomy (pipeline/config.py TAXONOMY_ALIASES).
 TAX_ALIAS = {

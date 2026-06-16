@@ -8,11 +8,11 @@
 # Run from anywhere; resolves paths relative to this script.
 #
 # Edit the print-tuned source at:
-#   scratch/architecture_notes/x3d_integration_macro_plan_print.md
+#   docs/architecture_notes/x3d_integration_macro_plan_print.md
 # Edit print styling at:
-#   scratch/architecture_notes/print_assets/x3d_macro_plan_print.css
+#   docs/architecture_notes/print_assets/x3d_macro_plan_print.css
 # Output PDF lands at:
-#   scratch/architecture_notes/x3d_integration_macro_plan.pdf
+#   docs/architecture_notes/x3d_integration_macro_plan.pdf
 
 set -euo pipefail
 

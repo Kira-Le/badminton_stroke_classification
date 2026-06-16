@@ -65,7 +65,7 @@ Things that aren't a stage of their own but must land before any stage runs.
 6. **Test gating.** What's the manual-spot-check sample size that gates landing? Random N clips per stroke class, hand-checked against video?
 7. **Validation harness.** Should this stage emit a graph/report (per-class hit-frame distribution, A-vs-B disagreement histogram, clip-position distribution of the hit) similar to existing `zeroed_frames_analysis_outputs/`?
 
-**Deliverable shape**: `validation_scripts/hit_frame_derive.py` (extends existing module), sidecar `hit_frame_idx.npy` + diagnostic CSV per split, a markdown report under `scratch/architecture_notes/` summarising A-vs-B agreement.
+**Deliverable shape**: `validation_scripts/hit_frame_derive.py` (extends existing module), sidecar `hit_frame_idx.npy` + diagnostic CSV per split, a markdown report under `docs/architecture_notes/` summarising A-vs-B agreement.
 
 **Dependencies**: none. Self-contained on existing CSV + collated trees. Stages 2-4 all depend on this output.
 
@@ -137,7 +137,7 @@ Things that aren't a stage of their own but must land before any stage runs.
 6. **Per-clip vs per-frame.** Same wrist for the whole clip (standard), or allow switching mid-clip (probably never needed, but flag). One choice for the whole pipeline.
 7. **Validation rubric.** Use ShuttleSet's own dominant-hand metadata (if accessible per player) as ground truth on a stratified sample, report agreement rate, hand-check the residuals. Heuristic ships if agreement ≥ ~98% on non-edge cases.
 
-**Deliverable shape**: a `wrist_crop_spec.py` module exposing `pick_dominant_wrist_idx(joints, hit_frame_idx) → 9 | 10` and `crop_box(joints, frame_idx, dominant_idx) → (x1, y1, x2, y2)` with the chosen sizing + smoothing + fallbacks; a validation script that reports dominant-wrist agreement against metadata; markdown writeup under `scratch/architecture_notes/`.
+**Deliverable shape**: a `wrist_crop_spec.py` module exposing `pick_dominant_wrist_idx(joints, hit_frame_idx) → 9 | 10` and `crop_box(joints, frame_idx, dominant_idx) → (x1, y1, x2, y2)` with the chosen sizing + smoothing + fallbacks; a validation script that reports dominant-wrist agreement against metadata; markdown writeup under `docs/architecture_notes/`.
 
 **Dependencies**: Stage 1 hit-frame; Stage 2 may flag clips that need wrist interpolation before the heuristic runs.
 
@@ -288,7 +288,7 @@ Plus the RacketVision (2025) finding that naive concatenation degraded performan
 6. **Hparam search budget.** What's the realistic compute budget for Stage 6? Number of full 5-serial runs informs whether the fusion-method shortlist is N=1 (depth-first) or N=2-3 (breadth-first).
 7. **Eval baseline.** A/B against `run_20260503_172922` on combo A nosides, plus the latest landed runs from Capacity Run 2 and the augmentation set. The "what does the fusion need to clear to count as a win" question wants an explicit number before launch (e.g., +1 pp macro and +2 pp wrist_smash, or whatever the user wants).
 
-**Deliverable shape**: `main_on_shuttleset/arch1_train.py`, fusion module under `model/fusion/` (or extended `bst.py`), per-fusion-method ablation suite, full writeup at `scratch/architecture_notes/bst_x_overview.md`'s experiment log.
+**Deliverable shape**: `main_on_shuttleset/arch1_train.py`, fusion module under `model/fusion/` (or extended `bst.py`), per-fusion-method ablation suite, full writeup at `docs/architecture_notes/bst_x_overview.md`'s experiment log.
 
 **Dependencies**: Stages 1-5 all upstream.
 
@@ -332,8 +332,8 @@ For when each stage's sub-plan is written:
 - `src/bst_x/stroke_classification/model/bst.py` (Stage 6; possibly extend with optional `x3d_branch` flag, or leave untouched and wrap)
 - `src/bst_x/stroke_classification/preparing_data/shuttleset_dataset.py` (Stage 4-6; either extend existing class or build parallel + zip)
 - `.env.example` (each stage; new env vars for paths)
-- `scratch/architecture_notes/bst_x_overview.md` (each stage; experiment log entries)
-- `scratch/architecture_notes/` (each stage; per-stage writeups, names TBD)
+- `docs/architecture_notes/bst_x_overview.md` (each stage; experiment log entries)
+- `docs/architecture_notes/` (each stage; per-stage writeups, names TBD)
 
 ## What this plan deliberately doesn't do
 

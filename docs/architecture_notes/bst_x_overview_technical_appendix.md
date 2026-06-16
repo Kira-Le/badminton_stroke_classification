@@ -1,6 +1,6 @@
 # BST-X technical appendix
 
-The dense companion to [`bst_x_overview.md`](bst_x_overview.md). Per-run best/mean numbers live in the ledger ([`bst_x_training_runs.md`](../bst_x_training_runs.md)); run numbers (`#n`) here index it. This doc holds the workings: per-experiment reasoning and per-class movement, comparability caveats, configuration and architecture detail, and the parked and future work (un-run experiments, unbuilt features, the cleanup backlog). Bug fixes have their own file, [`bst_x_issues_and_bugs_squashed.md`](bst_x_issues_and_bugs_squashed.md). Each experiment-log entry has one bolded takeaway, so skimming the bold lines gives the story.
+The dense companion to [`bst_x_overview.md`](bst_x_overview.md). Per-run best/mean numbers live in the ledger ([`bst_x_training_runs.md`](../../experiments/bst_x/bst_x_training_runs.md)); run numbers (`#n`) here index it. This doc holds the workings: per-experiment reasoning and per-class movement, comparability caveats, configuration and architecture detail, and the parked and future work (un-run experiments, unbuilt features, the cleanup backlog). Bug fixes have their own file, [`bst_x_issues_and_bugs_squashed.md`](bst_x_issues_and_bugs_squashed.md). Each experiment-log entry has one bolded takeaway, so skimming the bold lines gives the story.
 
 ## Contents
 
@@ -272,7 +272,7 @@ Sketched in `augmentation_framework.md`: extend CDB-F1 from per-class scalar alp
 ## Cross-references
 
 - [`bst_x_overview.md`](bst_x_overview.md): the readable overview this appendix backs.
-- [`bst_x_training_runs.md`](../bst_x_training_runs.md): the run ledger, every run's per-metric best and mean.
+- [`bst_x_training_runs.md`](../../experiments/bst_x/bst_x_training_runs.md): the run ledger, every run's per-metric best and mean.
 - [`bst_x_issues_and_bugs_squashed.md`](bst_x_issues_and_bugs_squashed.md): the unknown ghost channel and the other squashed bugs.
 - `model/bst.py`: model defaults (`d_model=100, d_head=128, n_head=6`), CG/AP branches in `BST.forward`, the `CrossTransformerLayer` docstring.
 - `main_on_shuttleset/bst_x_train.py`: the cosine schedule and Hyp namedtuple configuration.

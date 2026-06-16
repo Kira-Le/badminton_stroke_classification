@@ -145,7 +145,7 @@ The data argues against a clean "model is at capacity" story for the macro plate
 - **Every CDB knob now tested.** With γ=2 / run_20260502_075808 in the books (test macro 0.7359, test min 0.4207, both below the γ=1 baseline), every untouched CDB knob has been run. The full CDB spread on test min is 0.41-0.46, with γ=1 at the top. No CDB run breaks the macro 0.74-0.75 cluster on test. Loss-side options remaining are bigger swings: Seesaw-F1 (pair-aware mitigation matrix) or two-stage cRT/LWS (Kang et al.).
 - **Two-stage cRT/LWS test**: train BST end-to-end vanilla, freeze encoder, retrain `mlp_head` with class-balanced sampling for 10-20 epochs. Cheapest test of the encoder-vs-classifier bottleneck question. Project decision pending on whether to spend the time on it before X3D-S fusion.
 - **Architecture 2 cross-check**: the RGB-3dCNN-core model on the same data. If it caps near 0.75 macro too, the data is the limit; if it breaks through, BST-specific shape is the bottleneck.
-- **Per-class augmentation experiment**: Isiah's augmentation writeup at `scratch/research/Augmentation.pdf` proposes class-aware augmentation. If applied selectively to smash/ws/mid-tail classes (the ones with the train-test gap), it directly attacks the generalisation problem this analysis surfaces.
+- **Per-class augmentation experiment**: Isiah's augmentation writeup at `docs/research/Augmentation.pdf` proposes class-aware augmentation. If applied selectively to smash/ws/mid-tail classes (the ones with the train-test gap), it directly attacks the generalisation problem this analysis surfaces.
 - **Label-noise floor estimate**: a small manually-relabelled sample on smash/ws clips would let us bound the label-noise contribution to the train-test gap. Bigger research effort, beyond near-term scope.
 
 ## Methodology notes
@@ -154,10 +154,10 @@ The data argues against a clean "model is at capacity" story for the macro plate
 - "Best val epoch" is read from `best/macro_f1_epoch` in TB scalars (the trainer's own early-stop trigger record).
 - Train F1 per class is computed by `accumulate_class_counts` in `train_one_epoch` from the running argmax during the epoch's forward passes; not held-out evaluation. Macro is the unweighted mean across 14 active classes; min is the lowest per-class F1.
 - Test scores are pulled from each run's `manifest.yaml` per-serial metrics.
-- Generation scripts: `scratch/architecture_notes/scripts/extract_tb.py` (TB scalar extractor, dumps to `/tmp/nosides_tb_extract.json`) + `scratch/architecture_notes/scripts/analyse_tb.py` (tables + matplotlib charts, reads the JSON). Charts at `scratch/architecture_notes/charts/`. Both scripts need `numpy`, `pandas`, `matplotlib`, `pyyaml`, `tensorboard`.
+- Generation scripts: `docs/architecture_notes/scripts/extract_tb.py` (TB scalar extractor, dumps to `/tmp/nosides_tb_extract.json`) + `docs/architecture_notes/scripts/analyse_tb.py` (tables + matplotlib charts, reads the JSON). Charts at `docs/architecture_notes/charts/`. Both scripts need `numpy`, `pandas`, `matplotlib`, `pyyaml`, `tensorboard`.
 - Rerun workflow when a new run lands:
     1. Pull the experiment dir + test_log down from bourbaki.
     2. Append the new `(run_id, label)` to the `NOSIDES_RUNS` list at the top of `extract_tb.py` and the matching entry in the `ORDER` list at the top of `analyse_tb.py`. CDB runs also need to be added to the four `cdb_runs` lists inside `analyse_tb.py` (the per-CDB charts).
-    3. From repo root: `python scratch/architecture_notes/scripts/extract_tb.py` (rebuilds the JSON for all listed runs).
-    4. From repo root: `python scratch/architecture_notes/scripts/analyse_tb.py` (rewrites the table to stdout and overwrites `scratch/architecture_notes/charts/*.png`).
+    3. From repo root: `python docs/architecture_notes/scripts/extract_tb.py` (rebuilds the JSON for all listed runs).
+    4. From repo root: `python docs/architecture_notes/scripts/analyse_tb.py` (rewrites the table to stdout and overwrites `docs/architecture_notes/charts/*.png`).
     5. Update the per-run summary table and any prose numbers in this doc that reference the new run.

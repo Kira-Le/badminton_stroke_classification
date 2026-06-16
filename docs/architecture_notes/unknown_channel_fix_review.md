@@ -44,7 +44,7 @@ The unknown channel got allocated weight despite never being positively trained.
 - Source-level structural fix at the `n_classes` / `class_ls` derivation.
 - No monkey patching, no loss-side masking, no zeroing weights downstream.
 - Loud `n_active_classes` derivation, persisted to manifest, so future taxonomy + drop combinations can't silently re-introduce a ghost.
-- Flag the change in `scratch/architecture_notes/bst_x_overview.md`.
+- Flag the change in `docs/architecture_notes/bst_x_overview.md`.
 - Don't recollate existing collated npy dirs. Don't invalidate existing weight files.
 
 The accepted comparability cost is that pre-fix runs (LS sweep cells `run_20260430_170325`, `run_20260430_213933`, `run_20260501_073430`, plus the class-weighted run that finished on engelbart on 2026-05-01) carry the 15-channel ghost head. Post-fix runs are a new architectural era.
@@ -68,7 +68,7 @@ Drove the architecture decision off the `hyp.drop_unknown` boolean. Concretely:
 - Loud `[arch]` printout at run start in `bst_x_train.__main__`.
 - Manifest enrichment: `extra.arch = {'n_classes_full', 'n_active_classes', 'has_unknown', 'unknown_first', 'drop_unknown', 'active_class_list'}`.
 - Parallel fix in `bst_x_infer.py`: new `drop_unknown` parameter on `get_network_architecture`; decoder uses `active_class_list` instead of full `class_list()`.
-- Structural note added to `scratch/architecture_notes/bst_x_overview.md`.
+- Structural note added to `docs/architecture_notes/bst_x_overview.md`.
 
 ### The drop-policy guard (the part that misbehaved)
 
@@ -613,7 +613,7 @@ Major rewrites in three sections:
 - All remapped labels in `[0, n_active)`.
 - `n_active` matches what the data implies (14 for v1/nosides dropunk; 25 for merged_25 dropunk). The expected n_active per dir can be hardcoded as a per-test annotation, or derived once and printed for the reviewer to verify.
 
-#### `scratch/architecture_notes/bst_x_overview.md`
+#### `docs/architecture_notes/bst_x_overview.md`
 
 The structural note added by the first fix gets reworded:
 
@@ -1242,7 +1242,7 @@ For implementation reference. Refer to §5 for the full code patches; §6 only a
 | `src/bst_x/stroke_classification/main_on_shuttleset/bst_x_infer.py` | Strip 1 — required kwargs `n_active_classes` and `active_class_list`, no fallback. Update `__main__` example to read both from manifest. |
 | `scratch/post_tidy_smoke/smoke_infer_bit_exact.py` | Add explicit `n_active_classes=taxonomy.n_classes, active_class_list=taxonomy.class_list()` at the existing `get_network_architecture` call site (line 112). |
 | `tests/test_active_classes.py` | Reframe per §5.2: helper signature change; subset-assert tests; resume cross-check tests; expected_active_classes tests. Section 3 (drop-policy guards) deleted. Real-data probes pass for v1, nosides, merged_25 dropunk. |
-| `scratch/architecture_notes/bst_x_overview.md` | Update the structural note from the first fix to reflect the empirical-derivation semantics, including the train-only invariant. |
+| `docs/architecture_notes/bst_x_overview.md` | Update the structural note from the first fix to reflect the empirical-derivation semantics, including the train-only invariant. |
 
 ### 6.4 Files NOT touched
 

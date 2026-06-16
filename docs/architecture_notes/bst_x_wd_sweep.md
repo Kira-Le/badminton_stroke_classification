@@ -54,7 +54,7 @@ Hyp = namedtuple('Hyp', [
     # barely move (norm/bias/embeddings now excluded from decay, but 0.01 on
     # them was near-inert anyway). The sweep overrides this per cell. Optimal
     # lambda for this dataset/LR/run-length is likely 0.1-0.3; see
-    # scratch/architecture_notes/hp_and_aug_speculations_30_05_2026.md (Q2).
+    # docs/architecture_notes/hp_and_aug_speculations_30_05_2026.md (Q2).
     weight_decay=0.01,
 ```
 

@@ -6,7 +6,7 @@ Writes five files under <run_dir>/fe_jsons/, each carrying `_mock_data: true`:
   - clip_index.json
 
 Run from repo root:
-    python3 scratch/api_mocks/build_mock_artifacts.py
+    python3 scripts/api_fixtures/build_mock_artifacts.py
 
 The numbers are seeded for reproducibility. Class list + per-class F1
 are taken from run_20260505_154907/manifest.yaml serial 5.
