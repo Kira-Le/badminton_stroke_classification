@@ -141,7 +141,7 @@ have completed, their verdicts, the cell-start refs, etc. You don't
 normally need to read this, but it's there if you want to grep across
 the search.
 
-The per-cell run dirs (`experiments/run_<timestamp>_<microseconds>/`)
+The per-cell run dirs (`experiments/bst_x/shuttleset/run_<timestamp>_<microseconds>/`)
 have the standard manifest.yaml + best_model_id.txt + TB events as
 usual. Same format as a manual run, just driven by the wrapper.
 
@@ -284,4 +284,4 @@ requires, duplicate cell name) you'll see it here.
   `<session_dir>/manifest.md`.
 - Orchestration state: `<session_dir>/state.json`.
 - Per-cell run output (one per cell):
-  `experiments/run_<timestamp>_<microseconds>/`.
+  `experiments/bst_x/shuttleset/run_<timestamp>_<microseconds>/`.

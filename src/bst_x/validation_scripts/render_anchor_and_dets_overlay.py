@@ -64,9 +64,9 @@ import numpy as np
 import pandas as pd
 from PIL import Image, ImageDraw
 
-# File lives at src/bst_x/validation_scripts/mmpose_heuristic_investigation/<this>,
-# so the repo root is four parents up.
-REPO_ROOT = Path(__file__).resolve().parents[4]
+# File lives at src/bst_x/validation_scripts/<this> (hoisted from
+# mmpose_heuristic_investigation/ in Stage 7), so the repo root is three parents up.
+REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "src" / "bst_x"))
 
 from pipeline.config import HOMOGRAPHY_RESOLUTION  # noqa: E402

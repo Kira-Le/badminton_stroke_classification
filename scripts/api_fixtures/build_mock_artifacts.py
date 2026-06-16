@@ -15,10 +15,7 @@ import json
 import random
 from pathlib import Path
 
-RUN_DIR = Path(
-    "src/bst_x/stroke_classification/main_on_shuttleset/"
-    "experiments/run_20260505_154907"
-)
+RUN_DIR = Path("experiments/bst_x/shuttleset/run_20260505_154907")
 FE_DIR = RUN_DIR / "fe_jsons"
 
 RUN_ID = "run_20260505_154907"

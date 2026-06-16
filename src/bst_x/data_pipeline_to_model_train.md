@@ -434,19 +434,19 @@ The `__main__` block runs 5 serial trials (`range(1, 6)`) to measure seed varian
 
 #### Outputs
 
-Every invocation writes under `experiments/<run_id>/`, where `<run_id>` is `run_<timestamp>` on a fresh run or the `resume_from` folder name on a re-test. That folder is the single collection point: manifest + per-serial weights + per-serial TB dirs all live side by side.
+Every invocation writes under `experiments/bst_x/shuttleset/<run_id>/`, where `<run_id>` is `run_<timestamp>` on a fresh run or the `resume_from` folder name on a re-test. That folder is the single collection point: manifest + per-serial weights + per-serial TB dirs all live side by side.
 
-- **Manifest** (`experiments/<run_id>/manifest.yaml`): source of truth for hparams, git SHA + host, per-serial metrics (`macro_f1`, `min_f1`, `accuracy`, `top2_accuracy`, `num_strokes`), paths to each serial's weight file and TB dir, plus a `log_path:` pointer back to the matching test log. Tracked in git.
-- **Best-model notes** (`experiments/<run_id>/best_model_id.txt`): freeform notes flagging the best-performing serial(s) and the config context, written by hand after eyeballing the test log. Tracked in git alongside the manifest.
-- **Model weights** (`experiments/<run_id>/weights/bst_x_..._une_v1_14[_N].pt`): one best-validation-F1 checkpoint per serial. Gitignored by default; `src/bst_x/.gitignore` carries a per-run tactical `!` unignore for the serial(s) flagged in `best_model_id.txt`, so git history stays small while the best checkpoints are still shareable.
-- **TensorBoard logs** (`experiments/<run_id>/tb/serial_N/`): per-serial event directories grouped under one run folder. Launch with `tensorboard --logdir experiments/<run_id>/tb` to see all serials of a run in one view. Each subfolder holds **two** event files: a larger one (60-70 KB) with the per-epoch scalar curves (train/val loss, val macro/min F1, `Schedule/aux_factor`) and a tiny one (~1.6 KB) with the end-of-run HParams summary (best/2nd-best macro F1 and min F1, best val loss, their epochs, `stopped_epoch`). Gitignored.
+- **Manifest** (`experiments/bst_x/shuttleset/<run_id>/manifest.yaml`): source of truth for hparams, git SHA + host, per-serial metrics (`macro_f1`, `min_f1`, `accuracy`, `top2_accuracy`, `num_strokes`), paths to each serial's weight file and TB dir, plus a `log_path:` pointer back to the matching test log. Tracked in git.
+- **Best-model notes** (`experiments/bst_x/shuttleset/<run_id>/best_model_id.txt`): freeform notes flagging the best-performing serial(s) and the config context, written by hand after eyeballing the test log. Tracked in git alongside the manifest.
+- **Model weights** (`experiments/bst_x/shuttleset/<run_id>/weights/bst_x_..._une_v1_14[_N].pt`): one best-validation-F1 checkpoint per serial. Gitignored by default; `experiments/bst_x/shuttleset/.gitignore` carries a per-run tactical `!` unignore for the serial(s) flagged in `best_model_id.txt`, so git history stays small while the best checkpoints are still shareable.
+- **TensorBoard logs** (`experiments/bst_x/shuttleset/<run_id>/tb/serial_N/`): per-serial event directories grouped under one run folder. Launch with `tensorboard --logdir experiments/bst_x/shuttleset/<run_id>/tb` to see all serials of a run in one view. Each subfolder holds **two** event files: a larger one (60-70 KB) with the per-epoch scalar curves (train/val loss, val macro/min F1, `Schedule/aux_factor`) and a tiny one (~1.6 KB) with the end-of-run HParams summary (best/2nd-best macro F1 and min F1, best val loss, their epochs, `stopped_epoch`). Gitignored.
 - **Test logs** (`test_logs/test_<timestamp>.log`): all serials' test-set output (`=== Serial N (...) ===` headers, macro F1 table, accuracy, top-2 accuracy) auto-captured via the `Tee` class so metrics survive a dropped terminal. One file per script invocation; the run's manifest points at it via `log_path:`. Grep with `grep -E 'Accuracy|macro' test_logs/test_*.log` for a quick summary across runs, or use `run_overview.py` for a proper tabulation.
 
 #### Run tracker + aggregator
 
 Cross-run comparison and the optional Aim UI are handled by the YAML-based tracker at `src/bst_x/run_tracker.py`. `bst_x_train.py` wires it in with two function calls (`track_run` + `track_serial`), so any future training script (Arch 2 3D CNN, or any further extension) can plug in the same way. Full details in [`src/bst_x/run_tracker.md`](run_tracker.md).
 
-- **`run_overview.py`** aggregates every `experiments/<run_id>/manifest.yaml` into one table with mean / stdev / max per metric across serials:
+- **`run_overview.py`** aggregates every `experiments/bst_x/shuttleset/<run_id>/manifest.yaml` into one table with mean / stdev / max per metric across serials:
   ```bash
   cd src/bst_x
   python ../run_overview.py                              # default: experiments/
