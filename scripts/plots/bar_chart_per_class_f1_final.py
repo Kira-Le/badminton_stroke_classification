@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-EXPERIMENTS = REPO_ROOT / "src/bst_x/stroke_classification/main_on_shuttleset/experiments"
+EXPERIMENTS = REPO_ROOT / "experiments/bst_x/shuttleset"
 
 # Final best BST-X run; serial 2 is best by both test macro and min F1.
 BEST_RUN = "run_20260602_143618_156220"
@@ -23,7 +23,7 @@ BEST_LABEL = "final best"
 BASELINE_RUN = "run_20260430_170325"
 BASELINE_LABEL = "first nosides (Phase 2 LS=0.1)"
 
-OUT_PATH = REPO_ROOT / "scratch/presentation_prep/bar_chart_per_class_f1_final.png"
+OUT_PATH = REPO_ROOT / "docs/images/bar_chart_per_class_f1_final.png"
 
 # Tol muted (protanopia-safe, qualitative). Sand for baseline, indigo for current best.
 COLOUR_BASELINE = "#DDCC77"

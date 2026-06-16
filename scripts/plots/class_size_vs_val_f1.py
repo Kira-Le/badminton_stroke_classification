@@ -6,7 +6,7 @@ from clips_master.csv with the une_merge_v1 4-into-2 merges applied.
 Single-serial val F1 here; the manifest only records test per-class F1 across
 serials, and the npz dumps are the only source for the val numbers.
 
-Output: scratch/presentation_prep/class_size_vs_val_f1.png
+Output: local_scratch/presentation_prep/class_size_vs_val_f1.png
 """
 from __future__ import annotations
 
@@ -18,10 +18,10 @@ import pandas as pd
 from scipy.stats import spearmanr
 
 REPO = Path('/home/ariel/Documents/COSC594/badminton_stroke_classification')
-RUN_DIR = REPO / 'src/bst_x/stroke_classification/main_on_shuttleset/experiments/run_20260602_143618_156220'
+RUN_DIR = REPO / 'experiments/bst_x/shuttleset/run_20260602_143618_156220'
 SERIAL = 2
 CLIPS_CSV = REPO / 'notebooks/clips_master.csv'
-OUT_PNG = REPO / 'scratch/presentation_prep/class_size_vs_val_f1.png'
+OUT_PNG = REPO / 'local_scratch/presentation_prep/class_size_vs_val_f1.png'
 
 # une_merge_v1: 4 raw types fold into existing labels; rest pass through and the
 # 14-class taxonomy keeps the result set below.

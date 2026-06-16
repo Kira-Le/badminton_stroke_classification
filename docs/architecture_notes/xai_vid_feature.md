@@ -48,7 +48,7 @@ The viewer simultaneously sees: the raw rally, the abstracted view the model rec
                                                                         ├─ per real frame: composite
                                                                         └─ encode mp4
 
-[source clip mp4s]              ──── rsync ────►                       [scratch/presentation_prep/
+[source clip mp4s]              ──── rsync ────►                       [scripts/plots/
   └─ /scratch/comp320a/ShuttleSet/clips/...                              ig_overlay_<...>.mp4]
 
 [raw mmpose .npys]              ──── rsync ────►                       (local working copies)
@@ -280,7 +280,7 @@ Optional polish (defer unless quick):
 
 ### Modified files
 
-- `scratch/presentation_prep/eval_dump_predictions.py` — add softmax-probability save alongside argmax preds (one-line extension to the existing dump dict, plus a `softmax` call).
+- `scripts/plots/eval_dump_predictions.py` — add softmax-probability save alongside argmax preds (one-line extension to the existing dump dict, plus a `softmax` call).
 
 ### Read-only references
 

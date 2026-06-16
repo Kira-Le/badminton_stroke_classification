@@ -25,10 +25,10 @@ import yaml
 
 BASE = Path(
     "/home/ariel/Documents/COSC594/badminton_stroke_classification/"
-    "src/bst_x/stroke_classification/main_on_shuttleset/experiments"
+    "experiments/bst_x/shuttleset"
 )
 OUT_DIR = Path(
-    "/home/ariel/Documents/COSC594/badminton_stroke_classification/scratch/presentation_prep"
+    "/home/ariel/Documents/COSC594/badminton_stroke_classification/local_scratch/presentation_prep"
 )
 
 FLOOR = 0.40

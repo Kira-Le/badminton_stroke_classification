@@ -178,7 +178,7 @@ metrics available" placeholder for that exact case (data gap, not a bug).
 
 ## 3. Programmatic end-to-end upload test
 
-Script: `scratch/inspect_clips/e2e.py`. Sample upload:
+Script: `scripts/api_fixtures/e2e.py`. Sample upload:
 `train/Top_smash/11_1_17_9.mp4` (476 KB).
 
 | Phase | Time |
@@ -243,7 +243,7 @@ patches Isiah marked LOCAL-ONLY).
 Reverted the 8_3_17_5 swap (now back to its original test/Bottom_smash path
 in git, then re-bound by the remap script alongside 9 other entries). Net
 diff vs. mocked baseline: 10 `video_path` strings changed to point at
-train/*.mp4 files on disk under `scratch/inspect_clips/`.
+train/*.mp4 files on disk under `scripts/api_fixtures/`.
 
 No backend code touched.
 
@@ -377,7 +377,7 @@ magnifier reads intrinsic dimensions from `naturalWidth` or
 `seekTo / nudge / togglePlay / setHandle` route to either branch
 without changing the surrounding scrubber UI. The three Set
 start/target/end buttons read the active source's current time. Hand-
-test: uploading `scratch/inspect_clips/train/Top_smash/11_1_17_9.mp4`
+test: uploading `scripts/api_fixtures/train/Top_smash/11_1_17_9.mp4`
 and walking through both steps works end-to-end.
 
 ### 7.4  Item 4 — Real upload-status-results in the progress flow
@@ -471,7 +471,7 @@ Browser walk-through, in order:
    modal. Modal now shows "My Uploads" (empty initially) above
    "Match Library — 44".
 2. **Library — Upload Video tab.** Drop
-   `scratch/inspect_clips/train/Top_smash/11_1_17_9.mp4` (or any mp4).
+   `scripts/api_fixtures/train/Top_smash/11_1_17_9.mp4` (or any mp4).
    The 4-stage panel runs, then advances to Markup. Refresh the page,
    re-open the modal, confirm the entry is in My Uploads with a grey
    "Re-upload" button. Click Re-upload, pick the same file, the entry
@@ -891,7 +891,7 @@ src/api/main.py             +2 / −1 lines  (pass markup into run_inference)
 - Backend container restart clean; `/api/registry`,
   `/api/clips/{stem}/video`, `/api/upload`, `/api/library_predict`,
   `/api/status`, `/api/results` all return expected shapes.
-- §3 programmatic e2e (`scratch/inspect_clips/e2e.py`) still passes
+- §3 programmatic e2e (`scripts/api_fixtures/e2e.py`) still passes
   end-to-end in ~4.5 s — the new contract-shaped fields are present
   per-stroke (and the legacy fields are unchanged).
 - Smart-stub variance demonstrated above (§9.2 sample table).
@@ -1090,7 +1090,7 @@ predictions JSON or making the run dir world-readable.
 
 ### 10.4  Real-stem rebuild (Phase 4a)
 
-`scratch/inspect_clips/rebuild_real.py` does the row→stem work
+`scripts/api_fixtures/rebuild_real.py` does the row→stem work
 locally. The pipeline:
 
 1. Filter `clips_master.csv` to `split_v2 == split` + `raw_type_en !=
@@ -1110,7 +1110,7 @@ locally. The pipeline:
 5. Pick a `video_path` per stem — class-aligned to the 13 local train
    mp4s when possible, round-robin fill otherwise.
 
-Originals are backed up at `scratch/inspect_clips/mock_backup/`.
+Originals are backed up at `scripts/api_fixtures/mock_backup/`.
 
 Counts:
 - 56 stems × 100 % real-data-backed (row_index resolves to a real
@@ -1191,8 +1191,8 @@ src/bst_x/.../run_20260505_154907/clip_index.json
                                             rewritten — 56 real stems with row_index
 src/bst_x/.../run_20260505_154907/predictions/{test,val}.json
                                             rewritten — 28+28 real stems with placeholder predictions
-scratch/inspect_clips/rebuild_real.py       NEW (rebuild helper)
-scratch/inspect_clips/mock_backup/           NEW (backups of original mocks)
+scripts/api_fixtures/rebuild_real.py       NEW (rebuild helper)
+scripts/api_fixtures/mock_backup/           NEW (backups of original mocks)
 scratch/bst_x_inputs/{test,val}/*.npy         NEW · 542 MB (SCP'd, gitignored by size)
 ```
 
@@ -1371,7 +1371,7 @@ against multi-annotation `library_predict` jobs:
 The smart stub draws its predictions from
 `run_20260505_154907/predictions/test.json` under the registered
 model. Inside the running container that file has been replaced (by
-`scratch/inspect_clips/rebuild_real.py`) with the **real**
+`scripts/api_fixtures/rebuild_real.py`) with the **real**
 eval-dump from a re-run on the *remapped* test split. Because the
 remap binds test stems to clips the model trained on, the model
 predicts every entry at near-1.0 confidence; the rebuild script

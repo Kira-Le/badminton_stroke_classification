@@ -11,8 +11,8 @@ The 'Blues' colourmap is a single-hue sequential, universally readable
 
 Usage::
 
-    python scratch/presentation_prep/confusion_matrix.py \\
-        --predictions src/bst_x/stroke_classification/main_on_shuttleset/experiments/run_<id>/predictions/test_serial_5.npz
+    python local_scratch/presentation_prep/confusion_matrix.py \\
+        --predictions experiments/bst_x/shuttleset/run_<id>/predictions/test_serial_5.npz
 """
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ import numpy as np
 from sklearn.metrics import confusion_matrix, f1_score
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_OUT_PATH = REPO_ROOT / "scratch/presentation_prep/confusion_matrix.png"
+DEFAULT_OUT_PATH = REPO_ROOT / "local_scratch/presentation_prep/confusion_matrix.png"
 
 # Mapping from raw run_id to the in-doc / in-chat common name. Used to title the figure
 # so the reader sees the ablation by its working name first, run_id second. Extend as

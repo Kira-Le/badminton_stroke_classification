@@ -29,9 +29,9 @@ The project's target taxonomy drops the unknown bucket, merges Top/Bottom side v
 
 Best run on this set (`run_20260505_154907`, 5-serial mean over the 4,202-stroke test split): macro 0.745 / min-class 0.478 / accuracy 0.764 / top-2 0.939.
 
-![Per-class F1, current best vs prior project best, 14-class taxonomy, 5 serials each](scratch/presentation_prep/bar_chart_per_class_f1_final.png)
+![Per-class F1, current best vs prior project best, 14-class taxonomy, 5 serials each](docs/images/bar_chart_per_class_f1_final.png)
 
-Core ablation graph and confusion-matrix charts: [`scratch/presentation_prep/`](scratch/presentation_prep/).
+Core ablation graph and confusion-matrix charts: [`scripts/plots/`](scripts/plots/).
 
 **A second architecture (RGB-3dCNN-core multi-stream) is in development in parallel on the same data pipeline, to meet the need for greater fine-grained action discrimination flagged by the macro-F1 plateau**
 
@@ -48,7 +48,7 @@ Explainable AI activation mapping overlays are currently also in development.
 - `training/` — per-model training data, caches, and run artefacts (gitignored)
 - `runtime/` — runtime state for the API + inference jobs (gitignored)
 - `docs/architecture_notes/` — design docs, experiment writeups, taxonomy and loss exploration
-- `scratch/presentation_prep/` — charts and eval scripts for milestone reporting
+- `scripts/plots/` — charts and eval scripts for milestone reporting
 - `tests/` — pytest suite (environment, dataset, API, integration smoke)
 - `notebooks/` — EDA and dataset-build notebooks
 - `docs/` — decision log

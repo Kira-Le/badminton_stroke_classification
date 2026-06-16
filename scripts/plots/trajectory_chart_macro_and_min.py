@@ -19,7 +19,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-OUT_PATH = REPO_ROOT / "scratch/presentation_prep/trajectory_chart_macro_and_min.png"
+OUT_PATH = REPO_ROOT / "local_scratch/presentation_prep/trajectory_chart_macro_and_min.png"
 
 # Tol muted palette (protanopia-safe, qualitative). One colour per taxonomy.
 COLOUR = {
