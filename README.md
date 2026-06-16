@@ -47,7 +47,7 @@ Explainable AI activation mapping overlays are currently also in development.
 - `scripts/` — cross-cutting setup and shared data-prep only (e.g. `build_shots_master.py`, `validate_videos.py`, `setup_data.sh`). Per-architecture scripts live with their architecture (`src/bric/preprocessing/`, `src/bric/diagnostics/`)
 - `training/` — per-model training data, caches, and run artefacts (gitignored)
 - `runtime/` — runtime state for the API + inference jobs (gitignored)
-- `scratch/architecture_notes/` — design docs, experiment writeups, taxonomy and loss exploration
+- `docs/architecture_notes/` — design docs, experiment writeups, taxonomy and loss exploration
 - `scratch/presentation_prep/` — charts and eval scripts for milestone reporting
 - `tests/` — pytest suite (environment, dataset, API, integration smoke)
 - `notebooks/` — EDA and dataset-build notebooks
@@ -129,7 +129,7 @@ chmod -R 775 /scratch/comp320a/ShuttleSet
 
 **Don't commit these symlinks.** They're host-local and break on every other machine. Add them to your local `.gitignore` if `git status` keeps surfacing them. Pose data is physically taxonomy-independent (same clip → byte-identical pose npy), so a single pose extraction can be reused across taxonomies via filename matching; only the output folder layout differs.
 
-HPC quickstart and GPU notes: [`scratch/hpc_quickstart.md`](scratch/hpc_quickstart.md), [`scratch/gpu-access.md`](scratch/gpu-access.md).
+HPC quickstart and GPU notes: [`docs/hpc_quickstart.md`](docs/hpc_quickstart.md), [`docs/gpu-access.md`](docs/gpu-access.md).
 
 ## Experiment tracking
 

@@ -1,6 +1,6 @@
 """Namespace migration test suite for the BST to BST-X rebrand.
 
-T1-T12 + H1 per scratch/architecture_notes/namespace_migration_test_design.md.
+T1-T12 + H1 per docs/architecture_notes/namespace_migration_test_design.md.
 Each test either holds on today's main or self-gates on a sentinel that signals
 its rebrand step has landed (pytest.skip until then). Where the step IS the
 contract (T5: Pydantic Literal pin), the test lands in that step's commit
@@ -856,9 +856,9 @@ def test_t11_stage1_bst_refactor():
     # historical-archive narrative docs reference scratch/project_history/
     # bst_refactor_deprecated/ as the actual archived directory name.
     allowed = {
-        'scratch/architecture_notes/namespace_migration_test_design.md',
-        'scratch/architecture_notes/historical_bst.md',
-        'scratch/architecture_notes/pre_phase_2_tidy_plan.md',
+        'docs/architecture_notes/namespace_migration_test_design.md',
+        'docs/architecture_notes/historical_bst.md',
+        'docs/architecture_notes/pre_phase_2_tidy_plan.md',
         'tests/test_namespace_migration.py',
     }
     hits = _scan_pattern(
@@ -891,7 +891,7 @@ def test_t11_stage3_bst_inputs_dir():
     # The design doc and this test file quote the rename pattern verbatim;
     # allowlist both to avoid a self-flag.
     allowed = {
-        'scratch/architecture_notes/namespace_migration_test_design.md',
+        'docs/architecture_notes/namespace_migration_test_design.md',
         'tests/test_namespace_migration.py',
     }
     hits = _scan_pattern(
@@ -923,12 +923,12 @@ def test_t11_stage5_legacy_env_vars():
     # - Historical refactor logs / dated tidy-plan narratives reference the
     #   pre-rebrand names as they were at the time.
     allowed = {
-        'scratch/architecture_notes/namespace_migration_test_design.md',
-        'scratch/architecture_notes/pre_phase_2_tidy_plan.md',
-        'scratch/architecture_notes/completed_general_refactors/data_access_integration_plan.md',
-        'scratch/architecture_notes/completed_general_refactors/dir_flatten_refactor.md',
-        'scratch/collation_taxon_pin_w_preds_refactor_log.md',
-        'scratch/collation_taxon_pin_w_preds_refactor.md',
+        'docs/architecture_notes/namespace_migration_test_design.md',
+        'docs/architecture_notes/pre_phase_2_tidy_plan.md',
+        'docs/architecture_notes/completed_general_refactors/data_access_integration_plan.md',
+        'docs/architecture_notes/completed_general_refactors/dir_flatten_refactor.md',
+        'docs/architecture_notes/collation_taxon_pin_w_preds_refactor_log.md',
+        'docs/architecture_notes/collation_taxon_pin_w_preds_refactor.md',
         'tests/test_namespace_migration.py',
     }
     hits = _scan_pattern(
@@ -939,9 +939,12 @@ def test_t11_stage5_legacy_env_vars():
 
 
 def _stage6_in_scope(rel: str) -> bool:
-    """Scoped stage-6 corpus: doc tree, api code, manifest tsv, run manifests,
-    and the Chang baseline dir. Scratch history and the ledger legitimately
-    mention old filenames; not in scope here."""
+    """Scoped stage-6 corpus: live shipped docs, api code, manifest tsv, run
+    manifests, and the Chang baseline dir. Scratch history (now relocated
+    under docs/architecture_notes/) and the ledger legitimately mention old
+    filenames; not in scope here."""
+    if rel.startswith('docs/architecture_notes/'):
+        return False
     if rel.startswith('docs/'):
         return True
     if rel.startswith('src/api/'):
@@ -950,7 +953,7 @@ def _stage6_in_scope(rel: str) -> bool:
         return True
     if rel.startswith('experiments/bst_x/shuttleset/run_'):
         return True
-    if rel.startswith('experiments/bst_x/shuttleset/bst_cg_ap_base_'):
+    if rel.startswith('experiments/bst_x/shuttleset/foundation_chang_baseline'):
         return True
     return False
 

@@ -897,7 +897,7 @@ def collate_npy(
         # Pose-fail frames no longer wipe shuttle. Pose tells you where a
         # player is in the court; shuttle tells you where the bird is. If
         # one player collapses, the bird's coord still has meaning.
-        # Full rationale: scratch/architecture_notes/frame_zeroing.md.
+        # Full rationale: docs/architecture_notes/frame_zeroing.md.
 
         shuttle_ls.append(shuttle)
 

@@ -11,7 +11,7 @@ A full 5-cell search runs in ~10 hours on engelbart. Designed for
 launch-and-walk-away.
 
 For the design rationale and decision trail, see
-`scratch/architecture_notes/hparam_search_wrapper.md`. This file is
+`docs/architecture_notes/hparam_search_wrapper.md`. This file is
 the how-to.
 
 ## The workflow
@@ -275,7 +275,7 @@ requires, duplicate cell name) you'll see it here.
 ## Where to find what
 
 - Design rationale, kill rule calibration, decisions log:
-  `scratch/architecture_notes/hparam_search_wrapper.md`.
+  `docs/architecture_notes/hparam_search_wrapper.md`.
 - Wrapper code: `hparam_sweep.py` (alongside this file).
 - bst_x_train CLI changes: `bst_x_train.py` (the `__main__` block at the
   bottom).
