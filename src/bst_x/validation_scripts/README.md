@@ -57,7 +57,7 @@ python src/bst_x/validation_scripts/validate_zeroed_frames.py \
     --taxonomy une_merge_v1
 ```
 
-`--clips-csv` defaults to `<repo>/notebooks/clips_master.csv`. `--dataset-npy-dir` is auto-discovered under `--data-root` (the single `*_flat/` subdir). `--set-dir` is auto-detected at `<repo>/src/bst_x/ShuttleSet/set` if a `match.csv` is present there, which also enables the flaw and hit-frame sections below.
+`--clips-csv` defaults to `<repo>/notebooks/clips_master.csv`. `--dataset-npy-dir` is auto-discovered under `--data-root` (the single `*_flat/` subdir). `--set-dir` is auto-detected at `<repo>/data/shuttleset/set` if a `match.csv` is present there, which also enables the flaw and hit-frame sections below.
 
 **Full usage** (explicit paths for flaw cross-reference, hit-frame proximity, and shuttle analysis):
 
@@ -66,7 +66,7 @@ python src/bst_x/validation_scripts/validate_zeroed_frames.py \
     --data-root /scratch/comp320a/ShuttleSet_data_merged_25 \
     --split-column split_v2 \
     --taxonomy une_merge_v1 \
-    --set-dir src/bst_x/ShuttleSet/set \
+    --set-dir data/shuttleset/set \
     --hit-window 10 \
     --shuttle-npy-dir /scratch/comp320a/ShuttleSet/shuttle_npy_flat
 ```
@@ -81,9 +81,9 @@ python src/bst_x/validation_scripts/validate_zeroed_frames.py \
 | `--split-column` | No | `split_bst_baseline` | Column in clips_csv giving train/val/test assignment. |
 | `--taxonomy` | No | `une_merge_v1` | Taxonomy name (choices from `TAXONOMIES` in `pipeline/config.py`). Used for label derivation, filenames, and display headers. |
 | `--threshold` | No | `0.5` | Fail-rate cutoff for the flagged-clips list. |
-| `--set-dir` | No | repo-relative fallback | Path to `ShuttleSet/set/`. Enables flaw cross-reference and hit-frame proximity. If omitted, checks `<repo>/src/bst_x/ShuttleSet/set` for a `match.csv` and uses it when found. |
+| `--set-dir` | No | repo-relative fallback | Path to `data/shuttleset/set/`. Enables flaw cross-reference and hit-frame proximity. If omitted, checks `<repo>/data/shuttleset/set` for a `match.csv` and uses it when found. |
 | `--hit-window` | No | `10` | Frames either side of the hit frame to check. Requires `--set-dir`. |
-| `--shuttle-npy-dir` | No | - | Path to `ShuttleSet/shuttle_npy_flat/`. Enables shuttle detection failure analysis via the TrackNet visibility column. |
+| `--shuttle-npy-dir` | No | - | Path to `data/shuttleset/shuttle_npy_flat/`. Enables shuttle detection failure analysis via the TrackNet visibility column. |
 
 **Output** (all saved to `zeroed_frames_analysis_outputs/`):
 
@@ -185,7 +185,7 @@ Reusable library module (not a CLI script). Maps clip stems to the 0-based frame
 
 ```python
 from hit_frame_lookup import build_hit_frame_lookup
-lookup = build_hit_frame_lookup(Path("ShuttleSet/set"), Path("ShuttleSet/video_metadata.csv"))
+lookup = build_hit_frame_lookup(Path("data/shuttleset/set"), Path("data/shuttleset/video_metadata.csv"))
 # lookup["35_1_10_17"] == 23  means the hit is at frame index 23
 ```
 

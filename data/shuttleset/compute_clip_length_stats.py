@@ -7,8 +7,8 @@ Replicates the clipping logic from gen_my_dataset.py using only the CSV annotati
 import sys
 from pathlib import Path
 
-# Allow importing pipeline when running from ShuttleSet/ directory
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+# Allow importing pipeline from data/shuttleset/ (parents[2] = repo root, then src/bst_x/).
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'src' / 'bst_x'))
 
 import pandas as pd
 import numpy as np

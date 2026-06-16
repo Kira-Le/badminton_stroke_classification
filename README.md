@@ -106,7 +106,7 @@ The pipeline expects clip and pose data inside the repo tree; symlink to `/scrat
 ```bash
 mkdir -p /scratch/comp320a/ShuttleSet/{raw_video,clips,shuttle_csv,shuttle_npy}
 
-cd ~/badminton_stroke_classification/src/bst_x/ShuttleSet
+cd ~/badminton_stroke_classification/data/shuttleset
 ln -s /scratch/comp320a/ShuttleSet/raw_video raw_video
 ln -s /scratch/comp320a/ShuttleSet/clips clips
 ln -s /scratch/comp320a/ShuttleSet/shuttle_csv shuttle_csv

@@ -31,10 +31,10 @@ venv/
 # Multi-GB depending on how many clips are pulled; never worth committing.
 scratch/raw_extract_local/
 #symlinks
-src/bst_x/ShuttleSet/raw_video
-src/bst_x/ShuttleSet/clips
-src/bst_x/ShuttleSet/shuttle_csv
-src/bst_x/ShuttleSet/shuttle_npy
+data/shuttleset/raw_video
+data/shuttleset/clips
+data/shuttleset/shuttle_csv
+data/shuttleset/shuttle_npy
 src/bst_x/preparing_data/ShuttleSet_data_une_merge_v1
 #wildcard for various taxonomies--could cause a problem if you unluckily picked this root name
 src/bst_x/preparing_data/ShuttleSet_data_*

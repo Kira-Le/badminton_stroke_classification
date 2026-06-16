@@ -18,9 +18,9 @@ import yaml
 
 REPO = Path('/home/ariel/Documents/COSC594/badminton_stroke_classification')
 CLIPS_CSV = REPO / 'notebooks' / 'clips_master.csv'
-MATCH_CSV = REPO / 'src/bst_x/ShuttleSet/set/match.csv'
-SET_DIR = REPO / 'src/bst_x/ShuttleSet/set'
-FLAW_CSV = REPO / 'src/bst_x/ShuttleSet/flaw_shot_records.csv'
+MATCH_CSV = REPO / 'data/shuttleset/set/match.csv'
+SET_DIR = REPO / 'data/shuttleset/set'
+FLAW_CSV = REPO / 'data/shuttleset/flaw_shot_records.csv'
 DISCARD_CSV = REPO / 'scratch/research/discard_flags_split_v2_dropunk_nosides.csv'
 
 CHARTS_DIR = REPO / 'scratch/research/charts'

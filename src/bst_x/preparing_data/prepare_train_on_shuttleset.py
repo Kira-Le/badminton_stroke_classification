@@ -863,7 +863,7 @@ def collate_npy(
         failed_ls = [t3.result() for t3 in tasks3]
     print("Finish loading.")
 
-    # Load shuttle CSVs from the canonical pipeline CSV dir (ShuttleSet/shuttle_csv/),
+    # Load shuttle CSVs from the canonical pipeline CSV dir (data/shuttleset/shuttle_csv/),
     # align temporal dimensions, and apply failed-frame masking.
     #
     # Shuttle data is read here rather than in the pose step because:

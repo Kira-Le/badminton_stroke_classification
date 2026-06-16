@@ -39,7 +39,7 @@ if np.any(failed):
 
 **Why tail-truncation, not centering**: Both decoders start at frame 0 and agree on early frames -- the disagreement is about whether the last 1-2 frames are valid (partial frames, B-frame dependencies). Tail-truncation preserves the 1:1 correspondence between `joints[i]` and `shuttle[i]` for all kept frames.
 
-**Why shuttle reading belongs in collation**: Shuttle CSVs are taxonomy- and split-agnostic physical measurements that live in a single canonical directory (`ShuttleSet/shuttle_csv/`). Keeping them out of the pose step means the 1.5-3 day GPU job has no dependency on CSV availability, and collation (fast, re-runnable) can be re-run cheaply when the taxonomy changes without redoing pose extraction.
+**Why shuttle reading belongs in collation**: Shuttle CSVs are taxonomy- and split-agnostic physical measurements that live in a single canonical directory (`data/shuttleset/shuttle_csv/`). Keeping them out of the pose step means the 1.5-3 day GPU job has no dependency on CSV availability, and collation (fast, re-runnable) can be re-run cheaply when the taxonomy changes without redoing pose extraction.
 
 **Impact**: Loses at most 1-2 frames from the end of a 75-105 frame clip. No effect on clips where frame counts match (the vast majority).
 
@@ -131,7 +131,7 @@ prepare_train_on_shuttleset.py    main() dispatches 3 steps
     Step 3:  collate_npy(shuttle_csv_dir, resolution_df)
                  |
                  +-- load _joints.npy, _pos.npy, _failed.npy (ThreadPoolExecutor)
-                 +-- per clip: get_shuttle_result() from ShuttleSet/shuttle_csv/
+                 +-- per clip: get_shuttle_result() from data/shuttleset/shuttle_csv/
                  |             tail-truncate to align MMPose/TrackNetV3 frame counts
                  |             zero shuttle coords where _failed is True
                  +-- pad_and_augment_one_npy_video() per clip (ProcessPoolExecutor)
@@ -159,7 +159,7 @@ Files land flat under `save_root_dir`, one set per clip stem. Split and label as
 | `{clip_stem}_pos.npy` | `(F, 2, 2)` | Court-projected player positions |
 | `{clip_stem}_failed.npy` | `(F,)` bool | True where MMPose failed to detect 2 players |
 
-Shuttle data (`*_shuttle.npy`) is no longer saved per-clip by the pose step. It is read from `ShuttleSet/shuttle_csv/` and merged at collation time (Step 3).
+Shuttle data (`*_shuttle.npy`) is no longer saved per-clip by the pose step. It is read from `data/shuttleset/shuttle_csv/` and merged at collation time (Step 3).
 
 ### Resume logic
 
