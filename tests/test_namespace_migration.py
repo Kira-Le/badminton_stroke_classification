@@ -64,11 +64,11 @@ def _first_importable(*candidates: str):
 
 def _experiments_dir() -> Path:
     candidate = (
-        REPO_ROOT / 'src' / 'bst_x' / 'experiments'
+        REPO_ROOT / 'experiments' / 'bst_x' / 'shuttleset'
     )
     if candidate.is_dir():
         return candidate
-    raise RuntimeError(f'No experiments dir under src/bst_x in {REPO_ROOT}')
+    raise RuntimeError(f'No experiments dir under experiments/bst_x/shuttleset in {REPO_ROOT}')
 
 
 def _common_module():
@@ -948,9 +948,9 @@ def _stage6_in_scope(rel: str) -> bool:
         return True
     if rel == 'scripts/model_manifest.tsv':
         return True
-    if rel.startswith('src/bst_x/experiments/run_'):
+    if rel.startswith('experiments/bst_x/shuttleset/run_'):
         return True
-    if rel.startswith('src/bst_x/experiments/bst_cg_ap_base_'):
+    if rel.startswith('experiments/bst_x/shuttleset/bst_cg_ap_base_'):
         return True
     return False
 

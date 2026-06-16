@@ -1299,7 +1299,7 @@ if __name__ == '__main__':
 
     # ----------------------------------------------------------------------
     # Per-run experiment folder (tracked via run_tracker).
-    # Every run mints experiments/run_<timestamp>/ with:
+    # Every run mints experiments/bst_x/shuttleset/run_<timestamp>/ with:
     #   manifest.yaml          (hyperparams + config.classes, git SHA, per-serial metrics)
     #   weights/<save_name>.pt (best checkpoint per serial)
     #   tb/serial_N/           (TB event files per serial)
@@ -1318,14 +1318,14 @@ if __name__ == '__main__':
     # Uses the fresh invocation timestamp (not run_id) so resumed re-tests
     # don't overwrite the original run's log file.
     #
-    # Anchor test_logs/ and experiments/ to this file's directory so the
-    # write paths don't depend on cwd. Lets `python -m bst_x_train`
-    # land outputs next to the script regardless of where it was invoked from.
+    # Anchor experiments/ and test_logs/ to the repo-root experiments/bst_x/shuttleset/
+    # so write paths don't depend on cwd. Lets `python -m bst_x_train` land outputs in
+    # the canonical run-artefact tree regardless of where it was invoked from.
     script_dir = Path(__file__).resolve().parent
-    log_dir = script_dir / 'test_logs'
+    experiments_dir = script_dir.parent.parent / 'experiments' / 'bst_x' / 'shuttleset'
+    log_dir = experiments_dir / 'test_logs'
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = Path(args.log_path) if args.log_path else log_dir / f'test_{timestamp}.log'
-    experiments_dir = script_dir / 'experiments'
 
     extra = compute_data_provenance(
         clips_csv_path=Path(hyp.clips_csv),

@@ -10,7 +10,7 @@
 # Run from the repo root with both package roots on PYTHONPATH:
 #   PYTHONPATH=src/bst_x \
 #       python -m bst_x_infer --fe \
-#           --run-dir .../experiments/run_<id> --serial 5
+#           --run-dir .../experiments/bst_x/shuttleset/run_<id> --serial 5
 #   The dump lands in <run-dir>/inference_runs/<timestamp>/ (npz +
 #   inference_manifest.yaml); pass --fe-output-dir to redirect it elsewhere.
 #
@@ -303,7 +303,7 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         '--run-dir', type=Path, default=None,
-        help='experiments/run_<id>/ whose weights to dump. Required when --fe is set.',
+        help='experiments/bst_x/shuttleset/run_<id>/ whose weights to dump. Required when --fe is set.',
     )
     parser.add_argument('--serial', type=int, default=5,
                         help='Serial number whose weights to evaluate.')
@@ -329,7 +329,7 @@ if __name__ == '__main__':
             'For live single-clip inference, import infer() / Task instead.'
         )
     if args.run_dir is None:
-        parser.error('--fe requires --run-dir <experiments/run_...>')
+        parser.error('--fe requires --run-dir <experiments/bst_x/shuttleset/run_...>')
 
     dump_run_predictions(
         run_dir=args.run_dir.resolve(),

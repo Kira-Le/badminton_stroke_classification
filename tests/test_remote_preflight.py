@@ -70,7 +70,7 @@ NPZ_FIELDS = {
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENTS_DIR = (
-    REPO_ROOT / 'src/bst_x/experiments'
+    REPO_ROOT / 'experiments/bst_x/shuttleset'
 )
 
 

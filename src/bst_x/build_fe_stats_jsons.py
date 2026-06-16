@@ -21,7 +21,7 @@ Invocation matches the rest of this package (PYTHONPATH =
 ``src/bst_x``):
 
     python -m build_fe_stats_jsons \
-        --run-dir .../experiments/run_20260531_005535_005154 --serial 3
+        --run-dir .../experiments/bst_x/shuttleset/run_20260531_005535_005154 --serial 3
 """
 
 from __future__ import annotations
@@ -190,7 +190,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(
         description="Build Tier 1 FE sidecar JSONs (fe_jsons/) from a run's prediction npz."
     )
-    ap.add_argument("--run-dir", type=Path, required=True, help="experiments/<run_id> dir")
+    ap.add_argument("--run-dir", type=Path, required=True, help="experiments/bst_x/shuttleset/<run_id> dir")
     ap.add_argument("--serial", type=int, required=True, help="serial whose npz to read (1-5)")
     ap.add_argument("--splits", nargs="+", default=["val", "test"])
     ap.add_argument("--clips-csv", type=Path, default=None, help="override DataPaths clips_csv")

@@ -31,8 +31,9 @@ from pathlib import Path
 import yaml
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-EXPERIMENTS_DIR = SCRIPT_DIR / 'experiments'
-TEST_LOGS_DIR = SCRIPT_DIR / 'test_logs'
+REPO_ROOT = SCRIPT_DIR.parent.parent
+EXPERIMENTS_DIR = REPO_ROOT / 'experiments' / 'bst_x' / 'shuttleset'
+TEST_LOGS_DIR = EXPERIMENTS_DIR / 'test_logs'
 
 
 def invoke_bst_train(*, serial_no: int, run_id: str, log_path: Path, cell: dict) -> int:

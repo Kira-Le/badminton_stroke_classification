@@ -14,7 +14,7 @@ Bind mounts required (set in docker-compose.yml):
         -> /app/bst_x_inputs/{test,val}/...
 
 The checkpoint and clip_index.json live in the repo tree at
-`src/bst_x/.../experiments/run_20260505_154907/`.
+`experiments/bst_x/shuttleset/run_20260505_154907/`.
 
 The clip_index.json carries `row_index` per stem (added by
 scratch/inspect_clips/rebuild_real.py); we use that directly rather than
@@ -47,7 +47,7 @@ if sp not in sys.path:
 
 
 # ─── Constants ──────────────────────────────────────────────────────
-RUN_DIR = REPO_ROOT / "src" / "bst_x" / "experiments" / "run_20260505_154907"
+RUN_DIR = REPO_ROOT / "experiments" / "bst_x" / "shuttleset" / "run_20260505_154907"
 WEIGHTS_PATH = RUN_DIR / "weights" / "bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_5.pt"
 CLIP_INDEX_PATH = RUN_DIR / "clip_index.json"
 

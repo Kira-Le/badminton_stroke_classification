@@ -40,9 +40,10 @@ import yaml
 # ==========================================================================
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-EXPERIMENTS_DIR = SCRIPT_DIR / 'experiments'
+REPO_ROOT = SCRIPT_DIR.parent.parent
+EXPERIMENTS_DIR = REPO_ROOT / 'experiments' / 'bst_x' / 'shuttleset'
 SWEEPS_DIR = EXPERIMENTS_DIR / 'aug_hparam_sweep'
-TEST_LOGS_DIR = SCRIPT_DIR / 'test_logs'
+TEST_LOGS_DIR = EXPERIMENTS_DIR / 'test_logs'
 
 
 # ==========================================================================

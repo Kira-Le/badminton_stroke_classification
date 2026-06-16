@@ -31,7 +31,7 @@ PYTHONPATH=src/bst_x \
 ```
 
 This drops a session dir under
-`src/bst_x/experiments/aug_hparam_sweep/`
+`experiments/bst_x/shuttleset/aug_hparam_sweep/`
 with a template `config.yaml`. The dir name has a timestamp so multiple
 sessions don't collide. Open the printed path in your editor.
 

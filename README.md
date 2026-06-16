@@ -133,7 +133,7 @@ HPC quickstart and GPU notes: [`scratch/hpc_quickstart.md`](scratch/hpc_quicksta
 
 ## Experiment tracking
 
-Each training run writes a manifest, per-serial metrics, and TensorBoard events under `src/bst_x/experiments/<run_id>/`. Optional Aim UI for browsing runs: [`src/bst_x/run_tracker.md`](src/bst_x/run_tracker.md).
+Each training run writes a manifest, per-serial metrics, and TensorBoard events under `experiments/bst_x/shuttleset/<run_id>/`. Optional Aim UI for browsing runs: [`src/bst_x/run_tracker.md`](src/bst_x/run_tracker.md).
 
 ## API + frontend
 

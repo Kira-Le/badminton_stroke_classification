@@ -94,7 +94,7 @@ grep -n "active_class_list\|extra.*arch\|config.*classes" src/api/registry.py
 # someone landed Patch 2 ahead of us; audit Step J before re-doing.
 
 # 11. Confirm the predictions JSON output dir is still in the placeholder state.
-find src/bst_x/experiments \
+find experiments/bst_x/shuttleset \
     -name 'test.json' -o -name 'val.json' 2>/dev/null | head -5
 # Expected: val.json + test.json at run_20260505_154907/predictions/ with
 # _mock_data: false, _real_stems: true, y_pred a placeholder the live BST

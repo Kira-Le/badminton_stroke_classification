@@ -153,7 +153,7 @@ between runs. Run it in a venv with aim + tensorboard (locally, tb-viewer):
 ```bash
 ~/.venvs/tb-viewer/bin/python aim_backfill.py \
     --repo /path/to/.aim_repos/bst --wipe \
-    src/bst_x/experiments
+    experiments/bst_x/shuttleset
 ~/.venvs/tb-viewer/bin/aim up --repo /path/to/.aim_repos/bst
 ```
 
