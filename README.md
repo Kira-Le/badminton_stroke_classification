@@ -74,7 +74,7 @@ Lists clips for a given `split` + `class` filter, paired with their shuttle and 
 
 ```bash
 # Set PYTHONPATH once for the session
-export PYTHONPATH=src/bst_x:src/bst_x/stroke_classification
+export PYTHONPATH=src/bst_x
 
 python -m pipeline.data_access --summary                       # counts per split/class
 python -m pipeline.data_access --split val --class Top_smash   # one row per matching clip
@@ -117,7 +117,7 @@ Per-taxonomy MMPose output dir, same pattern:
 
 ```bash
 mkdir -p /scratch/comp320a/ShuttleSet_data_une_v1_14
-cd ~/badminton_stroke_classification/src/bst_x/stroke_classification/preparing_data
+cd ~/badminton_stroke_classification/src/bst_x/preparing_data
 ln -s /scratch/comp320a/ShuttleSet_data_une_v1_14 ShuttleSet_data_une_v1_14
 ```
 
@@ -133,7 +133,7 @@ HPC quickstart and GPU notes: [`scratch/hpc_quickstart.md`](scratch/hpc_quicksta
 
 ## Experiment tracking
 
-Each training run writes a manifest, per-serial metrics, and TensorBoard events under `src/bst_x/stroke_classification/experiments/<run_id>/`. Optional Aim UI for browsing runs: [`src/bst_x/run_tracker.md`](src/bst_x/run_tracker.md).
+Each training run writes a manifest, per-serial metrics, and TensorBoard events under `src/bst_x/experiments/<run_id>/`. Optional Aim UI for browsing runs: [`src/bst_x/run_tracker.md`](src/bst_x/run_tracker.md).
 
 ## API + frontend
 

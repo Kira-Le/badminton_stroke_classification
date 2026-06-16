@@ -101,7 +101,7 @@ Checks that:
 
 Runs TrackNetV3 on each clip to extract shuttle trajectories, then normalises to `(t, 3)` numpy arrays: `[x_norm, y_norm, visibility]`.
 
-TrackNetV3 shares the BST training venv (`stroke_classification/requirements.txt`) rather than maintaining a separate environment. The original repo's dependencies (torch 1.10, numpy 1.22) are incompatible with Python 3.11 and CUDA 12.1; the code has been verified to work with torch 2.3.1. See `TrackNetV3/requirements.txt` for the full version rationale and standalone setup instructions.
+TrackNetV3 shares the BST training venv (`requirements.txt`) rather than maintaining a separate environment. The original repo's dependencies (torch 1.10, numpy 1.22) are incompatible with Python 3.11 and CUDA 12.1; the code has been verified to work with torch 2.3.1. See `TrackNetV3/requirements.txt` for the full version rationale and standalone setup instructions.
 
 The pipeline calls TrackNetV3 as a subprocess via `batch_predict.py`, which loads models once and iterates over all clips in-process. This avoids the ~8s model-reload overhead per clip that the old subprocess-per-clip approach had. The pipeline passes `--batch_size` (default 32; configurable via `--batch-size`) and uses the default `eval_mode='weight'` (full temporal ensemble) for maximum detection accuracy. Inference runs in FP32 to preserve detection accuracy on fast-moving shuttles (>400 km/h at 25-30fps produces faint heatmap responses where FP16 rounding could flip the 0.5 visibility threshold). Frames are pre-resized during loading using PIL BICUBIC, which is bit-identical to the Dataset's own resize and avoids redundant full-resolution array operations. VideoCapture handles are explicitly released after use, and `gc.collect()` + `torch.cuda.empty_cache()` run between clips to prevent resource exhaustion over long batch runs. TrackNetV3's imports don't affect the pipeline venv. Point `--tracknet-python` at the BST venv's Python.
 
@@ -320,7 +320,7 @@ python -m pipeline.verify --clips-dir ShuttleSet/clips
 
 Both architectures read from the same `clips/` and `shuttle_npy/` directories. The pipeline doesn't care what you do with the output.
 
-**Next step for BST-X:** Run `stroke_classification/preparing_data/prepare_train_on_shuttleset.py` to extract poses (MMPose) and collate into batch-ready arrays. See `data_pipeline_to_model_train.md` at the project root for the full pipeline-to-training walkthrough. For the COCO 17-keypoint joint index map, bone pairs, and JnB representations, see [`keypoints_schema.md`](../stroke_classification/preparing_data/keypoints_schema.md).
+**Next step for BST-X:** Run `preparing_data/prepare_train_on_shuttleset.py` to extract poses (MMPose) and collate into batch-ready arrays. See `data_pipeline_to_model_train.md` at the project root for the full pipeline-to-training walkthrough. For the COCO 17-keypoint joint index map, bone pairs, and JnB representations, see [`keypoints_schema.md`](../preparing_data/keypoints_schema.md).
 
 ### Split + label source
 
@@ -374,7 +374,7 @@ class ClipVideoDataset(Dataset):
         return load_video(self._path_by_stem[stem]), label
 ```
 
-`label_for_row(taxonomy, row.raw_type_en, row.player_side)` produces the int label (or `None` to skip a filtered row), applying exclusion + merge + side in one place, matching what `collate_npy` does for the pose/shuttle npys (see `stroke_classification/preparing_data/prepare_train_on_shuttleset.py`). Pick your own video backend (cv2, decord, torchvision.io) for `load_video`.
+`label_for_row(taxonomy, row.raw_type_en, row.player_side)` produces the int label (or `None` to skip a filtered row), applying exclusion + merge + side in one place, matching what `collate_npy` does for the pose/shuttle npys (see `preparing_data/prepare_train_on_shuttleset.py`). Pick your own video backend (cv2, decord, torchvision.io) for `load_video`.
 
 This pattern means the nested clips layout is transparent: the same `ClipVideoDataset` works for any `split_column` in `clips_master.csv` without needing to flatten or reorganise `clips/`.
 

@@ -165,7 +165,7 @@ Three small scripts that confirm a sanity-train run is pointed at the right arte
 All three run from the repo root:
 
 ```bash
-PYTHONPATH=src/bst_x:src/bst_x/stroke_classification \
+PYTHONPATH=src/bst_x \
     python src/bst_x/validation_scripts/<script>.py
 ```
 

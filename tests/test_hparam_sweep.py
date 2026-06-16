@@ -7,7 +7,7 @@ via a monkeypatched bst_x_train shim.
 
 Run from repo root::
 
-    PYTHONPATH=src/bst_x:src/bst_x/stroke_classification \\
+    PYTHONPATH=src/bst_x \\
         pytest tests/test_hparam_sweep.py -v
 """
 

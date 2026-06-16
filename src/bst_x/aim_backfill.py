@@ -24,7 +24,7 @@ the cwd repo.
 Run in the tb-viewer venv (aim + tensorboard + tensorflow + pyyaml):
     ~/.venvs/tb-viewer/bin/python aim_backfill.py \
         --repo /path/to/.aim_repos/bst --wipe \
-        src/bst_x/stroke_classification/experiments
+        src/bst_x/experiments
     ~/.venvs/tb-viewer/bin/aim up --repo /path/to/.aim_repos/bst
 """
 

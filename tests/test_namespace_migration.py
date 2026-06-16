@@ -64,7 +64,7 @@ def _first_importable(*candidates: str):
 
 def _experiments_dir() -> Path:
     candidate = (
-        REPO_ROOT / 'src' / 'bst_x' / 'stroke_classification' / 'experiments'
+        REPO_ROOT / 'src' / 'bst_x' / 'experiments'
     )
     if candidate.is_dir():
         return candidate
@@ -948,11 +948,9 @@ def _stage6_in_scope(rel: str) -> bool:
         return True
     if rel == 'scripts/model_manifest.tsv':
         return True
-    if rel.startswith(('src/bst_x/stroke_classification/experiments/run_',
-                       'src/bst_x/stroke_classification/experiments/run_')):
+    if rel.startswith('src/bst_x/experiments/run_'):
         return True
-    if rel.startswith(('src/bst_x/stroke_classification/experiments/bst_cg_ap_base_',
-                       'src/bst_x/stroke_classification/experiments/bst_cg_ap_base_')):
+    if rel.startswith('src/bst_x/experiments/bst_cg_ap_base_'):
         return True
     return False
 

@@ -11,7 +11,7 @@ Optional Aim UI on top if you want it; works fine without.
 | `src/bst_x/run_tracker.py` | `track_run(config, run_id, log_path=...)` and `track_serial(run_dir, serial_no, weights_path, tb_dir, metrics)`. Writes `manifest.yaml` and (optionally) mirrors into `.aim/`. |
 | `src/bst_x/run_overview.py` | Aggregator. `python run_overview.py` prints a table across all runs under `experiments/` (mean/stdev/max per metric). |
 | `src/bst_x/aim_backfill.py` | Rebuilds Aim from every manifest + its TB event files: per-epoch curves, hparams, tags (incl `best` on the kept-checkpoint serial), each run dated to its `started_at`. Re-run with `--wipe` for a clean rebuild (see Aim UI below). |
-| `src/bst_x/stroke_classification/bst_x_train.py` | Integrated: two calls to the tracker, test methods now return metric dicts, TB directory is threaded through to `train_network`. |
+| `src/bst_x/bst_x_train.py` | Integrated: two calls to the tracker, test methods now return metric dicts, TB directory is threaded through to `train_network`. |
 
 ## How it's wired into bst_x_train.py
 
@@ -46,7 +46,7 @@ any future extension) can do the same two calls.
 ## Directory layout
 
 ```
-src/bst_x/stroke_classification/
+src/bst_x/
   experiments/
     run_20260418_174244/
       manifest.yaml                             (tracked in git)
@@ -104,7 +104,7 @@ the entry in place rather than appending a duplicate.
 ## Aggregator usage
 
 ```bash
-cd src/bst_x/stroke_classification
+cd src/bst_x
 python ../run_overview.py                              # default experiments/
 python ../run_overview.py -c n_epochs,use_aux_schedule -m macro_f1,min_f1
 ```
@@ -153,7 +153,7 @@ between runs. Run it in a venv with aim + tensorboard (locally, tb-viewer):
 ```bash
 ~/.venvs/tb-viewer/bin/python aim_backfill.py \
     --repo /path/to/.aim_repos/bst --wipe \
-    src/bst_x/stroke_classification/experiments
+    src/bst_x/experiments
 ~/.venvs/tb-viewer/bin/aim up --repo /path/to/.aim_repos/bst
 ```
 
@@ -174,7 +174,7 @@ regardless of which logger produced them.
 ## Dependencies
 
 - `pyyaml>=6.0,<7` (required) — add to
-  `src/bst_x/stroke_classification/requirements.txt` if not
+  `src/bst_x/requirements.txt` if not
   already there.
 - `aim` (optional) — only needed for the Aim UI / `aim_backfill.py`.
 - `tensorboard` (optional) — `aim_backfill.py` reads the TB event files

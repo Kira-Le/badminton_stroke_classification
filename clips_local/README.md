@@ -25,7 +25,7 @@ The full list of stems for a split is whatever the per-clip browser shows on
 the left, or the keys in:
 
 ```
-src/bst_x/stroke_classification/experiments/run_20260505_154907/clip_index.json
+src/bst_x/experiments/run_20260505_154907/clip_index.json
 ```
 
 ## How it's served

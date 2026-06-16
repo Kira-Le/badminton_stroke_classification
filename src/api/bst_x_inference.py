@@ -40,16 +40,14 @@ log = logging.getLogger(__name__)
 # rather than fully-qualified paths, so we have to extend sys.path the same
 # way bst_x_infer.py's docstring tells you to via PYTHONPATH.
 REPO_ROOT = Path("/app") if Path("/app").exists() else Path(__file__).resolve().parents[2]
-BST_X_REFACTOR = REPO_ROOT / "src" / "bst_x"
-BST_X_CLASSIFICATION = BST_X_REFACTOR / "stroke_classification"
-for p in (BST_X_CLASSIFICATION, BST_X_REFACTOR):
-    sp = str(p)
-    if sp not in sys.path:
-        sys.path.insert(0, sp)
+BST_X_PKG = REPO_ROOT / "src" / "bst_x"
+sp = str(BST_X_PKG)
+if sp not in sys.path:
+    sys.path.insert(0, sp)
 
 
 # ─── Constants ──────────────────────────────────────────────────────
-RUN_DIR = REPO_ROOT / "src" / "bst_x" / "stroke_classification" / "experiments" / "run_20260505_154907"
+RUN_DIR = REPO_ROOT / "src" / "bst_x" / "experiments" / "run_20260505_154907"
 WEIGHTS_PATH = RUN_DIR / "weights" / "bst_x_JnB_bone_between_2_hits_with_max_limits_seq_100_une_merge_v1_nosides_5.pt"
 CLIP_INDEX_PATH = RUN_DIR / "clip_index.json"
 

@@ -9,13 +9,13 @@ New here? [`data_pipeline_and_model_train_overview.md`](data_pipeline_and_model_
 - [Quick Start: End-to-End Execution](#quick-start-end-to-end-execution)
 - [Part 1: BST-X on ShuttleSet](#part-1-bst-x-on-shuttleset)
   - [Stage 1: Build the Dataset](#stage-1----build-the-dataset-pipeline)
-  - [Stage 2: Prepare Training Data](#stage-2----prepare-training-data-stroke_classificationpreparing_data)
+  - [Stage 2: Prepare Training Data](#stage-2----prepare-training-data-preparing_data)
   - [Between Stages 2 and 3: Data Quality Validation](#between-stages-2-and-3----data-quality-validation-validation_scripts)
-  - [Stage 3: Dataset Loading](#stage-3----dataset-loading-stroke_classificationpreparing_datashuttleset_datasetpy)
-  - [Stage 4: Model](#stage-4----model-stroke_classificationmodel)
-  - [Stage 5: Training](#stage-5----training-stroke_classification)
-  - [Stage 6: Inference](#stage-6----inference-stroke_classificationbst_x_inferpy)
-  - [Stage 7: Results](#stage-7----results-stroke_classificationresult_utilspy)
+  - [Stage 3: Dataset Loading](#stage-3----dataset-loading-preparing_datashuttleset_datasetpy)
+  - [Stage 4: Model](#stage-4----model-model)
+  - [Stage 5: Training](#stage-5----training)
+  - [Stage 6: Inference](#stage-6----inference-bst_x_inferpy)
+  - [Stage 7: Results](#stage-7----results-result_utilspy)
   - [Full dependency chain](#full-dependency-chain-bst-x-on-shuttleset)
 - [Part 2: Adapting for a Custom (Non-BST-X) Model](#part-2-adapting-for-a-custom-non-bst-x-model)
 
@@ -28,8 +28,8 @@ The project uses three separate Python environments because the OpenMMLab stack 
 | Environment | Requirements file | Purpose |
 |---|---|---|
 | **Pipeline** | `pipeline/requirements.txt` | Download videos, generate clips, verify output |
-| **MMPose** | `stroke_classification/preparing_data/requirements.txt` | Pose estimation (steps 1-2 of data preparation) |
-| **BST training** | `stroke_classification/requirements.txt` | Collation, training, inference. Also shared by TrackNetV3. |
+| **MMPose** | `preparing_data/requirements.txt` | Pose estimation (steps 1-2 of data preparation) |
+| **BST training** | `requirements.txt` | Collation, training, inference. Also shared by TrackNetV3. |
 
 ### Environment setup
 
@@ -44,13 +44,13 @@ python3.11 -m venv venv-mmpose
 source venv-mmpose/bin/activate
 pip install torch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1 --index-url https://download.pytorch.org/whl/cu121
 mim install mmcv==2.1.0
-pip install -r stroke_classification/preparing_data/requirements.txt
+pip install -r preparing_data/requirements.txt
 
 # 3. BST training venv
 python3.11 -m venv venv-bst-x
 source venv-bst-x/bin/activate
 pip install torch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1 --index-url https://download.pytorch.org/whl/cu121
-pip install -r stroke_classification/requirements.txt
+pip install -r requirements.txt
 ```
 
 ### Execution order
@@ -76,14 +76,14 @@ source venv-mmpose/bin/activate
 
 # On engelbart, symlink the taxonomy output dir to scratch first (see Stage 2 Setup below).
 # Run from the repo root with both package roots on PYTHONPATH (matches conftest.py for tests).
-export PYTHONPATH=src/bst_x:src/bst_x/stroke_classification
+export PYTHONPATH=src/bst_x
 
 python -m preparing_data.prepare_train_on_shuttleset \
     --skip-trajectory --skip-collate                       # pose only (no shuttle CSV needed)
 
 # ── Stage 3: Collation + training (BST venv) ────────────────────────
 source venv-bst-x/bin/activate
-export PYTHONPATH=src/bst_x:src/bst_x/stroke_classification
+export PYTHONPATH=src/bst_x
 
 python -m preparing_data.prepare_train_on_shuttleset \
     --skip-trajectory --skip-pose                          # collate (reads shuttle CSVs)
@@ -92,7 +92,7 @@ python -m bst_x_train                     # train (5 serial trials)
 python -m bst_x_infer                     # inference
 ```
 
-The same `PYTHONPATH=src/bst_x:src/bst_x/stroke_classification` setting is what `conftest.py` inserts for the test suite, so test and production invocation share one resolution layout. Bare-cd invocation (running the training script directly from inside its containing dir) no longer works after the proper-packages refactor.
+The same `PYTHONPATH=src/bst_x` setting is what `conftest.py` inserts for the test suite, so test and production invocation share one resolution layout. Bare-cd invocation (running the training script directly from inside its containing dir) no longer works after the proper-packages refactor.
 
 Each stage's output feeds the next. Stages are independently re-runnable — use `--skip-*` flags to avoid repeating completed work. **Important:** after class merge (step 4) has run, always pass `--skip-clips` on re-runs to avoid re-generating clips that were moved into merged folders.
 
@@ -145,7 +145,7 @@ Split and label assignment for `shuttle_npy/` (and downstream pose npys) come fr
 
 ---
 
-### Stage 2 -- Prepare Training Data (`stroke_classification/preparing_data/`)
+### Stage 2 -- Prepare Training Data (`preparing_data/`)
 
 The pipeline produces **video clips** and **shuttle .npy files**. BST-X does not operate on raw video -- it needs pre-extracted skeletal pose, court position, and shuttle trajectory arrays. This stage bridges the gap.
 
@@ -162,7 +162,7 @@ On the HPC nodes the collation output lives on scratch. Set `BST_X_COLLATED_DATA
 ```bash
 # Fallback (no BST_X_COLLATED_DATA_ROOT); replace taxonomy name as needed:
 mkdir -p /scratch/comp320a/ShuttleSet_data_une_v1_14
-cd ~/badminton_stroke_classification/src/bst_x/stroke_classification/preparing_data
+cd ~/badminton_stroke_classification/src/bst_x/preparing_data
 ln -s /scratch/comp320a/ShuttleSet_data_une_v1_14 ShuttleSet_data_une_v1_14
 ```
 
@@ -175,7 +175,7 @@ If running locally or without scratch, no setup is needed -- the script creates 
 Run from the repo root with both package roots on PYTHONPATH:
 
 ```bash
-export PYTHONPATH=src/bst_x:src/bst_x/stroke_classification
+export PYTHONPATH=src/bst_x
 
 # Preview what would be done:
 python -m preparing_data.prepare_train_on_shuttleset --dry-run
@@ -199,7 +199,7 @@ Key flags: `--seq-len` (30 or 100), `--taxonomy` (`bst_25`, `bst_24`, `bst_12`, 
 
 #### Data transformations in detail
 
-1. **Pose detection** (`detect_players_2d`): MMPose extracts 17 COCO keypoints per frame. Players are identified by court projection of their feet -- only the two players whose feet project inside the court boundaries are kept, ordered Top-first by y-coordinate. See [`keypoints_schema.md`](stroke_classification/preparing_data/keypoints_schema.md) for the full joint index map, bone pairs, and JnB representation details.
+1. **Pose detection** (`detect_players_2d`): MMPose extracts 17 COCO keypoints per frame. Players are identified by court projection of their feet -- only the two players whose feet project inside the court boundaries are kept, ordered Top-first by y-coordinate. See [`keypoints_schema.md`](preparing_data/keypoints_schema.md) for the full joint index map, bone pairs, and JnB representation details.
 
 2. **Joint normalization** (`normalize_joints`): Keypoints are normalized relative to the player's bounding box diagonal. Optionally center-aligned.
 
@@ -272,7 +272,7 @@ See `validation_scripts/README.md` for full argument and report section document
 
 ---
 
-### Stage 3 -- Dataset Loading (`stroke_classification/preparing_data/shuttleset_dataset.py`)
+### Stage 3 -- Dataset Loading (`preparing_data/shuttleset_dataset.py`)
 
 Bridges collated `.npy` files to PyTorch `DataLoader`s. Imports `Taxonomy` from `pipeline.config` for class list construction.
 
@@ -344,7 +344,7 @@ For ad-hoc queries or when a Dataset wants a higher-level "give me clip + shuttl
 
 ---
 
-### Stage 4 -- Model (`stroke_classification/model/`)
+### Stage 4 -- Model (`model/`)
 
 #### Modules
 
@@ -397,7 +397,7 @@ BST_CG_AP = BST(use_ppf=True,  use_cg=True,  use_ap=True)   # Full model
 
 ---
 
-### Stage 5 -- Training (`stroke_classification/`)
+### Stage 5 -- Training
 
 Stage 5 spans two files:
 
@@ -438,7 +438,7 @@ Every invocation writes under `experiments/<run_id>/`, where `<run_id>` is `run_
 
 - **Manifest** (`experiments/<run_id>/manifest.yaml`): source of truth for hparams, git SHA + host, per-serial metrics (`macro_f1`, `min_f1`, `accuracy`, `top2_accuracy`, `num_strokes`), paths to each serial's weight file and TB dir, plus a `log_path:` pointer back to the matching test log. Tracked in git.
 - **Best-model notes** (`experiments/<run_id>/best_model_id.txt`): freeform notes flagging the best-performing serial(s) and the config context, written by hand after eyeballing the test log. Tracked in git alongside the manifest.
-- **Model weights** (`experiments/<run_id>/weights/bst_x_..._une_v1_14[_N].pt`): one best-validation-F1 checkpoint per serial. Gitignored by default; `src/bst_x/stroke_classification/.gitignore` carries a per-run tactical `!` unignore for the serial(s) flagged in `best_model_id.txt`, so git history stays small while the best checkpoints are still shareable.
+- **Model weights** (`experiments/<run_id>/weights/bst_x_..._une_v1_14[_N].pt`): one best-validation-F1 checkpoint per serial. Gitignored by default; `src/bst_x/.gitignore` carries a per-run tactical `!` unignore for the serial(s) flagged in `best_model_id.txt`, so git history stays small while the best checkpoints are still shareable.
 - **TensorBoard logs** (`experiments/<run_id>/tb/serial_N/`): per-serial event directories grouped under one run folder. Launch with `tensorboard --logdir experiments/<run_id>/tb` to see all serials of a run in one view. Each subfolder holds **two** event files: a larger one (60-70 KB) with the per-epoch scalar curves (train/val loss, val macro/min F1, `Schedule/aux_factor`) and a tiny one (~1.6 KB) with the end-of-run HParams summary (best/2nd-best macro F1 and min F1, best val loss, their epochs, `stopped_epoch`). Gitignored.
 - **Test logs** (`test_logs/test_<timestamp>.log`): all serials' test-set output (`=== Serial N (...) ===` headers, macro F1 table, accuracy, top-2 accuracy) auto-captured via the `Tee` class so metrics survive a dropped terminal. One file per script invocation; the run's manifest points at it via `log_path:`. Grep with `grep -E 'Accuracy|macro' test_logs/test_*.log` for a quick summary across runs, or use `run_overview.py` for a proper tabulation.
 
@@ -448,7 +448,7 @@ Cross-run comparison and the optional Aim UI are handled by the YAML-based track
 
 - **`run_overview.py`** aggregates every `experiments/<run_id>/manifest.yaml` into one table with mean / stdev / max per metric across serials:
   ```bash
-  cd src/bst_x/stroke_classification
+  cd src/bst_x
   python ../run_overview.py                              # default: experiments/
   python ../run_overview.py -c n_epochs,use_aux_schedule -m macro_f1,min_f1
   ```
@@ -462,7 +462,7 @@ Cross-run comparison and the optional Aim UI are handled by the YAML-based track
 
 ---
 
-### Stage 6 -- Inference (`stroke_classification/bst_x_infer.py`)
+### Stage 6 -- Inference (`bst_x_infer.py`)
 
 Lightweight script for loading a trained checkpoint and predicting stroke types. Suitable as a Gradio backend.
 
@@ -473,7 +473,7 @@ Lightweight script for loading a trained checkpoint and predicting stroke types.
 
 ---
 
-### Stage 7 -- Results (`stroke_classification/result_utils.py`)
+### Stage 7 -- Results (`result_utils.py`)
 
 | Name | Role |
 |------|------|
