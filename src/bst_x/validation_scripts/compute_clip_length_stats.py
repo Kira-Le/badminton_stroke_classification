@@ -7,8 +7,9 @@ Replicates the clipping logic from gen_my_dataset.py using only the CSV annotati
 import sys
 from pathlib import Path
 
-# Allow importing pipeline from data/shuttleset/ (parents[2] = repo root, then src/bst_x/).
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'src' / 'bst_x'))
+# Allow importing pipeline when invoked directly. validation_scripts/ is one
+# level below src/bst_x/, so parents[1] resolves to the bst_x package root.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import pandas as pd
 import numpy as np

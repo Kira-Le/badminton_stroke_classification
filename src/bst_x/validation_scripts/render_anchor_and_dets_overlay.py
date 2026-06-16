@@ -36,7 +36,7 @@ Stitches each clip's PNGs into an mp4 by default; pass ``--no-encode-mp4`` to sk
 
 Usage (per-class sampling):
 
-    python src/bst_x/validation_scripts/mmpose_heuristic_investigation/render_anchor_and_dets_overlay.py \\
+    python src/bst_x/validation_scripts/render_anchor_and_dets_overlay.py \\
         --clips-dir /scratch/comp320a/ShuttleSet/clips \\
         --fe-json /path/to/run_XXX/fe_jsons/test.json.gz \\
         --samples-per-class 3 \\

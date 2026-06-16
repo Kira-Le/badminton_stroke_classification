@@ -35,11 +35,11 @@ Usage on engelbart:
 
   # Run on pre-phase-2-tidy
   git checkout pre-phase-2-tidy
-  OUT_PATH=/tmp/preds_post_tidy.npy python scratch/post_tidy_smoke/smoke_infer_bit_exact.py
+  OUT_PATH=/tmp/preds_post_tidy.npy python src/bst_x/validation_scripts/post_tidy_smoke/smoke_infer_bit_exact.py
 
   # Run on main
   git checkout main
-  OUT_PATH=/tmp/preds_main.npy python scratch/post_tidy_smoke/smoke_infer_bit_exact.py
+  OUT_PATH=/tmp/preds_main.npy python src/bst_x/validation_scripts/post_tidy_smoke/smoke_infer_bit_exact.py
 
   # Diff the two prediction files
   python -c "import numpy as np; \
